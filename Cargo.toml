@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+  "clearned_core",
+  "clearned"
+]

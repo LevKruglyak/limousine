@@ -1,0 +1,7 @@
+[package]
+name = "clearned_core"
+description = "Building blocks for clearned data structures."
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
