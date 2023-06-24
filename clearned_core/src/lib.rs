@@ -1,8 +1,10 @@
-use bytemuck::Pod;
+use bytemuck::{Pod, Zeroable};
+use mmap_buffer::Buffer;
 use num::PrimInt;
 use std::{
     borrow::Borrow,
     fmt::Debug,
+    ops::Deref,
     path::{Path, PathBuf},
 };
 use trait_set::trait_set;
@@ -10,6 +12,7 @@ use trait_set::trait_set;
 pub mod classical;
 pub mod learned;
 mod search;
+pub mod test;
 
 #[cfg(feature = "metrics")]
 pub mod metrics;
@@ -60,6 +63,10 @@ pub trait NodeLayer<K: Key> {
     /// Returns a slice of keys, each of which represent the
     /// minimum keys of the underlying node.
     fn nodes(&self) -> &[Self::Node];
+
+    fn len(&self) -> usize {
+        self.nodes().len()
+    }
 }
 
 /// A range of potential locations for the results of a query.
@@ -81,18 +88,21 @@ pub trait InternalLayer<K: Key>: NodeLayer<K> {
 pub trait InternalLayerBuild<K: Key>: NodeLayer<K> {
     /// Build an index layer over the given data, storing in memory
     /// Assumes the data is sorted, and without key repetitions
-    fn build(base: Vec<K>) -> Self
+    fn build(base: impl ExactSizeIterator<Item = K>) -> Self
     where
         Self: Sized;
 
     /// Build an index layer over the given data, persisting to disk
     /// Assumes the data is sorted, and without key repetitions
-    fn build_on_disk(base: Vec<K>, path: impl AsRef<Path>) -> crate::Result<Self>
+    fn build_on_disk(
+        base: impl ExactSizeIterator<Item = K>,
+        path: impl AsRef<Path>,
+    ) -> Result<Self>
     where
         Self: Sized;
 
     /// Load an index from memory, rebuilding layers which weren't persisted
-    fn load(path: impl AsRef<Path>) -> crate::Result<Self>
+    fn load(path: impl AsRef<Path>) -> Result<Self>
     where
         Self: Sized;
 }
@@ -102,4 +112,79 @@ fn path_with_extension(path: impl AsRef<Path>, extension: &str) -> Box<Path> {
     let mut buf = PathBuf::from(path.as_ref());
     buf.set_extension(extension);
     buf.into_boxed_path()
+}
+
+// ------------------------------------------------------
+// Entry
+// ------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct Entry<K, V> {
+    key: K,
+    value: V,
+}
+
+impl<K, V> Entry<K, V> {
+    pub fn new(key: K, value: V) -> Self {
+        Self { key, value }
+    }
+}
+
+impl<K, V> Borrow<K> for Entry<K, V> {
+    fn borrow(&self) -> &K {
+        &self.key
+    }
+}
+
+unsafe impl<K: Zeroable, V: Zeroable> Zeroable for Entry<K, V> {}
+unsafe impl<K: Pod, V: Pod> Pod for Entry<K, V> {}
+
+// ------------------------------------------------------
+// Base Layer
+// ------------------------------------------------------
+
+pub struct BaseLayer<K: Key, V: Value> {
+    data: Buffer<Entry<K, V>>,
+}
+
+impl<K: Key, V: Value> BaseLayer<K, V> {
+    fn build(base: impl ExactSizeIterator<Item = (K, V)>) -> Self {
+        Self {
+            data: Buffer::from_vec_in_memory(base.map(|(k, v)| Entry::new(k, v)).collect()),
+        }
+    }
+
+    fn build_disk(
+        base: impl ExactSizeIterator<Item = (K, V)>,
+        path: impl AsRef<Path>,
+    ) -> Result<Self> {
+        let data: Vec<Entry<K, V>> = base.map(|(k, v)| Entry::new(k, v)).collect();
+
+        Ok(Self {
+            data: Buffer::from_slice_on_disk(&data[..], path)?,
+        })
+    }
+
+    fn load(path: impl AsRef<Path>) -> Result<Self> {
+        Ok(Self {
+            data: Buffer::load_from_disk(path)?,
+        })
+    }
+}
+
+impl<K: Key, V: Value> NodeLayer<K> for BaseLayer<K, V> {
+    type Node = Entry<K, V>;
+
+    fn nodes(&self) -> &[Self::Node] {
+        self.data.deref()
+    }
+}
+
+impl<K: Key, V: Value> Deref for BaseLayer<K, V> {
+    type Target = [Entry<K, V>];
+
+    fn deref(&self) -> &Self::Target {
+        self.data.deref()
+    }
 }

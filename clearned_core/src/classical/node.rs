@@ -4,31 +4,13 @@ use std::{borrow::Borrow, mem::MaybeUninit};
 
 use crate::{
     search::{lower_bound, OptimalSearch, Search},
-    Key, Value,
+    Entry, Key,
 };
-
-#[derive(Clone, Copy)]
-pub struct KeyPtr<K, V> {
-    key: K,
-    value: V,
-}
-
-impl<K, V> KeyPtr<K, V> {
-    pub fn new(key: K, value: V) -> Self {
-        Self { key, value }
-    }
-}
-
-impl<K, V> Borrow<K> for KeyPtr<K, V> {
-    fn borrow(&self) -> &K {
-        &self.key
-    }
-}
 
 #[derive(Copy)]
 #[repr(C)]
 pub struct BTreeNode<K, V, const FANOUT: usize> {
-    key_ptrs: [MaybeUninit<KeyPtr<K, V>>; FANOUT],
+    key_ptrs: [MaybeUninit<Entry<K, V>>; FANOUT],
     min: K,
     len: usize,
 }
@@ -60,7 +42,7 @@ where
 {
     fn clone(&self) -> Self {
         let mut key_ptrs =
-            unsafe { MaybeUninit::<[MaybeUninit<KeyPtr<K, V>>; FANOUT]>::uninit().assume_init() };
+            unsafe { MaybeUninit::<[MaybeUninit<Entry<K, V>>; FANOUT]>::uninit().assume_init() };
 
         for i in 0..self.len {
             let key_ptr = unsafe { self.key_ptrs[i].assume_init_ref() };
@@ -75,19 +57,23 @@ where
     }
 }
 
-impl<K: Bounded, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
+impl<K: Bounded + Copy, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
     /// Create an empty `BTreeNode`
     pub fn empty() -> Self {
         Self {
             key_ptrs: unsafe {
-                MaybeUninit::<[MaybeUninit<KeyPtr<K, V>>; FANOUT]>::uninit().assume_init()
+                MaybeUninit::<[MaybeUninit<Entry<K, V>>; FANOUT]>::uninit().assume_init()
             },
             min: K::min_value(),
             len: 0,
         }
     }
 
-    pub fn push(&mut self, key_ptr: KeyPtr<K, V>) {
+    pub fn push(&mut self, key_ptr: Entry<K, V>) {
+        if self.len == 0 {
+            self.min = key_ptr.key;
+        }
+
         debug_assert!(self.len < FANOUT, "Tried to push into a full BTreeNode.");
 
         self.key_ptrs[self.len] = MaybeUninit::new(key_ptr);
@@ -95,23 +81,27 @@ impl<K: Bounded, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
     }
 
     /// Borrow a slice view into the entries stored in the `MergePage`
-    pub fn entries(&self) -> &[KeyPtr<K, V>] {
+    pub fn entries(&self) -> &[Entry<K, V>] {
         // SAFETY: `len` must be strictly less than `F`
         debug_assert!(self.len <= FANOUT);
         let slice = unsafe { self.key_ptrs.get_unchecked(..usize::from(self.len)) };
 
         // SAFETY: feature `maybe_uninit_slice`
-        unsafe { &*(slice as *const [MaybeUninit<KeyPtr<K, V>>] as *const [KeyPtr<K, V>]) }
+        unsafe { &*(slice as *const [MaybeUninit<Entry<K, V>>] as *const [Entry<K, V>]) }
     }
 }
 
-impl<K, V, const FANOUT: usize> BTreeNode<K, V, FANOUT>
+impl<K, V: Default, const FANOUT: usize> BTreeNode<K, V, FANOUT>
 where
     K: Key,
     V: Clone,
 {
     /// Returns the `ptr` corresponding to the desired key
     pub fn search(&self, key: &K) -> V {
+        if self.entries().len() == 0 {
+            return V::default();
+        }
+
         self.entries()[lower_bound(OptimalSearch::search_by_key(self.entries(), key))]
             .value
             .clone()
