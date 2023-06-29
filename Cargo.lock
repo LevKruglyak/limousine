@@ -37,6 +37,7 @@ dependencies = [
 name = "clearned_example"
 version = "0.1.0"
 dependencies = [
+ "clearned",
  "clearned_core",
 ]
 

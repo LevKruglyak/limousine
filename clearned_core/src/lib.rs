@@ -9,10 +9,15 @@ use std::{
 };
 use trait_set::trait_set;
 
-pub mod classical;
-pub mod learned;
+mod classical;
+mod hybrid;
+mod learned;
 mod search;
-pub mod test;
+
+pub use classical::BTreeLayer;
+pub use hybrid::HybridIndex;
+pub use hybrid::HybridLayer;
+pub use learned::pgm_node::PGMLayer;
 
 #[cfg(feature = "metrics")]
 pub mod metrics;
@@ -33,17 +38,18 @@ trait_set! {
 pub trait ImmutableIndex<K: Key, V: Value>: Sized {
     /// Build an index over the given data in memory
     /// This method assumes the data is sorted, and without key repetitions
-    fn build(base: impl ExactSizeIterator<Item = (K, V)>) -> Self;
+    fn build_in_memory(base: impl ExactSizeIterator<Item = (K, V)>) -> Self;
 
     /// Build an index over the given data, persisting to disk
     /// This method assumes the data is sorted, and without key repetitions
-    fn build_disk(
+    fn build_on_disk(
         base: impl ExactSizeIterator<Item = (K, V)>,
         path: impl AsRef<Path>,
+        threshold: usize,
     ) -> Result<Self>;
 
     /// Load an index from memory, rebuilding layers which weren't persisted
-    fn load(path: impl AsRef<Path>) -> Result<Self>;
+    fn load(path: impl AsRef<Path>, threshold: usize) -> Result<Self>;
 
     /// Returns `Some(entry)` if the is an entry with key `key`, otherwise `None`
     fn lookup(&self, key: &K) -> Option<V>;
@@ -107,13 +113,6 @@ pub trait InternalLayerBuild<K: Key>: NodeLayer<K> {
         Self: Sized;
 }
 
-/// Utility function to create a new path with the given extension
-fn path_with_extension(path: impl AsRef<Path>, extension: &str) -> Box<Path> {
-    let mut buf = PathBuf::from(path.as_ref());
-    buf.set_extension(extension);
-    buf.into_boxed_path()
-}
-
 // ------------------------------------------------------
 // Entry
 // ------------------------------------------------------
@@ -121,8 +120,8 @@ fn path_with_extension(path: impl AsRef<Path>, extension: &str) -> Box<Path> {
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Entry<K, V> {
-    key: K,
-    value: V,
+    pub key: K,
+    pub value: V,
 }
 
 impl<K, V> Entry<K, V> {
@@ -187,4 +186,49 @@ impl<K: Key, V: Value> Deref for BaseLayer<K, V> {
     fn deref(&self) -> &Self::Target {
         self.data.deref()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Hybrid index range iterator
+// ---------------------------------------------------------------------------
+
+pub struct HybridIndexRangeIterator<'e, K: Key, V: Value> {
+    data: &'e BaseLayer<K, V>,
+    low: usize,
+    high: usize,
+}
+
+impl<'e, K: Key, V: Value> HybridIndexRangeIterator<'e, K, V> {
+    pub fn new(data: &'e BaseLayer<K, V>, low: usize, high: usize) -> Self {
+        Self { data, low, high }
+    }
+}
+
+impl<'e, K: Key, V: Value> Iterator for HybridIndexRangeIterator<'e, K, V> {
+    type Item = (&'e K, &'e V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.low < self.high {
+            let result = Some((
+                &self.data.nodes()[self.low].key,
+                &self.data.nodes()[self.low].value,
+            ));
+
+            self.low += 1;
+            return result;
+        }
+
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Util
+// ---------------------------------------------------------------------------
+
+/// Utility function to create a new path with the given extension
+fn path_with_extension(path: impl AsRef<Path>, extension: &str) -> Box<Path> {
+    let mut buf = PathBuf::from(path.as_ref());
+    buf.set_extension(extension);
+    buf.into_boxed_path()
 }
