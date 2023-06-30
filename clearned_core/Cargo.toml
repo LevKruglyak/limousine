@@ -11,5 +11,4 @@ bytemuck = { version = "1.13", features = ["min_const_generics"] }
 mmap_buffer = "0.1.4"
 
 [features]
-default = ["metrics"]
-metrics = []
+default = []

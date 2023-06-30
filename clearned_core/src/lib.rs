@@ -16,11 +16,9 @@ mod search;
 
 pub use classical::BTreeLayer;
 pub use hybrid::HybridIndex;
+pub use hybrid::HybridIndexRangeIterator;
 pub use hybrid::HybridLayer;
 pub use learned::pgm_node::PGMLayer;
-
-#[cfg(feature = "metrics")]
-pub mod metrics;
 
 /// Generic error type (to avoid a dependency on anyhow)
 pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
@@ -185,40 +183,6 @@ impl<K: Key, V: Value> Deref for BaseLayer<K, V> {
 
     fn deref(&self) -> &Self::Target {
         self.data.deref()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Hybrid index range iterator
-// ---------------------------------------------------------------------------
-
-pub struct HybridIndexRangeIterator<'e, K: Key, V: Value> {
-    data: &'e BaseLayer<K, V>,
-    low: usize,
-    high: usize,
-}
-
-impl<'e, K: Key, V: Value> HybridIndexRangeIterator<'e, K, V> {
-    pub fn new(data: &'e BaseLayer<K, V>, low: usize, high: usize) -> Self {
-        Self { data, low, high }
-    }
-}
-
-impl<'e, K: Key, V: Value> Iterator for HybridIndexRangeIterator<'e, K, V> {
-    type Item = (&'e K, &'e V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.low < self.high {
-            let result = Some((
-                &self.data.nodes()[self.low].key,
-                &self.data.nodes()[self.low].value,
-            ));
-
-            self.low += 1;
-            return result;
-        }
-
-        None
     }
 }
 
