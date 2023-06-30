@@ -1,11 +1,10 @@
 use clearned::materialize_index;
+use clearned_core::ImmutableIndex;
 
 materialize_index! {
     name: HybridIndex,
     layout: {
-        0 => btree(32),
-        1 => btree(4),
-        _ => pgm(4),
+        _ => btree(32),
     }
 }
 
