@@ -5,7 +5,7 @@
 ```rust
 use limousine_engine::prelude::*;
 
-limousine_macros::create_immutable_hybrid_index! {
+create_immutable_hybrid_index! {
     name: ExampleHybridIndex,
     layout: {
         0 | 1 => btree(16),
@@ -19,14 +19,14 @@ To generate a design, we provide a name for the structure, and a layout descript
 ```rust
 use limousine_engine::prelude::*;
 
-limousine_marcos::create_immutable_hybrid_index! {
+create_immutable_hybrid_index! {
     name: BTreeIndex,
     layout: {
         _ => btree(16),
     }
 }
 
-limousine_marcos::create_immutable_hybrid_index! {
+create_immutable_hybrid_index! {
     name: PGMIndex,
     layout: {
         _ => pgm(4),
