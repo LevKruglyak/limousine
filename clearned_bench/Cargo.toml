@@ -14,4 +14,4 @@ rand_distr = "0.4.3"
 rayon = "1.7.0"
 seq-macro = "0.3.3"
 
-clearned = { path = "../clearned" }
+limousine_engine = { path = "../limousine_engine" }

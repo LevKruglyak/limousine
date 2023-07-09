@@ -1,0 +1,16 @@
+[package]
+name = "limousine_derive"
+description = "Proc macros for building hybrid index data structures."
+version = "0.1.0"
+edition = "2021"
+authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
+keywords = ["btree", "pgm", "database", "proc_macro", "limousine"]
+license = "Apache-2.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"

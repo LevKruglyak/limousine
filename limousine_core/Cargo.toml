@@ -1,0 +1,17 @@
+[package]
+name = "limousine_core"
+description = "Building blocks for hybrid index data structures."
+version = "0.1.0"
+edition = "2021"
+authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
+keywords = ["btree", "pgm", "database", "proc_macro", "limousine"]
+license = "Apache-2.0"
+
+[dependencies]
+num = "0.4.0"
+trait-set = "0.3.0"
+bytemuck = { version = "1.13", features = ["min_const_generics"] }
+mmap_buffer = "0.1.4"
+
+[features]
+default = []

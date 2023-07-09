@@ -1,8 +1,0 @@
-[package]
-name = "clearned"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-clearned_derive = { path = "../clearned_derive" }
-clearned_core = { path = "../clearned_core" }
