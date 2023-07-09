@@ -1,9 +1,7 @@
 [workspace]
 
 members = [
-  "clearned_example",
   "limousine_core",
-  # "clearned_bench",
   "limousine_derive",
   "limousine_engine"
 ]
