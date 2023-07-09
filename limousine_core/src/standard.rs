@@ -1,12 +1,15 @@
-use limousine_engine::private::{
+use crate::{
+    base::BaseLayer,
     search::{lower_bound, upper_bound, OptimalSearch, Search},
-    BaseLayer, HybridIndexRangeIterator, ImmutableIndex, Key, NodeLayer, Result, Value,
+    HybridIndexRangeIterator, ImmutableIndex, Key, NodeLayer, Result, Value,
 };
 use std::collections::{btree_map::Range, BTreeMap};
 
-pub struct BTreeMapBaseline<K: Key, V: Value>(BTreeMap<K, V>);
+/// `ImmutableIndex` wrapper of `std::collections::BTreeMap`. Does not support
+/// loading and persisting to disk.
+pub struct BTreeMapStandardIndex<K: Key, V: Value>(BTreeMap<K, V>);
 
-impl<K: Key, V: Value> ImmutableIndex<K, V> for BTreeMapBaseline<K, V> {
+impl<K: Key, V: Value> ImmutableIndex<K, V> for BTreeMapStandardIndex<K, V> {
     fn lookup(&self, key: &K) -> Option<V> {
         self.0.get(key).map(|x| *x)
     }
@@ -40,9 +43,11 @@ impl<K: Key, V: Value> ImmutableIndex<K, V> for BTreeMapBaseline<K, V> {
     type RangeIterator<'e> = Range<'e, K, V>;
 }
 
-pub struct SortedBaseline<K: Key, V: Value>(BaseLayer<K, V>);
+/// `ImmutableIndex` wrapepr of the sorted base data, which performs binary search over the
+/// entire base data without any index structure.
+pub struct SortedStandardIndex<K: Key, V: Value>(BaseLayer<K, V>);
 
-impl<K: Key, V: Value> ImmutableIndex<K, V> for SortedBaseline<K, V> {
+impl<K: Key, V: Value> ImmutableIndex<K, V> for SortedStandardIndex<K, V> {
     fn lookup(&self, key: &K) -> Option<V> {
         OptimalSearch::search_by_key(self.0.nodes(), key)
             .ok()
@@ -54,15 +59,15 @@ impl<K: Key, V: Value> ImmutableIndex<K, V> for SortedBaseline<K, V> {
     }
 
     fn build_on_disk(
-        _: impl ExactSizeIterator<Item = (K, V)>,
-        _: impl AsRef<std::path::Path>,
+        base: impl ExactSizeIterator<Item = (K, V)>,
+        path: impl AsRef<std::path::Path>,
         _: usize,
     ) -> Result<Self> {
-        unimplemented!()
+        Ok(Self(BaseLayer::build_disk(base, path)?))
     }
 
-    fn load(_: impl AsRef<std::path::Path>, _: usize) -> Result<Self> {
-        unimplemented!()
+    fn load(path: impl AsRef<std::path::Path>, _: usize) -> Result<Self> {
+        Ok(Self(BaseLayer::load(path)?))
     }
 
     fn range(&self, low: &K, high: &K) -> Self::RangeIterator<'_> {

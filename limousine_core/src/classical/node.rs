@@ -3,8 +3,9 @@ use num::Bounded;
 use std::{borrow::Borrow, mem::MaybeUninit};
 
 use crate::{
+    entry::Entry,
     search::{lower_bound, OptimalSearch, Search},
-    Entry, Key,
+    Key,
 };
 
 #[derive(Copy)]

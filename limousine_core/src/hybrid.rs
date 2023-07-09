@@ -1,16 +1,25 @@
 use crate::{
+    base::BaseLayer,
     search::{lower_bound, upper_bound, OptimalSearch, Search},
-    ApproxPos, BaseLayer, ImmutableIndex, Key, NodeLayer, Value,
+    ApproxPos, ImmutableIndex, Key, NodeLayer, Value,
 };
 use std::path::Path;
 
+/// This is a helper trait for macros building hybrid index data structures from a layer.
+/// This trait combines the `NodeLayer`, `InternalLayer`, and a variant of the `InternalLayerBuild`
+/// traits with some other helper methods to provide necessary functionality for a `HybridIndex`
+/// wrapper struct.
 pub trait HybridLayer<K>: 'static {
+    #[allow(missing_docs)]
     fn len(&self) -> usize;
 
+    #[allow(missing_docs)]
     fn search(&self, key: &K, range: ApproxPos) -> ApproxPos;
 
+    #[allow(missing_docs)]
     fn build(layer: usize, base: impl ExactSizeIterator<Item = K>) -> Self;
 
+    #[allow(missing_docs)]
     fn build_on_disk(
         layer: usize,
         base: impl ExactSizeIterator<Item = K>,
@@ -19,13 +28,18 @@ pub trait HybridLayer<K>: 'static {
     where
         Self: Sized;
 
+    #[allow(missing_docs)]
     fn load(layer: usize, path: impl AsRef<Path>) -> crate::Result<Self>
     where
         Self: Sized;
 
+    #[allow(missing_docs)]
     fn key_iter<'e>(&'e self) -> Box<dyn ExactSizeIterator<Item = K> + 'e>;
 }
 
+/// A helper struct which implements a hybrid index over some generic layer type `I`
+/// which knows its own hybrid layout. (i.e. it can search transparently, and build the
+/// appropriate type at each given layer index).
 pub struct HybridIndex<K: Key, V: Value, I: HybridLayer<K>> {
     layers: Vec<I>,
     base: BaseLayer<K, V>,
@@ -150,6 +164,9 @@ impl<K: Key, V: Value, I: HybridLayer<K>> ImmutableIndex<K, V> for HybridIndex<K
 // Hybrid index range iterator
 // ---------------------------------------------------------------------------
 
+/// Simple range iterator for hybrid indexes; all data is stored contiguously at
+/// the base level, so no advanced node jumping is required, just a start and end
+/// index.
 pub struct HybridIndexRangeIterator<'e, K: Key, V: Value> {
     data: &'e BaseLayer<K, V>,
     low: usize,
@@ -157,6 +174,7 @@ pub struct HybridIndexRangeIterator<'e, K: Key, V: Value> {
 }
 
 impl<'e, K: Key, V: Value> HybridIndexRangeIterator<'e, K, V> {
+    /// Create range iterator over a base layer given a start and end index
     pub fn new(data: &'e BaseLayer<K, V>, low: usize, high: usize) -> Self {
         Self { data, low, high }
     }

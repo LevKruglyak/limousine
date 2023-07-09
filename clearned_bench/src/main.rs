@@ -10,8 +10,6 @@ use std::{fs, hint::black_box, path::Path, time::Instant};
 
 use crate::baseline::{BTreeMapBaseline, SortedBaseline};
 
-pub mod baseline;
-
 limousine_macros::create_immutable_hybrid_index! {
     name: HybridIndex1,
     layout: {

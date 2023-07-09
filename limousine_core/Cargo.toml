@@ -15,3 +15,4 @@ mmap_buffer = "0.1.4"
 
 [features]
 default = []
+standard = []

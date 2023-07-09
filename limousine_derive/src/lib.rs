@@ -20,7 +20,10 @@ mod layer_type;
 /// Macro to materialize an immutable hybrid index structure. To materialize a hybrid index,
 /// a name and a layout is required, for example:
 ///
-/// ```rust
+/// ```ignore
+/// // Note: this is just a syntax example, this macro needs to be called
+/// // from the [`limousine_engine`](https://crates.io/crates/limousine_engine) crate.
+///
 /// create_immutable_hybrid_index! {
 ///     name: MyHybridIndex,
 ///     layout: {
@@ -33,16 +36,16 @@ mod layer_type;
 /// the scope. The layout follows the Rust match expression syntax, where each arm follows the
 /// format:
 ///
-/// ```
+/// ```ignore
 /// [usize match body] => [layer_type](param1, param2, ...)
 /// ```
 ///
 /// The supported layer types are:
 ///
-/// 1. ```btree(fanout: usize)```
-/// 2. ```pgm(epsilon: usize)```
+/// 1. **btree(fanout: usize)**
+/// 2. **pgm(epsilon: usize)**
 ///
-/// The macro will generate a strcutre with the given name, alongside an implementation of the
+/// The macro will generate a structure with the given name, alongside an implementation of the
 /// `ImmutableIndex` trait.
 #[proc_macro]
 pub fn create_immutable_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

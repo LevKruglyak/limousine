@@ -73,5 +73,7 @@ impl<K: Key, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON> {
     }
 }
 
+/// A `PGMLayer` is an `InternalLayer` consisting of linear models with `EPSILON`
+/// controlled error, and build by a `PGM` segmentation algorithm.
 pub type PGMLayer<K, const EPSILON: usize> =
     PiecewiseModel<K, LinearModel<K, EPSILON>, PGMSegmentation>;

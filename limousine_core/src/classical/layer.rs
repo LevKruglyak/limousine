@@ -1,14 +1,17 @@
-use std::{ops::Deref, path::Path};
-
 use super::node::BTreeNode;
-use crate::Entry;
+use crate::entry::Entry;
 use crate::{
     path_with_extension,
     search::{lower_bound, OptimalSearch, Search},
     ApproxPos, InternalLayer, InternalLayerBuild, Key, NodeLayer, Result,
 };
 use mmap_buffer::Buffer;
+use std::{ops::Deref, path::Path};
 
+/// A `BTreeLayer` is an `InternalLayer` with a constant size ratio
+/// given by the `FANOUT` parameter. Each node can index a maximum of
+/// `FANOUT` lower nodes, and since this is part of an immutable index, this
+/// fill factor is always achieved.
 pub struct BTreeLayer<K: Key, const FANOUT: usize> {
     nodes: Buffer<BTreeNode<K, usize, FANOUT>>,
 }
