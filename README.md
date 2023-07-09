@@ -1,4 +1,4 @@
-# Limousine engine 
+# Limousine
 
 Learned indexes, which use statistical models to approximate the location of keys in an index, have been proven to be highly effective, both in terms of memory usage and performance. Nevertheless, they suffer from some unavoidable trade-offs when compared to the well-developed BTree design. In this project, we want to map out a design space of *hybrid indexes*, which contain some classical, BTree layers and some learned index layers. 
 
