@@ -1,6 +1,6 @@
+use super::{pgm_node::LinearModel, Segmentation};
 use crate::Key;
 
-use super::{pgm_node::LinearModel, Segmentation};
 
 /// The optimal linear segmentation algorithm, translated
 /// almost directly from the official PGMIndex repository

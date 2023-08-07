@@ -1,13 +1,12 @@
 use std::borrow::Borrow;
-
-use bytemuck::{Pod, Zeroable};
+use std::fmt::Debug;
 
 /// Simple entry type containing a key and a value
-#[derive(Clone, Copy, Debug)]
-#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Entry<K, V> {
     /// Key field
     pub key: K,
+
     /// Value field
     pub value: V,
 }
@@ -25,5 +24,8 @@ impl<K, V> Borrow<K> for Entry<K, V> {
     }
 }
 
-unsafe impl<K: Zeroable, V: Zeroable> Zeroable for Entry<K, V> {}
-unsafe impl<K: Pod, V: Pod> Pod for Entry<K, V> {}
+impl<K: Debug, V: Debug> Debug for Entry<K, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("({:?}, {:?})", &self.key, &self.value))
+    }
+}

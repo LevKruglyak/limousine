@@ -1,7 +1,12 @@
 [workspace]
+resolver = "2"
 
 members = [
+  "limousine_example",
   "limousine_core",
-  "limousine_derive",
-  "limousine_engine"
+  # "limousine_derive",
+  # "limousine_engine"
 ]
+
+[profile.release]
+lto = true
