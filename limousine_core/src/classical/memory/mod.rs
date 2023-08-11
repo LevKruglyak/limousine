@@ -77,8 +77,12 @@ where
         }
     }
 
-    fn size(&self) -> usize {
+    fn len(&self) -> usize {
         self.inner.nodes.len()
+    }
+
+    fn memory_size(&self) -> usize {
+        self.inner.alloc.allocated_bytes_including_metadata()
     }
 }
 
@@ -153,8 +157,12 @@ where
         node.inner.search_exact(key)
     }
 
-    fn size(&self) -> usize {
+    fn len(&self) -> usize {
         self.inner.nodes.len()
+    }
+
+    fn memory_size(&self) -> usize {
+        self.inner.alloc.allocated_bytes_including_metadata()
     }
 }
 
@@ -169,6 +177,7 @@ where
 
         Self { inner: result }
     }
+
     fn build(iter: impl Iterator<Item = (K, V)>) -> Self {
         let mut result = MemoryBTreeLayer::empty();
         result.fill(iter);

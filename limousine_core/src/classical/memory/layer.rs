@@ -48,7 +48,7 @@ impl<K: StaticBounded, V, const FANOUT: usize> KeyBounded<K> for MemoryBTreeNode
 
 pub struct MemoryBTreeLayer<K, V, const FANOUT: usize> {
     pub nodes: Vec<Address<K, V, FANOUT>>,
-    alloc: Bump,
+    pub alloc: Bump,
 }
 
 impl<K: Debug, V: Debug, const FANOUT: usize> Debug for MemoryBTreeLayer<K, V, FANOUT> {
@@ -91,6 +91,16 @@ where
     }
 }
 
+impl<K, V, const FANOUT: usize> Drop for MemoryBTreeLayer<K, V, FANOUT> {
+    fn drop(&mut self) {
+        // Drop all of the nodes
+        for node in self.nodes.iter() {
+            let boxed = unsafe { Box::from_raw(node.as_ptr()) };
+            drop(boxed);
+        }
+    }
+}
+
 impl<K, V, const FANOUT: usize> MemoryBTreeLayer<K, V, FANOUT>
 where
     K: StaticBounded,
@@ -109,9 +119,20 @@ where
     }
 
     pub fn fill(&mut self, iter: impl Iterator<Item = (K, V)>) {
-        self.nodes.clear();
+        // Drop all of the nodes
+        for node in self.nodes.iter() {
+            let boxed = unsafe { Box::from_raw(node.as_ptr()) };
+            drop(boxed);
+        }
 
+        self.nodes.clear();
+        self.alloc.reset();
+
+        // Add empty cap node
         let mut node = unsafe { self.add_node(MemoryBTreeNode::empty()).as_mut() };
+        let mut new_address = self.add_node(MemoryBTreeNode::empty());
+        node.next = Some(new_address);
+        node = unsafe { new_address.as_mut() };
 
         for (key, address) in iter {
             if node.inner.is_half_full() {
