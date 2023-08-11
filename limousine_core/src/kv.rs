@@ -2,7 +2,11 @@ use num::PrimInt;
 use std::fmt::Debug;
 use trait_set::trait_set;
 
-pub trait StaticBounded: 'static {
+pub trait KeyBounded<K> {
+    fn lower_bound(&self) -> &K;
+}
+
+pub trait StaticBounded: 'static + Copy + Ord {
     fn min_ref() -> &'static Self;
 }
 

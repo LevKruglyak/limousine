@@ -52,6 +52,10 @@ impl<K: Key, V: 'static, const FANOUT: usize> NodeLayer<K> for DiskBTreeLayer<K,
     fn iter<'n>(&'n self) -> Self::NodeIter<'n> {
         Self::NodeIter::new(self.nodes.len())
     }
+
+    fn range<'n>(&'n self, lo_ptr: Self::NodeRef, hi_ptr: Self::NodeRef) -> Self::NodeIter<'n> {
+        unimplemented!()
+    }
 }
 
 impl<K: Key, V: 'static, const FANOUT: usize> DiskBTreeLayer<K, V, FANOUT> {

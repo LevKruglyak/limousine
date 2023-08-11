@@ -1,20 +1,20 @@
-use crate::common::entry::Entry;
 use crate::common::stack_map::StackMap;
 use crate::kv::StaticBounded;
 use std::borrow::Borrow;
 use std::fmt::Debug;
 
+#[derive(Clone, Default)]
 pub struct BTreeNode<K, V, const FANOUT: usize> {
     inner: StackMap<K, V, FANOUT>,
 }
 
-impl<K: Clone + Debug, V: Clone + Debug, const FANOUT: usize> Debug for BTreeNode<K, V, FANOUT> {
+impl<K: Debug, V: Debug, const FANOUT: usize> Debug for BTreeNode<K, V, FANOUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{:?}", &self.inner))
     }
 }
 
-impl<K: Copy, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
+impl<K, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
     pub fn empty() -> Self {
         Self {
             inner: StackMap::empty(),
@@ -27,6 +27,10 @@ impl<K: Copy, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
 
     pub fn is_full(&self) -> bool {
         self.inner.is_full()
+    }
+
+    pub fn is_half_full(&self) -> bool {
+        self.inner.len() >= FANOUT / 2
     }
 
     pub fn min(&self) -> &K
@@ -42,14 +46,14 @@ impl<K: Copy, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
 
     pub fn search_lub(&self, key: &K) -> &V
     where
-        K: Ord,
+        K: Ord + Copy,
     {
         self.inner.get_always(key)
     }
 
     pub fn search_exact(&self, key: &K) -> Option<&V>
     where
-        K: Ord,
+        K: Ord + Copy,
     {
         self.inner.get(key)
     }
@@ -57,11 +61,12 @@ impl<K: Copy, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
     /// Inserts an item and return the previous value if it exists.
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
     where
-        K: Ord,
+        K: Ord + Copy,
     {
         self.inner.insert(key, value)
     }
 
+    // TODO: should allocation go here?
     pub fn split(&mut self) -> (K, Self)
     where
         K: Clone,

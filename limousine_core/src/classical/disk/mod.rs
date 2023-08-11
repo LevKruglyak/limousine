@@ -33,6 +33,10 @@ impl<K: Key, B: NodeLayer<K>, const FANOUT: usize> NodeLayer<K>
     fn iter<'n>(&'n self) -> Self::NodeIter<'n> {
         self.layer.iter()
     }
+
+    fn range<'n>(&'n self, lo_ptr: Self::NodeRef, hi_ptr: Self::NodeRef) -> Self::NodeIter<'n> {
+        self.layer.range(lo_ptr, hi_ptr)
+    }
 }
 
 impl<K: Key, B: NodeLayer<K>, const FANOUT: usize> InternalComponent<K, B>
@@ -87,6 +91,10 @@ impl<K: Key, V: Value, const FANOUT: usize> NodeLayer<K> for DiskBTreeBaseCompon
 
     fn iter<'n>(&'n self) -> Self::NodeIter<'n> {
         self.layer.iter()
+    }
+
+    fn range<'n>(&'n self, lo_ptr: Self::NodeRef, hi_ptr: Self::NodeRef) -> Self::NodeIter<'n> {
+        self.layer.range(lo_ptr, hi_ptr)
     }
 }
 
