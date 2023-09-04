@@ -1,61 +1,75 @@
-use super::{pgm_node::LinearModel, Segmentation};
-use crate::Key;
-
+use super::pgm_node::LinearModel;
+use crate::{
+    kv::{Key, Value},
+    learned::generic::{PiecewiseNode, Segmentation},
+};
 
 /// The optimal linear segmentation algorithm, translated
 /// almost directly from the official PGMIndex repository
 pub struct PGMSegmentation;
 
-impl<K: Key, const EPSILON: usize> Segmentation<K, LinearModel<K, EPSILON>> for PGMSegmentation {
+impl<K: Key, V: Value, const EPSILON: usize> Segmentation<K, V, LinearModel<K, EPSILON>>
+    for PGMSegmentation
+{
     fn make_segmentation(
-        key_ranks: impl ExactSizeIterator<Item = (usize, K)>,
-    ) -> Vec<LinearModel<K, EPSILON>> {
-        let key_ranks: Vec<(usize, K)> = key_ranks.collect();
+        data: impl Iterator<Item = (K, V)>,
+    ) -> Vec<PiecewiseNode<K, V, LinearModel<K, EPSILON>>> {
+        // TODO: Fix so that it allows the same key
+        let data_ranked: Vec<(usize, (K, V))> = data.enumerate().collect();
 
-        let in_fun = |i: usize| {
-            let x: K = key_ranks[i].1;
+        let in_fun = |i: usize| -> ((K, V), usize) {
+            let entry = data_ranked[i].1;
             // Here there is an adjustment for inputs with duplicate keys: at the end
             // of a run of duplicate keys equal to x=first[i] such that
             // x+1!=first[i+1], we map the values x+1,...,first[i+1]-1 to their
             // correct rank i
+            // Logic needs tuning, was never easy to follow to begin with
             let flag = i > 0
-                && i + 1 < key_ranks.len()
-                && x == key_ranks[i - 1].1
-                && x != key_ranks[i + 1].1
-                && x + K::one() != key_ranks[i + 1].1;
+                && i + 1 < data_ranked.len()
+                && entry.0 == data_ranked[i - 1].1 .0
+                && entry.0 != data_ranked[i + 1].1 .0
+                && entry.0 + K::one() != data_ranked[i + 1].1 .0;
 
             if flag {
-                (x + K::one(), i)
+                ((entry.0 + K::one(), entry.1), i)
             } else {
-                (x, i)
+                (entry, i)
             }
         };
 
-        let mut segments: Vec<LinearModel<K, EPSILON>> = vec![];
+        let mut pgm_nodes: Vec<PiecewiseNode<K, V, LinearModel<K, EPSILON>>> = vec![];
         let mut model = OptimalPiecewiseLinearModel::<K, EPSILON>::new();
+        let mut data: Vec<(K, V)> = vec![];
 
         let mut p = in_fun(0);
-        model.add_point(p);
+        model.add_point((p.0 .0, p.1));
+        data.push(p.0);
 
-        // TODO: fix the off-by-one error here
-        for i in 1..(key_ranks.len() - 1) {
+        for i in 1..(data_ranked.len() - 1) {
             let next_p = in_fun(i);
             if next_p.1 == p.1 {
                 continue;
             }
 
             p = next_p;
-            if !model.add_point(p) {
+            if !model.add_point((p.0 .0, p.1)) {
                 let seg = model.get_segment();
-                segments.push(seg.into());
-                model.add_point(p);
+                pgm_nodes.push(PiecewiseNode {
+                    model: seg.into(),
+                    data: data.clone(),
+                });
+                data.clear();
+                model.add_point((p.0 .0, p.1));
             }
         }
 
         let seg = model.get_segment();
-        segments.push(seg.into());
+        pgm_nodes.push(PiecewiseNode {
+            model: seg.into(),
+            data,
+        });
 
-        segments
+        pgm_nodes
     }
 }
 
@@ -122,6 +136,7 @@ impl<K: Key, const EPSILON: usize> OptimalPiecewiseLinearModel<K, EPSILON> {
 
         if self.points_in_hull > 0 && x <= self.last_x {
             // println!("Points must be increasing by x. {x:?} {:?}", self.last_x);
+            panic!("Points must be increasing by x. {x:?} {:?}", self.last_x);
             return false;
         }
 
@@ -355,5 +370,47 @@ impl<K: Key> std::ops::Sub for Point<K> {
             dx: key_cast(self.x) - key_cast(rhs.x),
             dy: self.y as i128 - rhs.y as i128,
         }
+    }
+}
+
+#[cfg(test)]
+mod pgm_tests {
+    use super::*;
+    use crate::learned::generic::Model;
+
+    /// Tests that when we provide a huge list of numbers that are
+    /// perfectly linear, the segmentation algorithm returns one
+    /// segment with slope basically 1
+    #[test]
+    fn test_one_big_linear() {
+        let mut inp: Vec<(i32, i32)> = Vec::new();
+        for i in 0..100_000 {
+            inp.push((i, i));
+        }
+        let nodes: Vec<PiecewiseNode<i32, i32, LinearModel<i32, 2>>> =
+            PGMSegmentation::make_segmentation(inp.into_iter());
+        assert!(nodes.len() == 1);
+        let guess_100 = nodes[0].model.approximate(&100);
+        assert!(guess_100.lo == 98);
+        assert!(guess_100.hi == 104);
+    }
+
+    /// Tests that when we provide step-like series of points,
+    /// we get a corresponding number of models with near-zero slope
+    #[test]
+    fn test_step_function() {
+        let mut inp: Vec<(i32, i32)> = Vec::new();
+        const STEPS: usize = 1_000;
+        const STEP_SIZE: usize = 10_000;
+        const POINTS_PER_STEP: usize = 100;
+        for step in 0..STEPS {
+            for point in 0..POINTS_PER_STEP {
+                let key = step * STEP_SIZE + point;
+                inp.push(((step * STEP_SIZE + point) as i32, point as i32));
+            }
+        }
+        let nodes: Vec<PiecewiseNode<i32, i32, LinearModel<i32, 2>>> =
+            PGMSegmentation::make_segmentation(inp.into_iter());
+        assert!(nodes.len() == STEPS);
     }
 }

@@ -1,7 +1,11 @@
-use crate::Key;
+use crate::{
+    kv::Key,
+    learned::generic::{ApproxPos, Model, PiecewiseLayer},
+};
 
-use super::{pgm::PGMSegmentation, ApproxPos, Model, PiecewiseModel};
 use std::borrow::Borrow;
+
+use super::pgm_segmentation::PGMSegmentation;
 
 /// A simple linear model for a key-rank segment of data.
 #[derive(Copy, Clone, Debug)]
@@ -21,7 +25,7 @@ impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
         }
     }
 
-    /// Create a segment which always approximates the intercept
+    /// Create a segment with slope 0 which always approximates the intercept
     pub fn intercept(n: usize) -> Self {
         Self {
             key: K::max_value(),
@@ -58,7 +62,7 @@ impl<K: Key, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON> {
     }
 }
 
-/// A `PGMLayer` is an `InternalLayer` consisting of linear models with `EPSILON`
+/// A `PGMLayer` is a layer consisting of linear models with `EPSILON`
 /// controlled error, and build by a `PGM` segmentation algorithm.
-pub type PGMLayer<K, const EPSILON: usize> =
-    PiecewiseModel<K, LinearModel<K, EPSILON>, PGMSegmentation>;
+pub type PGMLayer<K, V, const EPSILON: usize> =
+    PiecewiseLayer<K, V, LinearModel<K, EPSILON>, PGMSegmentation>;
