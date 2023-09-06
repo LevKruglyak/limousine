@@ -101,7 +101,7 @@ where
 {
     fn insert(&mut self, ptr: Self::Address, key: K, value: V) -> Option<PropogateInsert<K, Self>>;
 
-    fn get(&self, ptr: Self::Address, key: &K) -> Option<&V>;
+    fn search(&self, ptr: Self::Address, key: &K) -> Option<&V>;
 
     fn len(&self) -> usize;
 

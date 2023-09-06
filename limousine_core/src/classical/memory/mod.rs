@@ -161,7 +161,7 @@ where
         }
     }
 
-    fn get(&self, ptr: Self::Address, key: &K) -> Option<&V> {
+    fn search(&self, ptr: Self::Address, key: &K) -> Option<&V> {
         let node = unsafe { ptr.as_ref() };
         node.inner.search_exact(key)
     }

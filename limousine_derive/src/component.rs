@@ -5,8 +5,7 @@ use std::collections::HashSet;
 use syn::{
     parenthesized,
     parse::{Parse, ParseStream},
-    punctuated::Punctuated,
-    token, Expr, LitInt, Token,
+    Token,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -109,7 +108,7 @@ impl InternalComponent {
             } => quote!(BTreeInternalComponent<K, #base, #fanout>).to_token_stream(),
 
             &InternalComponent::BTree {
-                fanout,
+                fanout: _,
                 persist: true,
             } => unimplemented!(),
         }
@@ -137,7 +136,7 @@ impl BaseComponent {
             } => quote!(BTreeBaseComponent<K, V, #fanout>).to_token_stream(),
 
             &BaseComponent::BTree {
-                fanout,
+                fanout: _,
                 persist: true,
             } => unimplemented!(),
         }

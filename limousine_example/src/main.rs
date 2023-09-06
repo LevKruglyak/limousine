@@ -27,33 +27,12 @@ create_hybrid_index! {
     ]
 }
 
-fn main() {}
+fn main() {
+    let index = MyHybridIndex::build((0..1_000).map(|x| (x, x * x)));
 
-// type Key = i32;
-// type Value = [u8; 32];
-//
-// type Component0 = BTreeBaseComponent<Key, Value, 4>;
-// type Component1 = PGMInternalComponent<Key, Component0, 2>;
-// type Component2 = BTreeInternalComponent<Key, Component1, 8>;
-// type Component3 = BTreeTopComponent<Key, Component2>;
-//
-// pub struct TestIndex {
-//     component3: Component3,
-//     component2: Component2,
-//     component1: Component1,
-//     component0: Component0,
-// }
-//
-// impl TestIndex {
-//     fn search(&mut self, key: &Key) -> Option<&Value> {
-//         let search3 = self.component3.search(&self.component2, &key);
-//         let search2 = self.component2.search(&self.component1, search3, &key);
-//         let search1 = self.component1.search(&self.component0, search2, &key);
-//         let search0 = self.component0.get(search1, &key);
-//
-//         search0
-//     }
-//
+    println!("{:?}", index.search(&0));
+}
+
 //     fn insert(&mut self, key: Key, value: Value) -> Option<Value> {
 //         // Search stage
 //         let search3 = self.component3.search(&self.component2, &key);
@@ -80,36 +59,6 @@ fn main() {}
 //
 //         None
 //     }
-//
-//     fn empty() -> Self {
-//         let component0 = Component0::empty();
-//         let component1 = Component1::build(&component0);
-//         let component2 = Component2::build(&component1);
-//         let component3 = Component3::build(&component2);
-//
-//         Self {
-//             component3,
-//             component2,
-//             component1,
-//             component0,
-//         }
-//     }
-//
-//     fn build(iter: impl Iterator<Item = (Key, Value)>) -> Self {
-//         let component0 = Component0::build(iter);
-//         let component1 = Component1::build(&component0);
-//         let component2 = Component2::build(&component1);
-//         let component3 = Component3::build(&component2);
-//
-//         Self {
-//             component3,
-//             component2,
-//             component1,
-//             component0,
-//         }
-//     }
-// }
-//
 // fn main() {
 //     let native_options = eframe::NativeOptions::default();
 //     eframe::run_native(

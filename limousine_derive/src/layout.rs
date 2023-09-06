@@ -3,7 +3,7 @@ use proc_macro2::{Ident, Span};
 use syn::{
     bracketed,
     parse::{Parse, ParseStream},
-    parse_macro_input, Arm, Token,
+    Token,
 };
 
 #[derive(Debug)]
