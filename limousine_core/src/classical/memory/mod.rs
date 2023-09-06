@@ -12,7 +12,7 @@ mod layer;
 use crate::component::*;
 use crate::kv::StaticBounded;
 use layer::*;
-use std::ops::RangeBounds;
+use std::ops::{Bound, RangeBounds};
 
 // -------------------------------------------------------
 //                  Internal Component
@@ -39,8 +39,12 @@ where
 
     type Iter<'n> = <MemoryBTreeLayer<K, B::Address, FANOUT> as NodeLayer<K>>::Iter<'n>;
 
-    fn range<'n>(&'n self, range: impl RangeBounds<Self::Address>) -> Self::Iter<'n> {
-        self.inner.range(range)
+    fn range<'n>(
+        &'n self,
+        start: Bound<Self::Address>,
+        end: Bound<Self::Address>,
+    ) -> Self::Iter<'n> {
+        self.inner.range(start, end)
     }
 
     fn full_range<'n>(&'n self) -> Self::Iter<'n> {
@@ -53,7 +57,7 @@ impl<K, B: NodeLayer<K>, const FANOUT: usize> InternalComponent<K, B>
 where
     K: StaticBounded,
 {
-    fn search(&self, ptr: Self::Address, key: &K) -> B::Address {
+    fn search(&self, _: &B, ptr: Self::Address, key: &K) -> B::Address {
         let node = unsafe { ptr.as_ref() };
 
         node.inner.search_lub(key).clone()
@@ -61,18 +65,19 @@ where
 
     fn insert<'n>(
         &'n mut self,
+        base: &B,
         ptr: Self::Address,
-        prop: PropogateInsert<'_, K, B>,
-    ) -> Option<PropogateInsert<'n, K, Self>> {
+        prop: PropogateInsert<K, B>,
+    ) -> Option<PropogateInsert<K, Self>> {
         match prop {
             PropogateInsert::Single(key, address) => self
                 .inner
                 .insert(key, address, ptr)
                 .map(|(key, address)| PropogateInsert::Single(key, address)),
-            PropogateInsert::Rebuild(base) => {
+            PropogateInsert::Rebuild => {
                 self.inner.fill(base.full_range());
 
-                Some(PropogateInsert::Rebuild(self))
+                Some(PropogateInsert::Rebuild)
             }
         }
     }
@@ -125,8 +130,12 @@ where
 
     type Iter<'n> = <MemoryBTreeLayer<K, V, FANOUT> as NodeLayer<K>>::Iter<'n>;
 
-    fn range<'n>(&'n self, range: impl RangeBounds<Self::Address>) -> Self::Iter<'n> {
-        self.inner.range(range)
+    fn range<'n>(
+        &'n self,
+        start: Bound<Self::Address>,
+        end: Bound<Self::Address>,
+    ) -> Self::Iter<'n> {
+        self.inner.range(start, end)
     }
 
     fn full_range<'n>(&'n self) -> Self::Iter<'n> {
@@ -144,7 +153,7 @@ where
         ptr: Self::Address,
         key: K,
         value: V,
-    ) -> Option<PropogateInsert<'n, K, Self>> {
+    ) -> Option<PropogateInsert<K, Self>> {
         if let Some((key, address)) = self.inner.insert(key, value, ptr) {
             Some(PropogateInsert::Single(key, address))
         } else {
