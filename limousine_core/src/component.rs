@@ -1,5 +1,5 @@
 use crate::kv::KeyBounded;
-use std::ops::RangeBounds;
+use std::ops::{Bound, RangeBounds};
 
 /// A `NodeLayer` is an ordered collection of key-bounded nodes which implement the `Keyed` trait.
 /// TODO: write more
@@ -32,10 +32,14 @@ pub trait NodeLayer<K>: 'static {
     fn full_range<'n>(&'n self) -> Self::Iter<'n>;
 
     /// Ordered iterator over a (un)bounded slice of `Address`
-    fn range<'n>(&'n self, range: impl RangeBounds<Self::Address>) -> Self::Iter<'n>;
+    fn range<'n>(
+        &'n self,
+        start: Bound<Self::Address>,
+        end: Bound<Self::Address>,
+    ) -> Self::Iter<'n>;
 }
 
-pub enum PropogateInsert<'n, K, Base>
+pub enum PropogateInsert<K, Base>
 where
     Base: NodeLayer<K> + ?Sized,
 {
@@ -43,18 +47,18 @@ where
     Single(K, Base::Address),
 
     /// Rebuild the entire layer
-    Rebuild(&'n Base),
+    Rebuild,
 }
 
 pub trait TopComponent<K, Base>
 where
     Base: NodeLayer<K>,
 {
-    fn search(&self, key: &K) -> Base::Address;
+    fn search(&self, base: &Base, key: &K) -> Base::Address;
 
-    fn insert(&mut self, prop: PropogateInsert<'_, K, Base>);
+    fn insert(&mut self, base: &Base, prop: PropogateInsert<K, Base>);
 
-    fn size(&self) -> usize;
+    fn len(&self) -> usize;
 }
 
 pub trait TopComponentInMemoryBuild<K, Base>
@@ -69,15 +73,18 @@ where
     Self: NodeLayer<K>,
     Base: NodeLayer<K>,
 {
-    fn search(&self, ptr: Self::Address, key: &K) -> Base::Address;
+    fn search(&self, base: &Base, ptr: Self::Address, key: &K) -> Base::Address;
 
     fn insert<'n>(
         &'n mut self,
+        base: &Base,
         ptr: Self::Address,
-        prop: PropogateInsert<'_, K, Base>,
-    ) -> Option<PropogateInsert<'n, K, Self>>;
+        prop: PropogateInsert<K, Base>,
+    ) -> Option<PropogateInsert<K, Self>>;
 
-    fn size(&self) -> usize;
+    fn len(&self) -> usize;
+
+    fn memory_size(&self) -> usize;
 }
 
 pub trait InternalComponentInMemoryBuild<K, Base>
@@ -92,16 +99,13 @@ where
     Self: NodeLayer<K>,
     Base: NodeLayer<K>,
 {
-    fn insert<'n>(
-        &'n mut self,
-        ptr: Self::Address,
-        key: K,
-        value: V,
-    ) -> Option<PropogateInsert<'n, K, Self>>;
+    fn insert(&mut self, ptr: Self::Address, key: K, value: V) -> Option<PropogateInsert<K, Self>>;
 
-    fn get(&self, ptr: Self::Address, key: &K) -> Option<&V>;
+    fn search(&self, ptr: Self::Address, key: &K) -> Option<&V>;
 
-    fn size(&self) -> usize;
+    fn len(&self) -> usize;
+
+    fn memory_size(&self) -> usize;
 
     // type EntryIter<'n>: Iterator<Item = (&'n K, &'n V)>
     // where

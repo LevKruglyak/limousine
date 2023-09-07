@@ -6,288 +6,408 @@
 //! crate.
 
 #![deny(missing_docs)]
-use crate::layer_type::LayerType;
-use proc_macro2::{Ident, Span};
-use quote::{format_ident, quote, ToTokens};
-use syn::{
-    braced, parse,
-    parse::{Parse, ParseStream},
-    parse_macro_input, Arm, Token,
-};
+mod component;
+mod layout;
+mod util;
 
-mod layer_type;
+use layout::IndexLayout;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
+use syn::Ident;
 
-/// Macro to materialize an immutable hybrid index structure. To materialize a hybrid index,
-/// a name and a layout is required, for example:
+/// Macro to materialize an hybrid index structure. To use, specify
+/// a name for the generated structure and a layout. The layout consists of
+/// a list of layer types, ordered from highest to lowest; for example:
 ///
 /// ```ignore
 /// // Note: this is just a syntax example, this macro needs to be called
 /// // from the [`limousine_engine`](https://crates.io/crates/limousine_engine) crate.
 ///
-/// create_immutable_hybrid_index! {
+/// create_hybrid_index! {
 ///     name: MyHybridIndex,
 ///     layout: {
-///         0 | 1 => btree(32),
-///         _ => pgm(8),
+///         pgm(4),
+///         pgm(4),
+///         btree(32),          // base layer
 ///     }
 /// }
 /// ```
-/// The name is required to be some unique identifier which is not defined anywhere elsewhere in
-/// the scope. The layout follows the Rust match expression syntax, where each arm follows the
-/// format:
+/// Optionally, we can also specify the top component, which is allowed to grow vertically
+/// indefinitely. By default, this is set to the ```BTreeMap``` structure from the Rust standard
+/// library, however alternative implmentations based LSM and LSH trees are also provided.
 ///
-/// ```ignore
-/// [usize match body] => [layer_type](param1, param2, ...)
-/// ```
+/// TODO: example
 ///
-/// The supported layer types are:
+/// The supported component types in the layout are:
 ///
 /// 1. **btree(fanout: usize)**
-/// 2. **pgm(epsilon: usize)**
+/// 2. **disk_btree(fanout: usize)**
+/// 3. **pgm(epsilon: usize)**
 ///
-/// The macro will generate a structure with the given name, alongside an implementation of the
-/// `ImmutableIndex` trait.
+/// Note that not all layouts are valid; for instance trying to place a disk layer over an
+/// in-memory layer will result in an error. These rules are enforced automatically by the macro.
+/// The macro will generate a structure with the provided name, alongside an implementation of the
+/// `Index` trait.
 #[proc_macro]
-pub fn create_immutable_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    // Generate documentation
-    let input_string = input.to_string();
-    let mut documentation = quote! {
-        #[doc = "Immutable hybrid index materialized by layout:"]
-        #[doc = ""]
-    };
-
-    for line in input_string.lines() {
-        let line = format!(
-            "```rust
-        {{
-        {line}
-        }}
-        ```"
-        );
-        documentation.extend(quote!(#[doc = #line]));
-    }
-
+pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse hybrid index description
-    let desc = parse_macro_input!(input as HybridIndexDescription);
-    let name = Ident::new(&desc.name, Span::mixed_site());
+    let layout = syn::parse_macro_input!(input as IndexLayout);
+    let name = layout.name();
 
-    let layer_name = Ident::new(
-        &format!("__{}Layer", &desc.name).to_string(),
-        Span::call_site(),
+    let mod_name = proc_macro2::Ident::new(
+        format!("__implmentation_{}", name.to_string().to_lowercase()).as_str(),
+        proc_macro2::Span::call_site(),
     );
 
-    // Materialize layer type
-    let mut variants = Vec::new();
-    for (i, layer) in desc.layer_types.iter().enumerate() {
-        let variant_name = format_ident!("L{}", i);
-        variants.push(quote! { #variant_name(#layer) });
-    }
+    let (alias_body, alias) = create_type_aliases(&layout);
+    let (index_body, index_fields) = create_index_struct(&layout, &alias);
+    let index_impl = create_index_impl(&layout, &alias, &index_fields);
 
-    // Materialize implementation for layer type
-    let mut len_arms = Vec::new();
-    let mut search_arms = Vec::new();
-    let mut key_iter_arms = Vec::new();
+    let mut implementation = proc_macro2::TokenStream::new();
+    implementation.extend(quote! {
+        pub mod #mod_name {
+            use ::limousine_engine::private::*;
 
-    for (i, _) in desc.layer_types.iter().enumerate() {
-        let variant_name = format_ident!("L{}", i);
+            #(#alias_body)*
 
-        len_arms.push(quote!(crate::#layer_name::#variant_name(_internal) => _internal.len()));
-        search_arms.push(
-            quote!(crate::#layer_name::#variant_name(_internal) => _internal.search(key, range)),
-        );
-        key_iter_arms.push(quote!(crate::#layer_name::#variant_name(_internal) => Box::new(_internal.nodes().iter().map(|x| *x.borrow()))));
-    }
+            #index_body
 
-    let mut build_arms = Vec::new();
-    let mut build_on_disk_arms = Vec::new();
-    let mut load_arms = Vec::new();
-
-    for (arm, index) in desc.layout.iter().cloned() {
-        let layer_base = desc.layer_types[index].to_base();
-        let layout_variant_name = format_ident!("L{}", index);
-
-        let mut build_arm = arm.clone();
-        build_arm.body = Box::new(
-            syn::parse2(quote!(crate::#layer_name::#layout_variant_name(#layer_base::build(base))))
-                .expect(""),
-        );
-        build_arms.push(build_arm.to_token_stream());
-
-        let mut build_on_disk_arm = arm.clone();
-        build_on_disk_arm.body = Box::new(
-            syn::parse2(quote!(Ok(crate::#layer_name::#layout_variant_name(#layer_base::build_on_disk(base, path)?))))
-                .expect(""),
-        );
-        build_on_disk_arms.push(build_on_disk_arm.to_token_stream());
-
-        let mut load_arm = arm.clone();
-        load_arm.body = Box::new(
-            syn::parse2(
-                quote!(Ok(crate::#layer_name::#layout_variant_name(#layer_base::load(path)?))),
-            )
-            .expect(""),
-        );
-
-        load_arms.push(load_arm.to_token_stream());
-    }
-
-    // Layer implementation
-    let mut layer = quote! {
-        pub enum #layer_name<K: ::limousine_engine::private::Key> {
-            #(#variants),*
+            #index_impl
         }
 
-        impl<K: ::limousine_engine::private::Key> ::limousine_engine::private::HybridLayer<K> for #layer_name<K> {
-            fn len(&self) -> usize {
-                use ::limousine_engine::private::NodeLayer;
+        use #mod_name::#name;
+    });
 
-                match self {
-                    #(#len_arms,)*
-                }
+    implementation.into()
+}
+
+fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
+    let type_alias: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .map(|i| Ident::new(format!("C{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    let mut type_alias_body = Vec::new();
+
+    // Add body as the first component
+    let alias = type_alias[0].clone();
+    let body = layout.base.to_tokens();
+    type_alias_body.push(quote::quote! {
+        type #alias<K, V> = #body;
+    });
+
+    // Add internal components
+    for (mut index, component) in layout.internal.iter().rev().enumerate() {
+        index += 1;
+
+        let previous_alias = type_alias[index - 1].clone();
+        let body = component.to_tokens(quote! { #previous_alias<K, V> });
+
+        let alias = type_alias[index].clone();
+        type_alias_body.push(quote! {
+            type #alias<K, V> = #body;
+        });
+    }
+
+    // Add top component
+    let index = layout.internal.len() + 1;
+
+    let previous_alias = type_alias[index - 1].clone();
+    let body = layout.top.to_tokens(quote! { #previous_alias<K, V> });
+
+    let alias = type_alias[index].clone();
+    type_alias_body.push(quote! {
+        type #alias<K, V> = #body;
+    });
+
+    (type_alias_body, type_alias)
+}
+
+fn create_index_struct(layout: &IndexLayout, alias: &Vec<Ident>) -> (TokenStream, Vec<Ident>) {
+    let name = layout.name();
+
+    // Create fields
+    let mut fields = Vec::new();
+    for component in alias.iter() {
+        fields.push(Ident::new(
+            component.to_string().to_lowercase().as_str(),
+            Span::call_site(),
+        ));
+    }
+
+    // Create field definitions
+    let mut field_bodies = Vec::new();
+    for (index, component) in alias.iter().enumerate() {
+        let field = fields[index].clone();
+        field_bodies.push(quote! {
+            #field: #component<K, V>,
+        });
+    }
+
+    let body = quote! {
+        pub struct #name<K: Key, V: Value> {
+            #(#field_bodies)*
+        }
+    };
+
+    (body, fields)
+}
+
+fn create_search_body(
+    layout: &IndexLayout,
+    _aliases: &Vec<Ident>,
+    fields: &Vec<Ident>,
+) -> TokenStream {
+    let search_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .rev()
+        .map(|i| Ident::new(format!("s{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    let component_vars: Vec<Ident> = fields.iter().cloned().rev().collect();
+    let mut search_body = TokenStream::new();
+
+    // Top component
+    let search = search_vars[0].clone();
+    let field = component_vars[0].clone();
+    let next = component_vars[1].clone();
+
+    search_body.extend(quote! { let #search = self.#field.search(&self.#next, &key);});
+
+    // Internal components
+    for index in 1..=layout.internal.len() {
+        let search = search_vars[index].clone();
+        let prev_search = search_vars[index - 1].clone();
+        let field = component_vars[index].clone();
+        let next = component_vars[index + 1].clone();
+
+        search_body
+            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+    }
+
+    // Base component
+    let index = layout.internal.len() + 1;
+    let search = search_vars[index].clone();
+    let prev_search = search_vars[index - 1].clone();
+    let field = component_vars[index].clone();
+
+    search_body.extend(quote! { let #search = self.#field.search(#prev_search, &key);});
+    search_body.extend(quote! { #search });
+
+    search_body
+}
+
+fn create_insert_body(
+    layout: &IndexLayout,
+    _aliases: &Vec<Ident>,
+    fields: &Vec<Ident>,
+) -> TokenStream {
+    let search_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .rev()
+        .map(|i| Ident::new(format!("s{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    let component_vars: Vec<Ident> = fields.iter().cloned().rev().collect();
+    let mut search_body = TokenStream::new();
+
+    // Top component
+    let search = search_vars[0].clone();
+    let field = component_vars[0].clone();
+    let next = component_vars[1].clone();
+
+    search_body.extend(quote! { let #search = self.#field.search(&self.#next, &key);});
+
+    // Internal components
+    for index in 1..=layout.internal.len() {
+        let search = search_vars[index].clone();
+        let prev_search = search_vars[index - 1].clone();
+        let field = component_vars[index].clone();
+        let next = component_vars[index + 1].clone();
+
+        search_body
+            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+    }
+
+    // Base component
+    let index = layout.internal.len() + 1;
+    let search = search_vars[index].clone();
+    let prev_search = search_vars[index - 1].clone();
+    let field = component_vars[index].clone();
+
+    search_body.extend(quote! { let #search = self.#field.search(#prev_search, &key);});
+
+    search_body.extend(quote! { let result = s0.copied(); });
+
+    // Insert stage
+    let insert_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .map(|i| Ident::new(format!("i{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    let var = insert_vars[0].clone();
+    let field = fields[0].clone();
+    let search = search_vars[search_vars.len() - 2].clone();
+
+    search_body.extend(quote! {
+        let #var;
+        if let Some(x) = self.#field.insert(#search, key, value) {
+            #var = x;
+        } else {
+            return result;
+        }
+    });
+
+    for index in 1..=layout.internal.len() {
+        let var = insert_vars[index].clone();
+        let prev_var = insert_vars[index - 1].clone();
+
+        let field = fields[index].clone();
+        let prev_field = fields[index - 1].clone();
+
+        let search = search_vars[search_vars.len() - 2 - index].clone();
+
+        search_body.extend(quote! {
+            let #var;
+            if let Some(x) = self.#field.insert(&self.#prev_field, #search, #prev_var) {
+                #var = x;
+            } else {
+                return result;
+            }
+        });
+    }
+
+    let index = layout.internal.len() + 1;
+
+    let var = insert_vars[index].clone();
+    let prev_var = insert_vars[index - 1].clone();
+
+    let field = fields[index].clone();
+    let prev_field = fields[index - 1].clone();
+
+    search_body.extend(quote! {
+        let #var = self.#field.insert(&self.#prev_field, #prev_var);
+    });
+
+    search_body.extend(quote! { result });
+    search_body
+}
+
+fn create_empty_body(
+    layout: &IndexLayout,
+    aliases: &Vec<Ident>,
+    fields: &Vec<Ident>,
+) -> TokenStream {
+    let mut empty_body = TokenStream::new();
+
+    // Add body as the first component
+    let alias = aliases[0].clone();
+    let var = fields[0].clone();
+
+    empty_body.extend(quote! {
+        let #var = #alias::empty();
+    });
+
+    // Add internal components
+    for index in 1..=layout.internal.len() {
+        let alias = aliases[index].clone();
+        let var = fields[index].clone();
+        let prev_var = fields[index - 1].clone();
+
+        empty_body.extend(quote! {
+            let #var = #alias::build(&#prev_var);
+        });
+    }
+
+    let index = layout.internal.len() + 1;
+    let alias = aliases[index].clone();
+    let var = fields[index].clone();
+    let prev_var = fields[index - 1].clone();
+
+    empty_body.extend(quote! {
+        let #var = #alias::build(&#prev_var);
+    });
+
+    empty_body.extend(quote! {
+        Self {
+            #(#fields,)*
+        }
+    });
+
+    empty_body
+}
+
+fn create_build_body(
+    layout: &IndexLayout,
+    aliases: &Vec<Ident>,
+    fields: &Vec<Ident>,
+) -> TokenStream {
+    let mut build_body = TokenStream::new();
+
+    // Add body as the first component
+    let alias = aliases[0].clone();
+    let var = fields[0].clone();
+
+    build_body.extend(quote! {
+        let #var = #alias::build(iter);
+    });
+
+    // Add internal components
+    for index in 1..=layout.internal.len() {
+        let alias = aliases[index].clone();
+        let var = fields[index].clone();
+        let prev_var = fields[index - 1].clone();
+
+        build_body.extend(quote! {
+            let #var = #alias::build(&#prev_var);
+        });
+    }
+
+    let index = layout.internal.len() + 1;
+    let alias = aliases[index].clone();
+    let var = fields[index].clone();
+    let prev_var = fields[index - 1].clone();
+
+    build_body.extend(quote! {
+        let #var = #alias::build(&#prev_var);
+    });
+
+    build_body.extend(quote! {
+        Self {
+            #(#fields,)*
+        }
+    });
+
+    build_body
+}
+
+fn create_index_impl(
+    layout: &IndexLayout,
+    aliases: &Vec<Ident>,
+    fields: &Vec<Ident>,
+) -> TokenStream {
+    let name = layout.name();
+
+    let search_body = create_search_body(layout, aliases, fields);
+    let insert_body = create_insert_body(layout, aliases, fields);
+    let empty_body = create_empty_body(layout, aliases, fields);
+    let build_body = create_build_body(layout, aliases, fields);
+
+    let body = quote! {
+        impl<K: Key, V: Value> #name<K, V> {
+            pub fn search(&self, key: &K) -> Option<&V> {
+                #search_body
             }
 
-            fn search(&self, key: &K, range: ::limousine_engine::private::ApproxPos) -> ::limousine_engine::private::ApproxPos {
-                use ::limousine_engine::private::InternalLayer;
-
-                match self {
-                    #(#search_arms,)*
-                }
+            pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+                #insert_body
             }
 
-            fn build(layer: usize, base: impl ExactSizeIterator<Item = K>) -> Self {
-                use ::limousine_engine::private::InternalLayerBuild;
-
-                match layer {
-                    #(#build_arms)*
-                }
+            pub fn empty() -> Self {
+                #empty_body
             }
 
-            fn build_on_disk(
-                layer: usize,
-                base: impl ExactSizeIterator<Item = K>,
-                path: impl AsRef<std::path::Path>,
-            ) -> ::limousine_engine::private::Result<Self>
-            where
-                Self: Sized {
-                use ::limousine_engine::private::InternalLayerBuild;
-
-                match layer {
-                    #(#build_on_disk_arms)*
-                }
-            }
-
-            fn load(layer: usize, path: impl AsRef<std::path::Path>) -> ::limousine_engine::private::Result<Self>
-            where
-                Self: Sized {
-                use ::limousine_engine::private::InternalLayerBuild;
-
-                match layer {
-                    #(#load_arms)*
-                }
-            }
-
-            fn key_iter<'e>(&'e self) -> Box<dyn ExactSizeIterator<Item = K> + 'e> {
-                use ::limousine_engine::private::NodeLayer;
-                use std::borrow::Borrow;
-
-                match self {
-                    #(#key_iter_arms,)*
-                }
+            pub fn build(iter: impl Iterator<Item = (K, V)>) -> Self {
+                #build_body
             }
         }
     };
 
-    // Index implementation
-    let index = quote! {
-        #documentation
-        #[allow(unused_import)]
-        pub struct #name<K: ::limousine_engine::private::Key, V: ::limousine_engine::private::Value>(::limousine_engine::private::HybridIndex<K, V, #layer_name<K>>);
-
-        impl<K: ::limousine_engine::private::Key, V: ::limousine_engine::private::Value> ::limousine_engine::private::ImmutableIndex<K, V> for #name<K, V> {
-            fn build_in_memory(base: impl ExactSizeIterator<Item = (K, V)>) -> Self {
-                Self(::limousine_engine::private::HybridIndex::build_in_memory(base))
-            }
-
-            fn build_on_disk(
-                base: impl ExactSizeIterator<Item = (K, V)>,
-                path: impl AsRef<::std::path::Path>,
-                threshold: usize,
-            ) -> ::limousine_engine::private::Result<Self> {
-                Ok(Self(::limousine_engine::private::HybridIndex::build_on_disk(base, path, threshold)?))
-            }
-
-            fn load(path: impl AsRef<::std::path::Path>, threshold: usize) -> ::limousine_engine::private::Result<Self> {
-                Ok(Self(::limousine_engine::private::HybridIndex::load(path, threshold)?))
-            }
-
-            fn lookup(&self, key: &K) -> Option<V> {
-                self.0.lookup(key)
-            }
-
-            fn range(&self, low: &K, high: &K) -> Self::RangeIterator<'_> {
-                self.0.range(low, high)
-            }
-
-            type RangeIterator<'e> = ::limousine_engine::private::HybridIndexRangeIterator<'e, K, V>;
-        }
-    };
-
-    layer.extend(index);
-    layer.into()
-}
-
-struct HybridIndexDescription {
-    name: String,
-    layer_types: Vec<LayerType>,
-    layout: Vec<(Arm, usize)>,
-}
-
-impl Parse for HybridIndexDescription {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let name: Ident = input.parse()?;
-        assert!(name.to_string() == "name".to_string(), "missing name!");
-
-        let _: Token![:] = input.parse()?;
-        let index_name: Ident = input.parse()?;
-        let _: Token![,] = input.parse()?;
-
-        let layout: Ident = input.parse()?;
-        assert!(
-            layout.to_string() == "layout".to_string(),
-            "missing layout!"
-        );
-        let _: Token![:] = input.parse()?;
-        let content;
-        braced!(content in input);
-        let mut layout = Vec::new();
-        let mut layer_types = Vec::new();
-
-        while !content.is_empty() {
-            let arm: Arm = content.parse()?;
-            let _: Option<Token![,]> = content.parse()?;
-            let body = arm.body.to_token_stream();
-            let layer_type: LayerType = parse(body.into())?;
-
-            if !layer_types.contains(&layer_type) {
-                layer_types.push(layer_type.clone());
-            }
-
-            let layer_index = layer_types
-                .iter()
-                .enumerate()
-                .find(|&(_, item)| *item == layer_type)
-                .unwrap()
-                .0;
-
-            layout.push((arm, layer_index));
-        }
-
-        let _: Option<Token![,]> = content.parse()?;
-
-        Ok(Self {
-            name: index_name.to_string(),
-            layer_types,
-            layout,
-        })
-    }
+    body
 }

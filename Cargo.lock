@@ -1292,6 +1292,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "limousine_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
+name = "limousine_engine"
+version = "0.1.2"
+dependencies = [
+ "limousine_core",
+ "limousine_derive",
+]
+
+[[package]]
 name = "limousine_example"
 version = "0.1.0"
 dependencies = [
@@ -1300,8 +1317,10 @@ dependencies = [
  "egui",
  "itertools",
  "limousine_core",
+ "limousine_engine",
  "rand",
  "rand_distr",
+ "sys-info",
 ]
 
 [[package]]
@@ -2128,6 +2147,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "sys-info"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b3a0d0aba8bf96a0e1ddfdc352fc53b3df7f39318c71854910c3c4b024ae52c"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
