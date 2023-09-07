@@ -1,13 +1,10 @@
 pub mod pgm_node;
 pub mod pgm_segmentation;
 
+use super::generic::*;
 use crate::common::search::*;
 use crate::component::*;
 use crate::kv::Key;
-use generic::pgm::{LinearModel, PGMSegmentation};
-// use generic::pgm_node::LinearModel;
-// use generic::pgm_node::PGMLayer;
-use generic::*;
 use std::collections::HashMap;
 use std::ops::Bound;
 use std::ops::RangeBounds;
@@ -15,6 +12,7 @@ use std::ops::RangeBounds;
 // -------------------------------------------------------
 //                  PGM Internal Component
 // -------------------------------------------------------
+/*
 
 type PGMLayer<K, const EPSILON: usize> =
     PiecewiseModel<K, LinearModel<K, EPSILON>, PGMSegmentation>;
@@ -132,3 +130,4 @@ impl<K: Key, Base: NodeLayer<K>, const EPSILON: usize> InternalComponentInMemory
         }
     }
 }
+*/
