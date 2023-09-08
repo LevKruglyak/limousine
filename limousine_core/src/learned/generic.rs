@@ -1,8 +1,11 @@
 //! Contains some components to build piecewise models which approximate the location of entries,
 //! for use in a learned index of some form. For example, the PGM index uses linear models for nodes.
 
+use crate::common::entry::Entry;
 use crate::common::heap_map::HeapMap;
+use crate::common::search::{BinarySearch, Search};
 use crate::common::stack_map::StackMap;
+use crate::component;
 use crate::kv::{Key, KeyBounded, Value};
 use crate::{component::NodeLayer, kv::StaticBounded};
 use std::ops::Bound;
@@ -13,9 +16,9 @@ use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, ops::Deref, path::Pat
 // Helper Types
 // ----------------------------------------
 
-type Node<K, V, M> = PiecewiseNode<K, V, M>;
-type Address = usize;
-type OptAddress = Option<usize>;
+pub type Node<K, V, M> = PiecewiseNode<K, V, M>;
+pub type Address = usize;
+pub type OptAddress = Option<usize>;
 
 // ----------------------------------------
 // Iteration Types
@@ -111,8 +114,8 @@ where
 
 pub struct PiecewiseNode<K: Key, V, M: Model<K>> {
     pub model: M,
-    pub data: Vec<(K, V)>, // TODO: Eventually replace with heapmap, or something more optimized
-                           // pub next: OptAddress<K, V, M>, Don't think we need for this implementation?
+    pub data: Vec<Entry<K, V>>, // TODO: Eventually replace with heapmap, or something more optimized
+                                // pub next: OptAddress<K, V, M>, Don't think we need for this implementation?
 }
 
 impl<K: Key, V, M: Model<K>> KeyBounded<K> for PiecewiseNode<K, V, M> {
@@ -147,13 +150,13 @@ pub trait Model<K: Key>: Borrow<K> + Debug + 'static {
 // Layer Types
 // ----------------------------------------
 
+/// Implement the node layer abstractions
 pub struct PiecewiseLayer<K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> {
     pub nodes: Vec<PiecewiseNode<K, V, M>>,
     _seg_marker: PhantomData<S>,
 }
 
-impl<K: Key, V: Value, M: Model<K>, S: Segmentation<K, V, M>> NodeLayer<K>
-    for PiecewiseLayer<K, V, M, S>
+impl<K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> NodeLayer<K> for PiecewiseLayer<K, V, M, S>
 where
     K: 'static + StaticBounded,
     V: 'static,
@@ -180,5 +183,23 @@ where
 
     fn full_range<'n>(&'n self) -> Self::Iter<'n> {
         Self::Iter::range(self, Bound::Unbounded, Bound::Unbounded)
+    }
+}
+
+/// Basic implementations for common functions on a layer
+impl<K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> PiecewiseLayer<K, V, M, S>
+where
+    K: 'static + StaticBounded,
+    V: 'static + Clone,
+{
+    fn search(
+        &self,
+        ix: <PiecewiseLayer<K, V, M, S> as component::NodeLayer<K>>::Address,
+        key: &K,
+    ) -> V {
+        let node = &self.nodes[ix];
+        let approx_pos = node.model.approximate(key);
+        let test = BinarySearch::search_by_key(&node.data[approx_pos.lo..approx_pos.hi], key);
+        node.data[test.unwrap()].value.clone()
     }
 }

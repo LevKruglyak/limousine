@@ -1,10 +1,14 @@
 pub mod pgm_node;
 pub mod pgm_segmentation;
 
-use super::generic::*;
+use self::pgm_node::LinearModel;
+use self::pgm_segmentation::PGMSegmentation;
+use super::generic::{PiecewiseLayer, Segmentation};
 use crate::common::search::*;
 use crate::component::*;
 use crate::kv::Key;
+use crate::kv::StaticBounded;
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ops::Bound;
 use std::ops::RangeBounds;
@@ -12,21 +16,24 @@ use std::ops::RangeBounds;
 // -------------------------------------------------------
 //                  PGM Internal Component
 // -------------------------------------------------------
-/*
 
-type PGMLayer<K, const EPSILON: usize> =
-    PiecewiseModel<K, LinearModel<K, EPSILON>, PGMSegmentation>;
-
-pub struct PGMInternalComponent<K, Base: NodeLayer<K>, const EPSILON: usize> {
-    inner: PGMLayer<K, EPSILON>,
-    mapping: Vec<Base::Address>,
+pub struct PGMInternalComponent<K: Key, Base: NodeLayer<K>, const EPSILON: usize> {
+    inner: PiecewiseLayer<K, Base::Address, LinearModel<K, EPSILON>, PGMSegmentation>,
 }
 
 impl<K: Key, Base: NodeLayer<K>, const EPSILON: usize> NodeLayer<K>
     for PGMInternalComponent<K, Base, EPSILON>
+where
+    K: StaticBounded,
 {
-    type Node = <PGMLayer<K, EPSILON> as NodeLayer<K>>::Node;
-    type Address = <PGMLayer<K, EPSILON> as NodeLayer<K>>::Address;
+    type Node =
+        <PiecewiseLayer<K, Base::Address, LinearModel<K, EPSILON>, PGMSegmentation> as NodeLayer<
+            K,
+        >>::Node;
+    type Address =
+        <PiecewiseLayer<K, Base::Address, LinearModel<K, EPSILON>, PGMSegmentation> as NodeLayer<
+            K,
+        >>::Address;
 
     fn deref(&self, ptr: Self::Address) -> &Self::Node {
         self.inner.deref(ptr)
@@ -36,7 +43,10 @@ impl<K: Key, Base: NodeLayer<K>, const EPSILON: usize> NodeLayer<K>
         self.inner.deref_mut(ptr)
     }
 
-    type Iter<'n> = <PGMLayer<K, EPSILON> as NodeLayer<K>>::Iter<'n>;
+    type Iter<'n> =
+        <PiecewiseLayer<K, Base::Address, LinearModel<K, EPSILON>, PGMSegmentation> as NodeLayer<
+            K,
+        >>::Iter<'n>;
 
     fn full_range<'n>(&'n self) -> Self::Iter<'n> {
         self.inner.full_range()
@@ -57,26 +67,6 @@ where
     Base::Address: std::fmt::Debug,
 {
     fn search(&self, base: &Base, ptr: Self::Address, key: &K) -> Base::Address {
-        let mut approx_pos = self.inner.approximate(ptr, key);
-
-        // Adjust to avoid out-of-bounds
-        if approx_pos.lo >= self.mapping.len() {
-            approx_pos.lo = self.mapping.len() - 1;
-        }
-
-        if approx_pos.hi > self.mapping.len() {
-            approx_pos.hi = self.mapping.len();
-        }
-
-        let start = Bound::Included(self.mapping[approx_pos.lo].clone());
-        let end = Bound::Included(self.mapping[approx_pos.hi - 1].clone());
-
-        for (base_key, base_address) in base.range(start, end) {
-            if key >= &base_key {
-                return base_address;
-            }
-        }
-
         unreachable!()
     }
 
@@ -86,28 +76,15 @@ where
         ptr: Self::Address,
         prop: PropogateInsert<K, Base>,
     ) -> Option<PropogateInsert<K, Self>> {
-        // Don't care what prop is, we always rebuild
-        self.mapping = Vec::new();
-
-        // TODO: move
-        let models = PGMSegmentation::make_segmentation(base.full_range().enumerate().map(
-            |(rank, (key, address))| {
-                self.mapping.push(address);
-                return (key, rank);
-            },
-        ));
-
-        self.inner = PGMLayer::new(models);
-
         Some(PropogateInsert::Rebuild)
     }
 
     fn memory_size(&self) -> usize {
-        self.inner.len() * std::mem::size_of::<LinearModel<K, EPSILON>>()
+        unreachable!()
     }
 
     fn len(&self) -> usize {
-        self.inner.len()
+        self.inner.nodes.len()
     }
 }
 
@@ -115,19 +92,6 @@ impl<K: Key, Base: NodeLayer<K>, const EPSILON: usize> InternalComponentInMemory
     for PGMInternalComponent<K, Base, EPSILON>
 {
     fn build(base: &Base) -> Self {
-        let mapping = base.full_range().map(|(_, address)| address).collect();
-
-        // TODO: move
-        let models = PGMSegmentation::make_segmentation(
-            base.full_range()
-                .enumerate()
-                .map(|(rank, (key, address))| (key, rank)),
-        );
-
-        Self {
-            inner: PiecewiseModel::new(models),
-            mapping,
-        }
+        unimplemented!();
     }
 }
-*/
