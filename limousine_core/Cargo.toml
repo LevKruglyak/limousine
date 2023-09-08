@@ -11,7 +11,6 @@ repository = "https://github.com/LevKruglyak/limousine"
 [dependencies]
 num = "0.4.0"
 trait-set = "0.3.0"
-bumpalo = { version = "3.13.0", features = ["boxed"] }
 
 [features]
 default = []

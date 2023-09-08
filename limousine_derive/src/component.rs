@@ -99,10 +99,10 @@ impl TopComponent {
         }
     }
 
-    pub fn to_tokens(&self, base: impl ToTokens) -> TokenStream {
+    pub fn to_tokens(&self, _base: impl ToTokens) -> TokenStream {
         match self {
             &TopComponent::BTreeTop => {
-                quote! { BTreeTopComponent<K, #base> }
+                quote! { BTreeTopComponent<K, V> }
             }
         }
     }
@@ -121,17 +121,17 @@ impl InternalComponent {
         }
     }
 
-    pub fn to_tokens(&self, base: impl ToTokens) -> TokenStream {
+    pub fn to_tokens(&self, _base: impl ToTokens) -> TokenStream {
         match self {
             &InternalComponent::BTree {
                 fanout,
                 persist: false,
-            } => quote!(BTreeInternalComponent<K, #base, #fanout>).to_token_stream(),
+            } => quote!(BTreeInternalComponent<K, V, #fanout>).to_token_stream(),
 
             &InternalComponent::BTree {
                 fanout,
                 persist: true,
-            } => quote!(BTreeInternalComponent<K, #base, #fanout>).to_token_stream(),
+            } => quote!(BTreeInternalComponent<K, V, #fanout>).to_token_stream(),
         }
     }
 }
