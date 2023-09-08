@@ -138,8 +138,10 @@ fn create_index_struct(layout: &IndexLayout, alias: &Vec<Ident>) -> (TokenStream
     let mut field_bodies = Vec::new();
     for (index, component) in alias.iter().enumerate() {
         let field = fields[index].clone();
+
+        // TODO: remove the `pub` field, this is for debugging purposes
         field_bodies.push(quote! {
-            #field: #component<K, V>,
+            pub #field: #component<K, V>,
         });
     }
 
