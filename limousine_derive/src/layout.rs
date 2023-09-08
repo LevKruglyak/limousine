@@ -52,9 +52,12 @@ impl Parse for IndexLayout {
             .parse_terminated(ParsedComponent::parse, Token![,])
             .map(|parsed| parsed.into_iter().collect())?;
 
+        let mut in_persisted_region: bool = false;
+
         let first = components
             .first()
             .ok_or(syn::Error::new(Span::call_site(), "Empty layout!"))?;
+        in_persisted_region |= first.component.is_persisted();
 
         let top = TopComponent::from_general(first.component)
             .ok_or(syn::Error::new(first.span, "Invalid top component type!"))?;
@@ -68,6 +71,15 @@ impl Parse for IndexLayout {
 
         let mut internal: Vec<InternalComponent> = Vec::new();
         for parsed in &components[1..components.len() - 1] {
+            if !parsed.component.is_persisted() && in_persisted_region {
+                return Err(syn::Error::new(
+                    parsed.span,
+                    "Cannot have an in-memory component below a persisted component!",
+                ));
+            }
+
+            in_persisted_region |= parsed.component.is_persisted();
+
             internal.push(InternalComponent::from_general(parsed.component).ok_or(
                 syn::Error::new(first.span, "Invalid internal component type!"),
             )?);

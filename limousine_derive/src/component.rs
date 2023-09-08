@@ -14,6 +14,15 @@ pub enum Component {
     BTree { fanout: usize, persist: bool },
 }
 
+impl Component {
+    pub fn is_persisted(&self) -> bool {
+        match self {
+            Self::BTreeTop => false,
+            Self::BTree { persist, .. } => *persist,
+        }
+    }
+}
+
 pub struct ParsedComponent {
     pub span: Span,
     pub component: Component,
@@ -35,7 +44,7 @@ impl Parse for ParsedComponent {
             attrs.insert(attr);
         }
 
-        match ident.to_string().as_str() {
+        let result = match ident.to_string().as_str() {
             "btree_top" => Ok(Self {
                 span,
                 component: Component::BTreeTop,
@@ -49,6 +58,9 @@ impl Parse for ParsedComponent {
 
                 let persist = attrs.get("persist").is_some();
 
+                attrs.remove("fanout");
+                attrs.remove("persist");
+
                 Ok(Self {
                     span,
                     component: Component::BTree {
@@ -59,9 +71,18 @@ impl Parse for ParsedComponent {
             }
             _ => Err(syn::Error::new(
                 span,
-                input.error("Valid components: btree_top, btree"),
+                input.error("Invalid component type!"),
             )),
+        };
+
+        if !attrs.is_empty() {
+            return Err(syn::Error::new(
+                span,
+                input.error("Invalid attribute specified!"),
+            ));
         }
+
+        result
     }
 }
 
@@ -108,9 +129,9 @@ impl InternalComponent {
             } => quote!(BTreeInternalComponent<K, #base, #fanout>).to_token_stream(),
 
             &InternalComponent::BTree {
-                fanout: _,
+                fanout,
                 persist: true,
-            } => unimplemented!(),
+            } => quote!(BTreeInternalComponent<K, #base, #fanout>).to_token_stream(),
         }
     }
 }
@@ -136,9 +157,9 @@ impl BaseComponent {
             } => quote!(BTreeBaseComponent<K, V, #fanout>).to_token_stream(),
 
             &BaseComponent::BTree {
-                fanout: _,
+                fanout,
                 persist: true,
-            } => unimplemented!(),
+            } => quote!(BTreeBaseComponent<K, V, #fanout>).to_token_stream(),
         }
     }
 }
