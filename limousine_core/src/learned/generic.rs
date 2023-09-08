@@ -14,26 +14,55 @@ use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, ops::Deref, path::Pat
 // ----------------------------------------
 
 type Node<K, V, M> = PiecewiseNode<K, V, M>;
-type Address<K, V, M> = NonNull<Node<K, V, M>>;
-type OptAddress<K, V, M> = Option<Address<K, V, M>>;
+type Address = usize;
+type OptAddress = Option<usize>;
 
 // ----------------------------------------
 // Iteration Types
 // ----------------------------------------
 
-/// A struct to stay organized while iterating over learned nodes in the same layer
+/// A struct to iterate over learned nodes in the same layer
 pub struct Iter<'n, K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> {
     layer: &'n PiecewiseLayer<K, V, M, S>,
-    current: OptAddress<K, V, M>,
-    end: Bound<Address<K, V, M>>,
+    current: OptAddress,
+    end: Bound<Address>,
+    _entry_marker: PhantomData<(K, V, M, S)>,
 }
 
 impl<'n, K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> Iter<'n, K, V, M, S> {
     fn new(layer: &'n PiecewiseLayer<K, V, M, S>) -> Self {
         Self {
             layer,
-            current: Some(layer.nodes[0]),
+            current: Some(0),
             end: Bound::Unbounded,
+            _entry_marker: Default::default(),
+        }
+    }
+
+    fn range(
+        layer: &'n PiecewiseLayer<K, V, M, S>,
+        start: Bound<Address>,
+        end: Bound<Address>,
+    ) -> Self {
+        let mut start_ix = match start {
+            Bound::Included(ix) => ix,
+            Bound::Excluded(ix) => ix + 1,
+            Bound::Unbounded => 0,
+        };
+        if start_ix >= layer.nodes.len() {
+            Self {
+                layer,
+                current: None,
+                end,
+                _entry_marker: Default::default(),
+            }
+        } else {
+            Self {
+                layer,
+                current: Some(start_ix),
+                end,
+                _entry_marker: Default::default(),
+            }
         }
     }
 }
@@ -43,10 +72,36 @@ where
     K: StaticBounded,
     V: 'static,
 {
-    type Item = (K, Address<K, V, M>);
+    type Item = (K, Address);
 
     fn next(&mut self) -> Option<Self::Item> {
-        None
+        match self.current {
+            None => None,
+            Some(cur_ix) => {
+                let mut ix = cur_ix + 1;
+                let mut end_ix = self.layer.nodes.len(); // Index of first thing _not_ included
+                match self.end {
+                    Bound::Included(jx) => {
+                        if jx + 1 < end_ix {
+                            end_ix = jx + 1;
+                        }
+                    }
+                    Bound::Excluded(jx) => {
+                        if jx < end_ix {
+                            end_ix = jx;
+                        }
+                    }
+                    _ => (),
+                }
+                if ix >= end_ix {
+                    self.current = None;
+                    None
+                } else {
+                    self.current = Some(ix);
+                    Some((self.layer.nodes[ix].lower_bound().clone(), ix))
+                }
+            }
+        }
     }
 }
 
@@ -56,9 +111,8 @@ where
 
 pub struct PiecewiseNode<K: Key, V, M: Model<K>> {
     pub model: M,
-    pub data: Vec<(K, V)>,
-    pub next: OptAddress<K, V, M>,
-    _ph: PhantomData<(K, V)>,
+    pub data: Vec<(K, V)>, // TODO: Eventually replace with heapmap, or something more optimized
+                           // pub next: OptAddress<K, V, M>, Don't think we need for this implementation?
 }
 
 impl<K: Key, V, M: Model<K>> KeyBounded<K> for PiecewiseNode<K, V, M> {
@@ -94,7 +148,7 @@ pub trait Model<K: Key>: Borrow<K> + Debug + 'static {
 // ----------------------------------------
 
 pub struct PiecewiseLayer<K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> {
-    pub nodes: Vec<Address<K, V, M>>,
+    pub nodes: Vec<PiecewiseNode<K, V, M>>,
     _seg_marker: PhantomData<S>,
 }
 
@@ -105,15 +159,15 @@ where
     V: 'static,
 {
     type Node = Node<K, V, M>;
-    type Address = Address<K, V, M>;
+    type Address = Address;
     type Iter<'n> = Iter<'n, K, V, M, S>;
 
-    fn deref(&self, ptr: Self::Address) -> &Self::Node {
-        unsafe { ptr.as_ref() }
+    fn deref(&self, ix: Self::Address) -> &Self::Node {
+        &self.nodes[ix]
     }
 
-    fn deref_mut(&mut self, mut ptr: Self::Address) -> &mut Self::Node {
-        unsafe { ptr.as_mut() }
+    fn deref_mut(&mut self, mut ix: Self::Address) -> &mut Self::Node {
+        &mut self.nodes[ix]
     }
 
     fn range<'n>(
@@ -121,10 +175,10 @@ where
         start: std::ops::Bound<Self::Address>,
         end: std::ops::Bound<Self::Address>,
     ) -> Self::Iter<'n> {
-        Self::Iter::new(self)
+        Self::Iter::range(self, start, end)
     }
 
     fn full_range<'n>(&'n self) -> Self::Iter<'n> {
-        Self::Iter::new(self)
+        Self::Iter::range(self, Bound::Unbounded, Bound::Unbounded)
     }
 }
