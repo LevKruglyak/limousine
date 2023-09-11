@@ -12,6 +12,8 @@ use syn::{
 pub enum Component {
     BTreeTop,
     BTree { fanout: usize, persist: bool },
+    PGMTop { epsilon: usize },
+    PGM { epsilon: usize },
 }
 
 impl Component {
@@ -19,6 +21,7 @@ impl Component {
         match self {
             Self::BTreeTop => false,
             Self::BTree { persist, .. } => *persist,
+            _ => false,
         }
     }
 }
@@ -69,6 +72,38 @@ impl Parse for ParsedComponent {
                     },
                 })
             }
+            "pgm_top" => {
+                let eps = attrs
+                    .get("epsilon")
+                    .expect("No epsilon specified!")
+                    .lit_int()
+                    .expect("Fanout is not an integer");
+
+                attrs.remove("epsilon");
+
+                Ok(Self {
+                    span,
+                    component: Component::PGMTop {
+                        epsilon: eps.base10_parse()?,
+                    },
+                })
+            }
+            "pgm" => {
+                let eps = attrs
+                    .get("epsilon")
+                    .expect("No epsilon specified!")
+                    .lit_int()
+                    .expect("Fanout is not an integer");
+
+                attrs.remove("epsilon");
+
+                Ok(Self {
+                    span,
+                    component: Component::PGMTop {
+                        epsilon: eps.base10_parse()?,
+                    },
+                })
+            }
             _ => Err(syn::Error::new(
                 span,
                 input.error("Invalid component type!"),
@@ -89,12 +124,14 @@ impl Parse for ParsedComponent {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TopComponent {
     BTreeTop,
+    PGMTop { epsilon: usize },
 }
 
 impl TopComponent {
     pub fn from_general(component: Component) -> Option<Self> {
         match component {
             Component::BTreeTop => Some(Self::BTreeTop),
+            Component::PGMTop { epsilon } => Some(Self::PGMTop { epsilon }),
             _ => None,
         }
     }
@@ -104,6 +141,9 @@ impl TopComponent {
             &TopComponent::BTreeTop => {
                 quote! { BTreeTopComponent<K, #base> }
             }
+            &TopComponent::PGMTop { epsilon } => {
+                quote! { PGMTopComponent<K, #base, #epsilon>}
+            }
         }
     }
 }
@@ -111,12 +151,14 @@ impl TopComponent {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InternalComponent {
     BTree { fanout: usize, persist: bool },
+    PGM { epsilon: usize },
 }
 
 impl InternalComponent {
     pub fn from_general(component: Component) -> Option<Self> {
         match component {
             Component::BTree { fanout, persist } => Some(Self::BTree { fanout, persist }),
+            Component::PGM { epsilon } => Some(Self::PGM { epsilon }),
             _ => None,
         }
     }
@@ -132,6 +174,10 @@ impl InternalComponent {
                 fanout,
                 persist: true,
             } => quote!(BTreeInternalComponent<K, #base, #fanout>).to_token_stream(),
+
+            &InternalComponent::PGM { epsilon } => {
+                quote!(PGMInternalComponent<K, #base, #epsilon>).to_token_stream()
+            }
         }
     }
 }
@@ -139,12 +185,14 @@ impl InternalComponent {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BaseComponent {
     BTree { fanout: usize, persist: bool },
+    PGM { epsilon: usize },
 }
 
 impl BaseComponent {
     pub fn from_general(component: Component) -> Option<Self> {
         match component {
             Component::BTree { fanout, persist } => Some(Self::BTree { fanout, persist }),
+            Component::PGM { epsilon } => Some(Self::PGM { epsilon }),
             _ => None,
         }
     }
@@ -160,6 +208,8 @@ impl BaseComponent {
                 fanout,
                 persist: true,
             } => quote!(BTreeBaseComponent<K, V, #fanout>).to_token_stream(),
+
+            &BaseComponent::PGM { epsilon } => quote!(PGMBaseComponent<K, V, #epsilon>),
         }
     }
 }

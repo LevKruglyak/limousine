@@ -249,7 +249,6 @@ impl<K: Key, V: Value, const EPSILON: usize> BaseComponent<K, V, Self>
             }
             Err(pos) => blind_base.insert(pos, Entry::new(key, value)),
         };
-
         PGMSegmentation::make_segmentation(blind_base.into_iter(), &mut self.inner.arena);
         Some(PropogateInsert::Rebuild)
     }
