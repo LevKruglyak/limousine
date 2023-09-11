@@ -1,78 +1,84 @@
-use super::{pgm_node::LinearModel, Segmentation};
-use crate::kv::*;
+//! Defines the segmentation algorithm for PGM layers.
+
+use super::{pgm_model::LinearModel, Segmentation};
 use crate::learned::generic::*;
+use crate::{common::entry::Entry, kv::*};
+use generational_arena::{Arena, Index};
 use num::{Bounded, CheckedSub, Num, NumCast};
 
 /// The optimal linear segmentation algorithm, translated
 /// almost directly from the official PGMIndex repository
+#[derive(Clone)]
 pub struct PGMSegmentation;
 
 impl<K, V, const EPSILON: usize> Segmentation<K, V, LinearModel<K, EPSILON>> for PGMSegmentation
 where
-    K: Key,
+    K: Key + Clone,
+    V: Clone,
 {
+    /// Given an iterator over entries, constructs the piecewise nodes and returns them as a Vector
     fn make_segmentation(
-        data: impl Iterator<Item = (K, V)>,
-    ) -> Vec<PiecewiseNode<K, V, LinearModel<K, EPSILON>>> {
-        let data_ranked: Vec<(usize, (K, V))> = data.enumerate().collect();
-
-        vec![]
-
-        /*
-        let in_fun = |i: usize| {
-            let x: K = data_ranked[i].0;
-            // Here there is an adjustment for inputs with duplicate keys: at the end
-            // of a run of duplicate keys equal to x=first[i] such that
-            // x+1!=first[i+1], we map the values x+1,...,first[i+1]-1 to their
-            // correct rank i
-            // Logic needs tuning, was never easy to follow to begin with
-            let flag = i > 0
-                && i + 1 < data_ranked.len()
-                && x == data_ranked[i - 1].0
-                && x != data_ranked[i + 1].0
-                && x + K::one() != data_ranked[i + 1].0;
-
-            if flag {
-                ((entry.0 + K::one(), entry.1), i)
-            } else {
-                (entry, i)
+        mut data: impl Iterator<Item = Entry<K, V>>,
+        arena: &mut Arena<PiecewiseNode<K, V, LinearModel<K, EPSILON>>>,
+    ) -> Index {
+        // Helpful variables and lambda functions for reading/writing
+        let mut rank: usize = 0;
+        let mut in_fun = || {
+            let val = data.next();
+            rank += 1;
+            match val {
+                Some(entry) => Some((rank - 1, entry)),
+                None => None,
             }
         };
-
-        let mut pgm_nodes: Vec<PiecewiseNode<K, V, LinearModel<K, EPSILON>>> = vec![];
+        let mut head_node_id: Option<Index> = None;
+        let mut last_node_id: Option<Index> = None;
         let mut model = OptimalPiecewiseLinearModel::<K, EPSILON>::new();
-        let mut data: Vec<(K, V)> = vec![];
+        let mut entries: Vec<Entry<K, V>> = vec![];
+        let mut out_fun = |new_model: OptimalPiecewiseLinearModel<K, EPSILON>,
+                           new_entries: Vec<Entry<K, V>>| {
+            let seg = new_model.get_segment();
+            let node = PiecewiseNode {
+                model: seg.into(),
+                data: new_entries,
+                next: None,
+            };
+            let new_id = arena.insert(node);
+            match last_node_id {
+                Some(last_id) => {
+                    let last_node = arena.get_mut(last_id);
+                    if last_node.is_some() {
+                        last_node.unwrap().next = Some(new_id);
+                    }
+                }
+                None => {
+                    head_node_id = Some(new_id);
+                }
+            };
+            last_node_id = Some(new_id);
+        };
 
-        let mut p = in_fun(0);
-        model.add_point((p.0 .0, p.1));
-        data.push(p.0);
+        let Some((rank, entry)) = in_fun() else { panic!() };
+        model.add_point((entry.key, rank));
+        entries.push(entry);
 
-        for i in 1..(data_ranked.len() - 1) {
-            let next_p = in_fun(i);
-            if next_p.1 == p.1 {
-                continue;
+        let mut next_pair = in_fun();
+
+        while next_pair.is_some() {
+            let (rank, entry) = next_pair.unwrap();
+            if !model.add_point((entry.key, rank)) {
+                out_fun(model.clone(), entries.clone());
+                entries.clear();
+                model.add_point((entry.key, rank));
             }
-
-            p = next_p;
-            if !model.add_point((p.0 .0, p.1)) {
-                let seg = model.get_segment();
-                pgm_nodes.push(PiecewiseNode {
-                    model: seg.into(),
-                    data: data.clone(),
-                });
-                data.clear();
-                model.add_point((p.0 .0, p.1));
-            }
+            entries.push(entry);
+            next_pair = in_fun();
+        }
+        if model.points_in_hull > 0 {
+            out_fun(model, entries.clone());
         }
 
-        let seg = model.get_segment();
-        pgm_nodes.push(PiecewiseNode {
-            model: seg.into(),
-            data,
-        });
-
-        pgm_nodes
-         */
+        head_node_id.unwrap()
     }
 }
 
@@ -108,6 +114,7 @@ struct CanonicalSegment<K: Key> {
     first: K,
 }
 
+#[derive(Clone)]
 struct OptimalPiecewiseLinearModel<K: Key, const EPSILON: usize> {
     lower: Vec<Point<K>>,
     upper: Vec<Point<K>>,
@@ -386,14 +393,16 @@ mod pgm_tests {
     /// segment with slope basically 1
     #[test]
     fn test_one_big_linear() {
-        let mut inp: Vec<(i32, i32)> = Vec::new();
+        let mut inp: Vec<Entry<i32, i32>> = Vec::new();
         for i in 0..100_000 {
-            inp.push((i, i));
+            inp.push(Entry::new(i, i));
         }
-        let nodes: Vec<PiecewiseNode<i32, i32, LinearModel<i32, 2>>> =
-            PGMSegmentation::make_segmentation(inp.into_iter());
-        assert!(nodes.len() == 1);
-        let guess_100 = nodes[0].model.approximate(&100);
+        let mut arena: Arena<PiecewiseNode<i32, i32, LinearModel<i32, 2>>> = Arena::new();
+        let head = PGMSegmentation::make_segmentation(inp.into_iter(), &mut arena);
+        assert!(arena.len() == 1);
+        let node = arena.get(head).unwrap();
+        let guess_100 = node.model.approximate(&100);
+        println!("{:?}", node.model);
         assert!(guess_100.lo == 98);
         assert!(guess_100.hi == 104);
     }
@@ -402,18 +411,18 @@ mod pgm_tests {
     /// we get a corresponding number of models with near-zero slope
     #[test]
     fn test_step_function() {
-        let mut inp: Vec<(i32, i32)> = Vec::new();
+        let mut inp: Vec<Entry<i32, i32>> = Vec::new();
         const STEPS: usize = 1_000;
         const STEP_SIZE: usize = 10_000;
         const POINTS_PER_STEP: usize = 100;
         for step in 0..STEPS {
             for point in 0..POINTS_PER_STEP {
                 let key = step * STEP_SIZE + point;
-                inp.push(((step * STEP_SIZE + point) as i32, point as i32));
+                inp.push(Entry::new((step * STEP_SIZE + point) as i32, point as i32));
             }
         }
-        let nodes: Vec<PiecewiseNode<i32, i32, LinearModel<i32, 2>>> =
-            PGMSegmentation::make_segmentation(inp.into_iter());
-        assert!(nodes.len() == STEPS);
+        let mut arena: Arena<PiecewiseNode<i32, i32, LinearModel<i32, 2>>> = Arena::new();
+        let nodes = PGMSegmentation::make_segmentation(inp.into_iter(), &mut arena);
+        assert!(arena.len() == STEPS);
     }
 }

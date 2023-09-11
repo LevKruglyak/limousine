@@ -1,10 +1,11 @@
+use crate::common::entry::Entry;
 use crate::kv::KeyBounded;
 use std::ops::{Bound, RangeBounds};
 use std::path::Path;
 
 /// A `NodeLayer` is an ordered collection of key-bounded nodes which implement the `Keyed` trait.
 /// TODO: write more
-pub trait NodeLayer<K>: 'static {
+pub trait NodeLayer<K: Clone>: 'static {
     /// Node type stored in the layer. Each node roughly represents a model in the hybrid index
     /// which indexes some finite/lower-bounded collection of `Keyed` elements.
     type Node: KeyBounded<K>;
@@ -24,9 +25,10 @@ pub trait NodeLayer<K>: 'static {
         self.deref(ptr).lower_bound()
     }
 
-    type Iter<'n>: Iterator<Item = (K, Self::Address)>
+    type Iter<'n>: Iterator<Item = Entry<K, Self::Address>> + Clone
     where
-        Self: 'n;
+        Self: 'n,
+        Entry<K, Self::Address>: Clone;
 
     /// Ordered iterator over all of the nodes in the layer. Functionally equivalent to calling
     /// ```self.range(None, None)```
@@ -40,7 +42,7 @@ pub trait NodeLayer<K>: 'static {
     ) -> Self::Iter<'n>;
 }
 
-pub enum PropogateInsert<K, Base>
+pub enum PropogateInsert<K: Clone, Base>
 where
     Base: NodeLayer<K> + ?Sized,
 {
@@ -51,7 +53,7 @@ where
     Rebuild,
 }
 
-pub trait TopComponent<K, Base>
+pub trait TopComponent<K: Clone, Base>
 where
     Base: NodeLayer<K>,
 {
@@ -62,14 +64,14 @@ where
     fn len(&self) -> usize;
 }
 
-pub trait TopComponentInMemoryBuild<K, Base>
+pub trait TopComponentInMemoryBuild<K: Clone, Base>
 where
     Base: NodeLayer<K>,
 {
     fn build(base: &Base) -> Self;
 }
 
-pub trait InternalComponent<K, Base>
+pub trait InternalComponent<K: Clone, Base>
 where
     Self: NodeLayer<K>,
     Base: NodeLayer<K>,
@@ -88,21 +90,21 @@ where
     fn memory_size(&self) -> usize;
 }
 
-pub trait InternalComponentInMemoryBuild<K, Base>
+pub trait InternalComponentInMemoryBuild<K: Clone, Base>
 where
     Base: NodeLayer<K>,
 {
     fn build(base: &Base) -> Self;
 }
 
-pub trait InternalComponentDiskBuild<K, Base>
+pub trait InternalComponentDiskBuild<K: Clone, Base>
 where
     Base: NodeLayer<K>,
 {
     fn build(base: &Base, path: impl AsRef<Path>) -> Self;
 }
 
-pub trait BaseComponent<K, V, Base>
+pub trait BaseComponent<K: Clone, V, Base>
 where
     Self: NodeLayer<K>,
     Base: NodeLayer<K>,
@@ -127,5 +129,5 @@ where
 pub trait BaseComponentInMemoryBuild<K, V> {
     fn empty() -> Self;
 
-    fn build(iter: impl Iterator<Item = (K, V)>) -> Self;
+    fn build(iter: impl Iterator<Item = Entry<K, V>>) -> Self;
 }

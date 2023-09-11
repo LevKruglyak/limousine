@@ -8,6 +8,7 @@ use crate::common::stack_map::StackMap;
 use crate::component;
 use crate::kv::{Key, KeyBounded, Value};
 use crate::{component::NodeLayer, kv::StaticBounded};
+use generational_arena::{Arena, Index};
 use std::ops::Bound;
 use std::ptr::NonNull;
 use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, ops::Deref, path::Path};
@@ -17,14 +18,15 @@ use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, ops::Deref, path::Pat
 // ----------------------------------------
 
 pub type Node<K, V, M> = PiecewiseNode<K, V, M>;
-pub type Address = usize;
-pub type OptAddress = Option<usize>;
+pub type Address = Index;
+pub type OptAddress = Option<Index>;
 
 // ----------------------------------------
 // Iteration Types
 // ----------------------------------------
 
 /// A struct to iterate over learned nodes in the same layer
+#[derive(Clone)]
 pub struct Iter<'n, K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> {
     layer: &'n PiecewiseLayer<K, V, M, S>,
     current: OptAddress,
@@ -36,7 +38,7 @@ impl<'n, K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> Iter<'n, K, V, M, S> 
     fn new(layer: &'n PiecewiseLayer<K, V, M, S>) -> Self {
         Self {
             layer,
-            current: Some(0),
+            current: layer.head,
             end: Bound::Unbounded,
             _entry_marker: Default::default(),
         }
@@ -47,25 +49,37 @@ impl<'n, K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> Iter<'n, K, V, M, S> 
         start: Bound<Address>,
         end: Bound<Address>,
     ) -> Self {
-        let mut start_ix = match start {
-            Bound::Included(ix) => ix,
-            Bound::Excluded(ix) => ix + 1,
-            Bound::Unbounded => 0,
-        };
-        if start_ix >= layer.nodes.len() {
-            Self {
+        match start {
+            Bound::Included(id) => Self {
                 layer,
-                current: None,
+                current: Some(id),
                 end,
                 _entry_marker: Default::default(),
+            },
+            Bound::Excluded(id) => {
+                let node = layer.arena.get(id);
+                if node.is_none() || node.unwrap().next.is_none() {
+                    Self {
+                        layer,
+                        current: None,
+                        end,
+                        _entry_marker: Default::default(),
+                    }
+                } else {
+                    Self {
+                        layer,
+                        current: node.unwrap().next,
+                        end,
+                        _entry_marker: Default::default(),
+                    }
+                }
             }
-        } else {
-            Self {
+            Bound::Unbounded => Self {
                 layer,
-                current: Some(start_ix),
+                current: layer.head,
                 end,
                 _entry_marker: Default::default(),
-            }
+            },
         }
     }
 }
@@ -75,34 +89,20 @@ where
     K: StaticBounded,
     V: 'static,
 {
-    type Item = (K, Address);
+    type Item = Entry<K, Address>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.current {
             None => None,
-            Some(cur_ix) => {
-                let mut ix = cur_ix + 1;
-                let mut end_ix = self.layer.nodes.len(); // Index of first thing _not_ included
-                match self.end {
-                    Bound::Included(jx) => {
-                        if jx + 1 < end_ix {
-                            end_ix = jx + 1;
-                        }
-                    }
-                    Bound::Excluded(jx) => {
-                        if jx < end_ix {
-                            end_ix = jx;
-                        }
-                    }
-                    _ => (),
+            Some(cur_id) => {
+                let Some(node) = self.layer.arena.get(cur_id) else { return None; };
+                let Some(next_id) = node.next else { return None; };
+                if Bound::Excluded(next_id) == self.end {
+                    return None;
                 }
-                if ix >= end_ix {
-                    self.current = None;
-                    None
-                } else {
-                    self.current = Some(ix);
-                    Some((self.layer.nodes[ix].lower_bound().clone(), ix))
-                }
+                self.current = Some(next_id);
+                let Some(node) = self.layer.arena.get(next_id) else {return None;};
+                Some(Entry::new(node.lower_bound().clone(), next_id))
             }
         }
     }
@@ -115,7 +115,7 @@ where
 pub struct PiecewiseNode<K: Key, V, M: Model<K>> {
     pub model: M,
     pub data: Vec<Entry<K, V>>, // TODO: Eventually replace with heapmap, or something more optimized
-                                // pub next: OptAddress<K, V, M>, Don't think we need for this implementation?
+    pub next: Option<Index>,
 }
 
 impl<K: Key, V, M: Model<K>> KeyBounded<K> for PiecewiseNode<K, V, M> {
@@ -129,8 +129,12 @@ impl<K: Key, V, M: Model<K>> KeyBounded<K> for PiecewiseNode<K, V, M> {
 // ----------------------------------------
 
 /// An algorithm for turning a list of key-rank pairs into a piecewise model.
-pub trait Segmentation<K: Key, V, M: Model<K>>: 'static {
-    fn make_segmentation(data: impl Iterator<Item = (K, V)>) -> Vec<PiecewiseNode<K, V, M>>;
+pub trait Segmentation<K: Key, V, M: Model<K>>: Clone + 'static {
+    /// Given a list of entries and an arena to allocate nodes into, constructs a flat learned layer
+    fn make_segmentation(
+        data: impl Iterator<Item = Entry<K, V>> + Clone,
+        arena: &mut Arena<PiecewiseNode<K, V, M>>,
+    ) -> Index;
 }
 
 pub struct ApproxPos {
@@ -141,7 +145,7 @@ pub struct ApproxPos {
 /// A model for approximate the location of a key, for use in a larged piecewise learned index
 /// layer. Must implement `Keyed<K>`, here the `.key()` method represents the maximum key which
 /// this model represents.
-pub trait Model<K: Key>: Borrow<K> + Debug + 'static {
+pub trait Model<K: Key>: Borrow<K> + Debug + Clone + 'static {
     /// Returns the approximate position of the specified key.
     fn approximate(&self, key: &K) -> ApproxPos;
 }
@@ -152,11 +156,13 @@ pub trait Model<K: Key>: Borrow<K> + Debug + 'static {
 
 /// Implement the node layer abstractions
 pub struct PiecewiseLayer<K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> {
-    pub nodes: Vec<PiecewiseNode<K, V, M>>,
+    pub arena: Arena<PiecewiseNode<K, V, M>>,
+    pub head: Option<Index>,
     _seg_marker: PhantomData<S>,
 }
 
-impl<K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> NodeLayer<K> for PiecewiseLayer<K, V, M, S>
+impl<K: Key, V: Clone, M: Model<K>, S: Segmentation<K, V, M>> NodeLayer<K>
+    for PiecewiseLayer<K, V, M, S>
 where
     K: 'static + StaticBounded,
     V: 'static,
@@ -165,12 +171,12 @@ where
     type Address = Address;
     type Iter<'n> = Iter<'n, K, V, M, S>;
 
-    fn deref(&self, ix: Self::Address) -> &Self::Node {
-        &self.nodes[ix]
+    fn deref(&self, id: Self::Address) -> &Self::Node {
+        &self.arena.get(id).unwrap()
     }
 
-    fn deref_mut(&mut self, mut ix: Self::Address) -> &mut Self::Node {
-        &mut self.nodes[ix]
+    fn deref_mut(&mut self, mut id: Self::Address) -> &mut Self::Node {
+        self.arena.get_mut(id).unwrap()
     }
 
     fn range<'n>(
@@ -192,14 +198,23 @@ where
     K: 'static + StaticBounded,
     V: 'static + Clone,
 {
-    fn search(
+    pub fn search(
         &self,
-        ix: <PiecewiseLayer<K, V, M, S> as component::NodeLayer<K>>::Address,
+        id: <PiecewiseLayer<K, V, M, S> as component::NodeLayer<K>>::Address,
         key: &K,
-    ) -> V {
-        let node = &self.nodes[ix];
+    ) -> &Entry<K, V> {
+        let node = self.arena.get(id).unwrap();
         let approx_pos = node.model.approximate(key);
-        let test = BinarySearch::search_by_key(&node.data[approx_pos.lo..approx_pos.hi], key);
-        node.data[test.unwrap()].value.clone()
+        let found_ix = BinarySearch::search_by_key(&node.data[approx_pos.lo..approx_pos.hi], key);
+        match found_ix {
+            Ok(ix) => &node.data[ix],
+            Err(ix) => {
+                if ix > 0 {
+                    &node.data[ix - 1]
+                } else {
+                    &node.data[ix]
+                }
+            }
+        }
     }
 }

@@ -14,11 +14,11 @@ pub use memory::*;
 
 /// A `TopComponent` implementation built around the BTreeMap implementation in the Rust standard
 /// library.
-pub struct BTreeTopComponent<K, Base: NodeLayer<K>> {
+pub struct BTreeTopComponent<K: Clone, Base: NodeLayer<K>> {
     inner: BTreeMap<K, Base::Address>,
 }
 
-impl<K, Base> TopComponent<K, Base> for BTreeTopComponent<K, Base>
+impl<K: Clone, Base> TopComponent<K, Base> for BTreeTopComponent<K, Base>
 where
     Base: NodeLayer<K>,
     K: Ord,
@@ -35,8 +35,8 @@ where
             PropogateInsert::Rebuild => {
                 self.inner.clear();
 
-                for (key, address) in base.full_range() {
-                    self.inner.insert(key, address);
+                for entry in base.full_range() {
+                    self.inner.insert(entry.key, entry.value);
                 }
             }
         }
@@ -47,7 +47,7 @@ where
     }
 }
 
-impl<K, Base> TopComponentInMemoryBuild<K, Base> for BTreeTopComponent<K, Base>
+impl<K: Clone, Base> TopComponentInMemoryBuild<K, Base> for BTreeTopComponent<K, Base>
 where
     Base: NodeLayer<K>,
     K: Ord,
@@ -55,8 +55,8 @@ where
     fn build(base: &Base) -> Self {
         let mut inner = BTreeMap::new();
 
-        for (key, address) in base.full_range() {
-            inner.insert(key, address);
+        for entry in base.full_range() {
+            inner.insert(entry.key, entry.value);
         }
 
         Self { inner }

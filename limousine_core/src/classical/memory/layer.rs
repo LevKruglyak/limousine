@@ -1,4 +1,5 @@
 use crate::classical::node::BTreeNode;
+use crate::common::entry::Entry;
 use crate::component::*;
 use crate::kv::StaticBounded;
 use crate::kv::*;
@@ -63,7 +64,7 @@ impl<K: Debug, V: Debug, const FANOUT: usize> Debug for MemoryBTreeLayer<K, V, F
     }
 }
 
-impl<K, V, const FANOUT: usize> NodeLayer<K> for MemoryBTreeLayer<K, V, FANOUT>
+impl<K, V: Clone, const FANOUT: usize> NodeLayer<K> for MemoryBTreeLayer<K, V, FANOUT>
 where
     K: 'static + StaticBounded,
     V: 'static,
@@ -122,7 +123,7 @@ where
         }
     }
 
-    pub fn fill(&mut self, iter: impl Iterator<Item = (K, V)>) {
+    pub fn fill(&mut self, iter: impl Iterator<Item = Entry<K, V>>) {
         // Drop all of the nodes
         for node in self.nodes.iter() {
             let boxed = unsafe { Box::from_raw(node.as_ptr()) };
@@ -138,7 +139,7 @@ where
         node.next = Some(new_address);
         node = unsafe { new_address.as_mut() };
 
-        for (key, address) in iter {
+        for entry in iter {
             if node.inner.is_half_full() {
                 let mut new_address = self.add_node(MemoryBTreeNode::empty());
                 node.next = Some(new_address);
@@ -146,7 +147,7 @@ where
                 node = unsafe { new_address.as_mut() };
             }
 
-            node.inner.insert(key, address);
+            node.inner.insert(entry.key, entry.value);
         }
     }
 
@@ -192,6 +193,7 @@ where
 // Iterator Type
 // ----------------------------------------
 
+#[derive(Clone)]
 pub struct Iter<'n, K, V, const FANOUT: usize> {
     layer: &'n MemoryBTreeLayer<K, V, FANOUT>,
     current: OptAddress<K, V, FANOUT>,
@@ -234,12 +236,12 @@ impl<'n, K, V, const FANOUT: usize> Iter<'n, K, V, FANOUT> {
     }
 }
 
-impl<'n, K, V, const FANOUT: usize> Iterator for Iter<'n, K, V, FANOUT>
+impl<'n, K, V: Clone, const FANOUT: usize> Iterator for Iter<'n, K, V, FANOUT>
 where
     K: StaticBounded,
     V: 'static,
 {
-    type Item = (K, Address<K, V, FANOUT>);
+    type Item = Entry<K, Address<K, V, FANOUT>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current.clone()?;
@@ -265,6 +267,6 @@ where
             self.current = self.layer.deref(current).next;
         }
 
-        return Some((*self.layer.lower_bound(current), current));
+        return Some(Entry::new(*self.layer.lower_bound(current), current));
     }
 }

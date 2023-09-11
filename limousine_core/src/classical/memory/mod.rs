@@ -9,8 +9,8 @@ mod layer;
 // use layer::MemoryBTreeLayer;
 // use std::borrow::Borrow;
 // use std::collections::BTreeMap;
-use crate::component::*;
 use crate::kv::StaticBounded;
+use crate::{common::entry::Entry, component::*};
 use layer::*;
 use std::ops::{Bound, RangeBounds};
 
@@ -18,7 +18,7 @@ use std::ops::{Bound, RangeBounds};
 //                  Internal Component
 // -------------------------------------------------------
 
-pub struct BTreeInternalComponent<K, B: NodeLayer<K>, const FANOUT: usize> {
+pub struct BTreeInternalComponent<K: Clone, B: NodeLayer<K>, const FANOUT: usize> {
     inner: MemoryBTreeLayer<K, B::Address, FANOUT>,
 }
 
@@ -112,7 +112,7 @@ pub struct BTreeBaseComponent<K, V, const FANOUT: usize> {
     inner: MemoryBTreeLayer<K, V, FANOUT>,
 }
 
-impl<K, V, const FANOUT: usize> NodeLayer<K> for BTreeBaseComponent<K, V, FANOUT>
+impl<K, V: Clone, const FANOUT: usize> NodeLayer<K> for BTreeBaseComponent<K, V, FANOUT>
 where
     K: StaticBounded,
     V: 'static,
@@ -143,7 +143,8 @@ where
     }
 }
 
-impl<K, V, const FANOUT: usize> BaseComponent<K, V, Self> for BTreeBaseComponent<K, V, FANOUT>
+impl<K, V: Clone, const FANOUT: usize> BaseComponent<K, V, Self>
+    for BTreeBaseComponent<K, V, FANOUT>
 where
     K: StaticBounded,
     V: 'static,
@@ -187,7 +188,7 @@ where
         Self { inner: result }
     }
 
-    fn build(iter: impl Iterator<Item = (K, V)>) -> Self {
+    fn build(iter: impl Iterator<Item = Entry<K, V>>) -> Self {
         let mut result = MemoryBTreeLayer::empty();
         result.fill(iter);
 

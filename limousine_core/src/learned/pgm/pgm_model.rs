@@ -1,3 +1,5 @@
+//! This file defines the Model portion of the PGM, which is simply just a linear approximator
+
 use crate::{
     kv::Key,
     learned::generic::{ApproxPos, Model, PiecewiseLayer},
