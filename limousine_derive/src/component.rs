@@ -12,7 +12,6 @@ use syn::{
 pub enum Component {
     BTreeTop,
     BTree { fanout: usize, persist: bool },
-    PGMTop { epsilon: usize },
     PGM { epsilon: usize },
 }
 
@@ -72,22 +71,6 @@ impl Parse for ParsedComponent {
                     },
                 })
             }
-            "pgm_top" => {
-                let eps = attrs
-                    .get("epsilon")
-                    .expect("No epsilon specified!")
-                    .lit_int()
-                    .expect("Fanout is not an integer");
-
-                attrs.remove("epsilon");
-
-                Ok(Self {
-                    span,
-                    component: Component::PGMTop {
-                        epsilon: eps.base10_parse()?,
-                    },
-                })
-            }
             "pgm" => {
                 let eps = attrs
                     .get("epsilon")
@@ -99,7 +82,7 @@ impl Parse for ParsedComponent {
 
                 Ok(Self {
                     span,
-                    component: Component::PGMTop {
+                    component: Component::PGM {
                         epsilon: eps.base10_parse()?,
                     },
                 })
@@ -124,14 +107,12 @@ impl Parse for ParsedComponent {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TopComponent {
     BTreeTop,
-    PGMTop { epsilon: usize },
 }
 
 impl TopComponent {
     pub fn from_general(component: Component) -> Option<Self> {
         match component {
             Component::BTreeTop => Some(Self::BTreeTop),
-            Component::PGMTop { epsilon } => Some(Self::PGMTop { epsilon }),
             _ => None,
         }
     }
@@ -140,9 +121,6 @@ impl TopComponent {
         match self {
             &TopComponent::BTreeTop => {
                 quote! { BTreeTopComponent<K, #base> }
-            }
-            &TopComponent::PGMTop { epsilon } => {
-                quote! { PGMTopComponent<K, #base, #epsilon>}
             }
         }
     }

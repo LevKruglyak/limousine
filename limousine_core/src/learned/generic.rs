@@ -161,6 +161,23 @@ pub struct PiecewiseLayer<K: Key, V, M: Model<K>, S: Segmentation<K, V, M>> {
     _seg_marker: PhantomData<S>,
 }
 
+impl<K: Key, V: Clone, M: Model<K>, S: Segmentation<K, V, M>> PiecewiseLayer<K, V, M, S>
+where
+    K: 'static + StaticBounded,
+    V: 'static,
+{
+    pub fn build(data: impl Iterator<Item = Entry<K, V>> + Clone) -> Self {
+        let mut arena = Arena::new();
+        let head = Some(S::make_segmentation(data, &mut arena));
+
+        Self {
+            arena,
+            head,
+            _seg_marker: PhantomData,
+        }
+    }
+}
+
 impl<K: Key, V: Clone, M: Model<K>, S: Segmentation<K, V, M>> NodeLayer<K>
     for PiecewiseLayer<K, V, M, S>
 where

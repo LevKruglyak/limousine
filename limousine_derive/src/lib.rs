@@ -403,7 +403,7 @@ fn create_index_impl(
                 #empty_body
             }
 
-            pub fn build(iter: impl Iterator<Item = (K, V)>) -> Self {
+            pub fn build(iter: impl Iterator<Item = Entry<K, V>>) -> Self {
                 #build_body
             }
         }

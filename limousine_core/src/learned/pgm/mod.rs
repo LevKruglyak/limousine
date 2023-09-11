@@ -174,6 +174,18 @@ where
     }
 }
 
+impl<K: Key, Base: NodeLayer<K>, const EPSILON: usize> InternalComponentInMemoryBuild<K, Base>
+    for PGMInternalComponent<K, Base, EPSILON>
+where
+    Base::Address: std::fmt::Debug,
+{
+    fn build(base: &Base) -> Self {
+        Self {
+            inner: PiecewiseLayer::build(base.full_range()),
+        }
+    }
+}
+
 // -------------------------------------------------------
 //                  PGM Base Component
 // -------------------------------------------------------

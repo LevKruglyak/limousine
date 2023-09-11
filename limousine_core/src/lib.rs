@@ -13,5 +13,10 @@ pub use classical::BTreeBaseComponent;
 pub use classical::BTreeInternalComponent;
 pub use classical::BTreeTopComponent;
 
+pub use learned::pgm::PGMBaseComponent;
+pub use learned::pgm::PGMInternalComponent;
+pub use learned::pgm::PGMTopComponent;
+
+pub use common::entry::Entry;
 pub use component::*;
 pub use kv::{Key, Value};
