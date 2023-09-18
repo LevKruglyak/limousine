@@ -1,3 +1,4 @@
+use crate::common::entry::Entry;
 use crate::common::stack_map::StackMap;
 use crate::kv::StaticBounded;
 use std::borrow::Borrow;
@@ -19,6 +20,10 @@ impl<K, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
         Self {
             inner: StackMap::empty(),
         }
+    }
+
+    pub fn entries(&self) -> &[Entry<K, V>] {
+        self.inner.entries()
     }
 
     pub fn is_empty(&self) -> bool {

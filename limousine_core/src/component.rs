@@ -1,181 +1,147 @@
-use crate::common::address::Address;
+use crate::iter::{Iter, MutIter};
 use crate::kv::KeyBounded;
 use std::ops::{Bound, RangeBounds};
 use std::path::Path;
+use trait_set::trait_set;
+
+trait_set! {
+    pub trait Address = Eq + Clone + 'static;
+}
 
 // Type dependence hierarchy
 
-pub trait LinkedNode<K>: 'static + KeyBounded<K> {
+pub trait LinkedNode<K, SA, PA>: 'static + KeyBounded<K>
+where
+    SA: Address,
+    PA: Address,
+{
     // Address to the next node in the current component
-    fn next(&self) -> Option<Address>;
+    fn next(&self) -> Option<SA>;
 
     // Address to the parent node in the above component
-    fn parent(&self) -> Option<Address>;
+    fn parent(&self) -> Option<PA>;
+
+    fn set_parent(&mut self, parent: PA);
 }
 
 /// A `NodeLayer` is a linked list of key-bounded nodes which implement the `Node<K>` trait
-pub trait NodeLayer<K>: 'static + Sized {
+pub trait NodeLayer<K, SA, PA>: 'static + Sized
+where
+    SA: Address,
+    PA: Address,
+{
     /// Node type stored in the layer. Each node roughly represents a model in the hybrid index
     /// which indexes some finite/lower-bounded collection of `Keyed` elements.
-    type Node: LinkedNode<K>;
+    type Node: LinkedNode<K, SA, PA>;
 
     /// Immutable address dereference which returns a reference to a node.
-    fn deref(&self, ptr: Address) -> &Self::Node;
+    fn deref(&self, ptr: SA) -> &Self::Node;
 
     /// Mutable address dereference which returns a reference to a node.
-    fn deref_mut(&mut self, ptr: Address) -> &mut Self::Node;
+    fn deref_mut(&mut self, ptr: SA) -> &mut Self::Node;
+
+    unsafe fn deref_unsafe(&self, ptr: SA) -> *mut Self::Node;
 
     /// Get the lower bound of a node. This could be overriden by some layers which might have a
     /// more optimal way of mapping the address to the lower bound.
-    fn lower_bound(&self, ptr: Address) -> &K {
+    fn lower_bound(&self, ptr: SA) -> &K {
         self.deref(ptr).lower_bound()
     }
 
-    /// First node in a
-    fn first(&self) -> Address;
+    /// First node in the current node
+    fn first(&self) -> SA;
 
-    fn range<'n>(&'n self, start: Bound<Address>, end: Bound<Address>) -> Iter<'n, K, Self> {
+    fn range<'n>(&'n self, start: Bound<SA>, end: Bound<SA>) -> Iter<'n, K, Self, SA, PA> {
         Iter::range(&self, start, end)
+    }
+
+    unsafe fn mut_range<'n>(
+        &'n mut self,
+        start: Bound<SA>,
+        end: Bound<SA>,
+    ) -> MutIter<'n, K, Self, SA, PA> {
+        MutIter::range(self, start, end)
     }
 }
 
-pub enum PropogateInsert<K> {
+pub enum PropogateInsert<K, SA, PA> {
     /// Insert a single newly created node into the layer
-    Single(K, Address),
+    Single(K, SA, PA),
 
     /// Rebuild the entire layer
-    Rebuild,
+    Replace(PA, PA),
 }
 
-pub trait TopComponent<K, Base>
+pub trait TopComponent<K, Base, BA, SA>
 where
-    Base: NodeLayer<K>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
 {
-    fn search(&self, base: &Base, key: &K) -> Address;
+    fn search(&self, base: &Base, key: &K) -> BA;
 
-    fn insert(&mut self, base: &Base, prop: PropogateInsert<K>);
+    fn insert(&mut self, base: &mut Base, prop: PropogateInsert<K, BA, SA>);
 }
 
-pub trait TopComponentInMemoryBuild<K, Base>
+pub trait TopComponentInMemoryBuild<K, Base, BA, SA>
 where
-    Base: NodeLayer<K>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
 {
-    fn build(base: &Base) -> Self;
+    fn build(base: &mut Base) -> Self;
 }
 
-pub trait InternalComponent<K, Base>
+pub trait InternalComponent<K, Base, BA, SA, PA>
 where
-    Self: NodeLayer<K>,
-    Base: NodeLayer<K>,
+    Self: NodeLayer<K, SA, PA>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
+    PA: Address,
 {
-    fn search(&self, base: &Base, ptr: Address, key: &K) -> Address;
+    fn search(&self, base: &Base, ptr: SA, key: &K) -> BA;
 
     fn insert<'n>(
         &'n mut self,
-        base: &Base,
-        ptr: Address,
-        prop: PropogateInsert<K>,
-    ) -> Option<PropogateInsert<K>>;
+        base: &mut Base,
+        prop: PropogateInsert<K, BA, SA>,
+    ) -> Option<PropogateInsert<K, SA, PA>>;
 }
 
-pub trait InternalComponentInMemoryBuild<K, Base>
+pub trait InternalComponentInMemoryBuild<K, Base, BA, SA, PA>
 where
-    Base: NodeLayer<K>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
+    PA: Address,
 {
-    fn build(base: &Base) -> Self;
+    fn build(base: &mut Base) -> Self;
 }
 
-pub trait InternalComponentDiskBuild<K, Base>
+pub trait InternalComponentDiskBuild<K, Base, BA, SA, PA>
 where
-    Base: NodeLayer<K>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
+    PA: Address,
 {
     fn build(base: &Base, path: impl AsRef<Path>) -> Self;
 }
 
-pub trait BaseComponent<K, V, Base>
+pub trait BaseComponent<K, V, SA, PA>
 where
-    Self: NodeLayer<K>,
-    Base: NodeLayer<K>,
+    Self: NodeLayer<K, SA, PA>,
+    SA: Address,
+    PA: Address,
 {
-    fn insert(&mut self, ptr: Address, key: K, value: V) -> Option<PropogateInsert<K>>;
+    fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropogateInsert<K, SA, PA>>;
 
-    fn search(&self, ptr: Address, key: &K) -> Option<&V>;
+    fn search(&self, ptr: SA, key: &K) -> Option<&V>;
 }
 
 pub trait BaseComponentInMemoryBuild<K, V> {
     fn empty() -> Self;
 
     fn build(iter: impl Iterator<Item = (K, V)>) -> Self;
-}
-
-// ----------------------------------------
-// Iterator Type
-// ----------------------------------------
-
-pub struct Iter<'n, K, N> {
-    layer: &'n N,
-    current: Option<Address>,
-    end: Bound<Address>,
-    _ph: std::marker::PhantomData<K>,
-}
-
-impl<'n, K, N: NodeLayer<K>> Iter<'n, K, N> {
-    fn range(layer: &'n N, start: Bound<Address>, end: Bound<Address>) -> Self {
-        match start {
-            Bound::Excluded(start) => Self {
-                layer,
-                current: layer.deref(start).next(),
-                end,
-                _ph: std::marker::PhantomData,
-            },
-
-            Bound::Included(start) => Self {
-                layer,
-                current: Some(start.clone()),
-                end,
-                _ph: std::marker::PhantomData,
-            },
-
-            Bound::Unbounded => Self {
-                layer,
-                current: Some(layer.first()),
-                end,
-                _ph: std::marker::PhantomData,
-            },
-        }
-    }
-}
-
-impl<'n, K, N: NodeLayer<K>> Iterator for Iter<'n, K, N>
-where
-    K: Copy,
-{
-    type Item = (K, Address);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current.clone()?;
-
-        match self.end {
-            Bound::Excluded(end) => {
-                if current == end {
-                    return None;
-                }
-            }
-
-            Bound::Included(end) => {
-                if current == end {
-                    self.current = None;
-                }
-            }
-
-            _ => (),
-        }
-
-        // Advance pointer
-        if let Some(current) = self.current {
-            self.current = self.layer.deref(current).next();
-        }
-
-        return Some(((*self.layer.lower_bound(current)), current));
-    }
 }
