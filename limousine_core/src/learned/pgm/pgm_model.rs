@@ -2,7 +2,7 @@
 
 use crate::{
     kv::Key,
-    learned::generic::{ApproxPos, Model, PiecewiseLayer},
+    learned::generic::{ApproxPos, Model},
 };
 
 use std::borrow::Borrow;
@@ -10,6 +10,8 @@ use std::borrow::Borrow;
 use super::pgm_segmentation::PGMSegmentation;
 
 /// A simple linear model for a key-rank segment of data.
+/// K: The type of keys in the model
+/// EPSILON: The maximum error bound for approximations into this model
 #[derive(Copy, Clone, Debug)]
 pub struct LinearModel<K, const EPSILON: usize> {
     key: K,
@@ -17,6 +19,8 @@ pub struct LinearModel<K, const EPSILON: usize> {
     intercept: i32,
 }
 
+/// Convenience methods on a LinearModel, most notably creation given key, slope, intercept
+/// NOTE: the provided `key` must represent the smallest key indexed by this model
 impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
     pub fn new(key: K, slope: f64, intercept: i32) -> Self {
         debug_assert!(slope.is_normal());
@@ -26,23 +30,16 @@ impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
             intercept,
         }
     }
-
-    /// Create a segment with slope 0 which always approximates the intercept
-    pub fn intercept(n: usize) -> Self {
-        Self {
-            key: K::max_value(),
-            slope: 0.0,
-            intercept: n as i32,
-        }
-    }
 }
 
+/// Allows us to use a model as a key, which should represent the smallest key indexed by this model
 impl<K: Key, const EPSILON: usize> Borrow<K> for LinearModel<K, EPSILON> {
     fn borrow(&self) -> &K {
         &self.key
     }
 }
 
+/// Implement LinearModel as a Model, meaning we can use it to approximate
 impl<K: Key, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON> {
     fn approximate(&self, key: &K) -> ApproxPos {
         // To support generic floats, we need all these shenanigans
@@ -64,7 +61,25 @@ impl<K: Key, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON> {
     }
 }
 
-/// A `PGMLayer` is a layer consisting of linear models with `EPSILON`
-/// controlled error, and build by a `PGM` segmentation algorithm.
-pub type PGMLayer<K, V, const EPSILON: usize> =
-    PiecewiseLayer<K, V, LinearModel<K, EPSILON>, PGMSegmentation>;
+#[cfg(test)]
+mod pgm_model_tests {
+    use super::*;
+
+    #[test]
+    fn pgm_model_basic() {
+        const EPS: usize = 2;
+        let key: usize = 10;
+        let slope: f64 = 1.0;
+        let slope_usize: usize = 1;
+        let intercept: i32 = 6;
+        let model: LinearModel<usize, EPS> = LinearModel::new(key, slope, intercept);
+        for test in 20..1000 {
+            let test: usize = test;
+            let approx = model.approximate(&test);
+            let expected_lo = (test - key) * slope_usize + (intercept as usize) - EPS;
+            let expected_hi = expected_lo + EPS * 2 + 2;
+            assert!(approx.lo == expected_lo);
+            assert!(approx.hi == expected_hi);
+        }
+    }
+}

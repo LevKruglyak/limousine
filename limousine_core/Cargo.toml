@@ -9,10 +9,10 @@ license = "Apache-2.0"
 repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
+generational-arena = "0.2.9"
 num = "0.4.0"
 trait-set = "0.3.0"
 bumpalo = { version = "3.13.0", features = ["boxed"] }
-generational-arena = "0.2.9"
 
 [features]
 default = []

@@ -1,6 +1,6 @@
 //! Defines the segmentation algorithm for PGM layers.
 
-use super::{pgm_model::LinearModel, Segmentation};
+use super::pgm_model::LinearModel;
 use crate::learned::generic::*;
 use crate::{common::entry::Entry, kv::*};
 use generational_arena::{Arena, Index};
@@ -10,7 +10,7 @@ use num::{Bounded, CheckedSub, Num, NumCast};
 /// almost directly from the official PGMIndex repository
 #[derive(Clone)]
 pub struct PGMSegmentation;
-
+/*
 impl<K, V, const EPSILON: usize> Segmentation<K, V, LinearModel<K, EPSILON>> for PGMSegmentation
 where
     K: Key + Clone,
@@ -426,3 +426,4 @@ mod pgm_tests {
         assert!(arena.len() == STEPS);
     }
 }
+ */

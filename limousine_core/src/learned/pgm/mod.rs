@@ -1,6 +1,7 @@
 pub mod pgm_model;
 pub mod pgm_segmentation;
 
+/*
 use self::pgm_model::LinearModel;
 use self::pgm_segmentation::PGMSegmentation;
 use super::generic::PiecewiseNode;
@@ -273,3 +274,4 @@ impl<K: Key, V: Value, const EPSILON: usize> BaseComponent<K, V, Self>
         unimplemented!()
     }
 }
+ */

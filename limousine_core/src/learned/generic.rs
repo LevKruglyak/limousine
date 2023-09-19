@@ -13,6 +13,30 @@ use std::ops::Bound;
 use std::ptr::NonNull;
 use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, ops::Deref, path::Path};
 
+/// An algorithm for turning a list of key-rank pairs into a piecewise model.
+pub trait Segmentation<K: Key, V, M: Model<K>>: Clone + 'static {
+    /// Given a list of entries and an arena to allocate nodes into, constructs a flat learned layer
+    fn make_segmentation(
+        data: impl Iterator<Item = Entry<K, V>> + Clone,
+        //arena: &mut Arena<PiecewiseNode<K, V, M>>,
+    ) -> Index;
+}
+
+/// The result of an approximation search
+pub struct ApproxPos {
+    pub lo: usize,
+    pub hi: usize,
+}
+
+/// A model for approximate the location of a key, for use in a larged piecewise learned index
+/// layer. Must implement `Keyed<K>`, here the `.key()` method represents the maximum key which
+/// this model represents.
+pub trait Model<K: Key>: Borrow<K> + Debug + Clone + 'static {
+    /// Returns the approximate position of the specified key.
+    fn approximate(&self, key: &K) -> ApproxPos;
+}
+
+/*
 // ----------------------------------------
 // Helper Types
 // ----------------------------------------
@@ -128,28 +152,6 @@ impl<K: Key, V, M: Model<K>> KeyBounded<K> for PiecewiseNode<K, V, M> {
 // Model Type
 // ----------------------------------------
 
-/// An algorithm for turning a list of key-rank pairs into a piecewise model.
-pub trait Segmentation<K: Key, V, M: Model<K>>: Clone + 'static {
-    /// Given a list of entries and an arena to allocate nodes into, constructs a flat learned layer
-    fn make_segmentation(
-        data: impl Iterator<Item = Entry<K, V>> + Clone,
-        arena: &mut Arena<PiecewiseNode<K, V, M>>,
-    ) -> Index;
-}
-
-pub struct ApproxPos {
-    pub lo: usize,
-    pub hi: usize,
-}
-
-/// A model for approximate the location of a key, for use in a larged piecewise learned index
-/// layer. Must implement `Keyed<K>`, here the `.key()` method represents the maximum key which
-/// this model represents.
-pub trait Model<K: Key>: Borrow<K> + Debug + Clone + 'static {
-    /// Returns the approximate position of the specified key.
-    fn approximate(&self, key: &K) -> ApproxPos;
-}
-
 // ----------------------------------------
 // Layer Types
 // ----------------------------------------
@@ -235,3 +237,4 @@ where
         }
     }
 }
+ */
