@@ -17,7 +17,7 @@ pub struct LinearModel<K, const EPSILON: usize> {
     /// In our structures, each model will view the data its indexing as having offset 0
     /// This is because we need to "fracture" the underlying data representation so it's not looking at
     /// a huge layer, which would make inserts/updates/etc. nearly impossible.
-    slope: f64,
+    pub slope: f64,
 }
 
 /// Convenience methods on a LinearModel, most notably creation given key, slope, intercept

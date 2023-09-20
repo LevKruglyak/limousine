@@ -1296,8 +1296,11 @@ name = "limousine_core"
 version = "0.1.0"
 dependencies = [
  "bumpalo",
+ "eframe",
+ "egui",
  "generational-arena",
  "num",
+ "rand",
  "trait-set",
 ]
 

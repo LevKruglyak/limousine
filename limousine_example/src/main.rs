@@ -1,5 +1,6 @@
 #![allow(unused)]
 
+use limousine_core::learned::pgm::viz::play_pgm;
 use limousine_engine::prelude::*;
 
 create_hybrid_index! {
@@ -14,26 +15,24 @@ create_hybrid_index! {
 }
 
 fn main() {
-    let num = 10_000_000;
+    play_pgm();
 
-    let mut index: MyHybridIndex<u128, u128> = MyHybridIndex::empty();
+    //     let num = 10_000_000;
 
-    let start = std::time::Instant::now();
-    for i in 0..num {
-        index.insert(i, i * i);
-    }
-    println!("{:?} after {:?} ms", index.search(&10), start.elapsed());
+    //     let mut index: MyHybridIndex<u128, u128> = MyHybridIndex::empty();
 
-    use std::collections::BTreeMap;
-    let mut index: BTreeMap<u128, u128> = BTreeMap::new();
+    //     let start = std::time::Instant::now();
+    //     for i in 0..num {
+    //         index.insert(i, i * i);
+    //     }
+    //     println!("{:?} after {:?} ms", index.search(&10), start.elapsed());
 
-    let start = std::time::Instant::now();
-    for i in 0..num {
-        index.insert(i, i * i);
-    }
-    println!(
-        "{:?} after {:?} ms",
-        index.get(&10),
-        start.elapsed().as_millis()
-    );
+    //     use std::collections::BTreeMap;
+    //     let mut index: BTreeMap<u128, u128> = BTreeMap::new();
+
+    //     let start = std::time::Instant::now();
+    //     for i in 0..num {
+    //         index.insert(i, i * i);
+    //     }
+    //     println!("{:?} after {:?} ms", index.get(&10), start.elapsed().as_millis());
 }

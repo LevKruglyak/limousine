@@ -41,10 +41,10 @@ struct ShutUpRust;
 #[derive(Clone)]
 struct Point<K: Key> {
     x: K,
-    y: usize,
+    y: i32,
 }
 impl<K: Key> Point<K> {
-    fn new(x: K, y: usize) -> Self {
+    fn new(x: K, y: i32) -> Self {
         Self { x, y }
     }
 
@@ -60,23 +60,23 @@ impl<K: Key> Sub<Self> for Point<K> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Point::new(rhs.x - self.x, rhs.y - self.y)
+        Point::new(self.x.saturating_sub(rhs.x), self.y.saturating_sub(rhs.y))
     }
 }
 
 /// A data structure that will grow to incorporate points while building a PGM and eventually
 /// produce a proper linear model, before moving on to the next one
-struct SimplePGMSegmentator<K: Key, V, const EPSILON: usize> {
-    first_k: Option<K>,
-    first_v: Option<V>,
-    max_slope: f64,
-    min_slope: f64,
-    num_entries: usize,
+pub struct SimplePGMSegmentator<K: Key, V, const EPSILON: usize> {
+    pub first_k: Option<K>,
+    pub first_v: Option<V>,
+    pub max_slope: f64,
+    pub min_slope: f64,
+    pub num_entries: usize,
     // For sanity checking that input is increasing
     _last_k: Option<K>,
 }
 impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             first_k: None,
             first_v: None,
@@ -89,7 +89,7 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
 
     /// Tries to add an entry to this segmentor, returning a result about whether it was
     /// successful.
-    fn try_add_entry(&mut self, entry: Entry<K, V>) -> Result<(), ()> {
+    pub fn try_add_entry(&mut self, entry: Entry<K, V>) -> Result<(), ()> {
         if self.num_entries == 0 {
             // If it's empty just add the point
             self.first_k = Some(entry.key);
@@ -105,8 +105,14 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
         assert!(self._last_k.unwrap() < entry.key);
         // Get the worst case points we care about
         let base_point = Point::new(self.first_k.unwrap(), 0);
-        let max_point = Point::new(entry.key, self.num_entries + 1 + EPSILON);
-        let min_point = Point::new(entry.key, self.num_entries + 1 - EPSILON);
+        let max_point = Point::new(
+            entry.key,
+            self.num_entries.saturating_add(1).saturating_add(EPSILON) as i32,
+        );
+        let min_point = Point::new(
+            entry.key,
+            self.num_entries.saturating_add(1).saturating_sub(EPSILON) as i32,
+        );
         let this_max = (max_point - base_point.clone()).slope();
         let this_min = (min_point - base_point.clone()).slope();
         if self.num_entries == 1 {
@@ -114,7 +120,7 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
             self.min_slope = this_min;
         } else {
             let new_max_slope = this_max.min(self.max_slope);
-            let new_min_slope = this_min.min(self.min_slope);
+            let new_min_slope = this_min.max(self.min_slope);
             if new_min_slope >= new_max_slope {
                 return Err(());
             }
@@ -128,7 +134,7 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
     }
 
     // Outputs a linear model that fits all the points presented so far
-    fn to_linear_model(&self) -> LinearModel<K, EPSILON> {
+    pub fn to_linear_model(&self) -> LinearModel<K, EPSILON> {
         assert!(self.first_k.is_some());
         assert!(self.num_entries > 0);
         let slope = if self.num_entries > 1 {
@@ -140,7 +146,7 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
         LinearModel::new(self.first_k.unwrap(), slope)
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.num_entries <= 0
     }
 }
@@ -171,4 +177,9 @@ impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, E
 
         result
     }
+}
+
+#[cfg(test)]
+mod pgm_segmentation_tests {
+    use super::*;
 }

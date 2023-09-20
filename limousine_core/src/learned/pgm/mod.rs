@@ -1,5 +1,6 @@
 pub mod pgm_model;
 pub mod pgm_segmentation;
+pub mod viz;
 
 /*
 use self::pgm_model::LinearModel;

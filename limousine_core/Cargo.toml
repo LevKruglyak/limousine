@@ -13,6 +13,9 @@ generational-arena = "0.2.9"
 num = "0.4.0"
 trait-set = "0.3.0"
 bumpalo = { version = "3.13.0", features = ["boxed"] }
+egui = "0.22.0"
+eframe = "0.22.0"
+rand = "0.8.5"
 
 [features]
 default = []
