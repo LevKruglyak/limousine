@@ -9,34 +9,6 @@ use crate::{
 
 use super::pgm_model::LinearModel;
 
-/// HIGH LEVEL OVERVIEW
-/// Given entries, we want to keep adding data to the same model until it breaks the epsilon guarantee
-
-/// PARTS
-///
-/// SimpleModel
-/// An expanding model is one that is trying to take in new points
-/// There is a rather arcane convex hull algorithm in the original repo that is too hard to reason about to be useful
-/// Instead we'll stick with a siumpler idea
-/// INSIGHT: At any given point we either have less than 2 points, OR there is a MAX_LINE and a MIN_LINE which represents
-///     the maximum and minimum values that the next point can have without breaking the epsilon guarantees
-/// INSIGHT: A key difference between our implementation and the one from the original PGM work is that our models will
-///     all index from zero. That's because we need flexibility inside the data structure, so we can't reference global
-///     indexes. This allows us to simplify the underlying linear model (no intercept) and the construction logic
-/// IDEA:
-///     - Always accept the first point. Set the slope to 1 (doesn't matter)
-///     - Always accept the second point (two points can always be approximated)
-///         - After accepting the first point, set the slope to connect them directly
-///         - HELPFUL: Think of the first point as being at (0, 0), with key k_0.
-///                    Then the ith point with key k_i is at (i, k_i - k_0)
-///         - Then the MIN_LINE is the line that connects (0, EPS) and (1, (k_i - k_0) - EPS)
-///         - The MAX_LINE is the line that connects (0, -EPS) and (1, (k_i - k_0) + EPS)
-///     - For the ith point...
-///         -
-///
-///
-struct ShutUpRust;
-
 /// Helper struct to deal with points
 #[derive(Clone)]
 struct Point<K: Key> {

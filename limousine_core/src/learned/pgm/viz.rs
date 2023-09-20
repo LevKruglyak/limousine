@@ -127,6 +127,7 @@ impl eframe::App for AppState {
                     self.keys = random_values;
                     self.adding_ix = 0;
                     self.cur_segment = SimplePGMSegmentator::new();
+                    self.models.clear();
                 }
             });
 
