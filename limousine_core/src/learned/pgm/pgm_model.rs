@@ -7,28 +7,25 @@ use crate::{
 
 use std::borrow::Borrow;
 
-use super::pgm_segmentation::PGMSegmentation;
-
 /// A simple linear model for a key-rank segment of data.
 /// K: The type of keys in the model
 /// EPSILON: The maximum error bound for approximations into this model
 #[derive(Copy, Clone, Debug)]
 pub struct LinearModel<K, const EPSILON: usize> {
     key: K,
+    /// Why don't we need an intercept?
+    /// In our structures, each model will view the data its indexing as having offset 0
+    /// This is because we need to "fracture" the underlying data representation so it's not looking at
+    /// a huge layer, which would make inserts/updates/etc. nearly impossible.
     slope: f64,
-    intercept: i32,
 }
 
 /// Convenience methods on a LinearModel, most notably creation given key, slope, intercept
 /// NOTE: the provided `key` must represent the smallest key indexed by this model
 impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
-    pub fn new(key: K, slope: f64, intercept: i32) -> Self {
+    pub fn new(key: K, slope: f64) -> Self {
         debug_assert!(slope.is_normal());
-        Self {
-            key,
-            slope,
-            intercept,
-        }
+        Self { key, slope }
     }
 }
 
@@ -45,12 +42,9 @@ impl<K: Key, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON> {
         // To support generic floats, we need all these shenanigans
         // TODO: check on godbolt that this is optimized away
         let pos = num::cast::<f64, i64>(
-            self.slope
-                * num::cast::<K, f64>(key.checked_sub(self.borrow()).unwrap_or(K::min_value()))
-                    .unwrap(),
+            self.slope * num::cast::<K, f64>(key.checked_sub(self.borrow()).unwrap_or(K::min_value())).unwrap(),
         )
-        .unwrap()
-            + (self.intercept as i64);
+        .unwrap();
 
         let pos = pos.max(0) as usize;
 
@@ -61,6 +55,7 @@ impl<K: Key, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON> {
     }
 }
 
+/// Simple component with simple test(s)
 #[cfg(test)]
 mod pgm_model_tests {
     use super::*;
@@ -71,12 +66,11 @@ mod pgm_model_tests {
         let key: usize = 10;
         let slope: f64 = 1.0;
         let slope_usize: usize = 1;
-        let intercept: i32 = 6;
-        let model: LinearModel<usize, EPS> = LinearModel::new(key, slope, intercept);
+        let model: LinearModel<usize, EPS> = LinearModel::new(key, slope);
         for test in 20..1000 {
             let test: usize = test;
             let approx = model.approximate(&test);
-            let expected_lo = (test - key) * slope_usize + (intercept as usize) - EPS;
+            let expected_lo = (test - key) * slope_usize - EPS;
             let expected_hi = expected_lo + EPS * 2 + 2;
             assert!(approx.lo == expected_lo);
             assert!(approx.hi == expected_hi);

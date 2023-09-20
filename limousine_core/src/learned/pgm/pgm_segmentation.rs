@@ -1,429 +1,174 @@
-//! Defines the segmentation algorithm for PGM layers.
+//! Code defining how to create a layer of PGMs given data
+
+use std::ops::Sub;
+
+use crate::{
+    learned::generic::{Model, Segmentation},
+    Entry, Key,
+};
 
 use super::pgm_model::LinearModel;
-use crate::learned::generic::*;
-use crate::{common::entry::Entry, kv::*};
-use generational_arena::{Arena, Index};
-use num::{Bounded, CheckedSub, Num, NumCast};
 
-/// The optimal linear segmentation algorithm, translated
-/// almost directly from the official PGMIndex repository
+/// HIGH LEVEL OVERVIEW
+/// Given entries, we want to keep adding data to the same model until it breaks the epsilon guarantee
+
+/// PARTS
+///
+/// SimpleModel
+/// An expanding model is one that is trying to take in new points
+/// There is a rather arcane convex hull algorithm in the original repo that is too hard to reason about to be useful
+/// Instead we'll stick with a siumpler idea
+/// INSIGHT: At any given point we either have less than 2 points, OR there is a MAX_LINE and a MIN_LINE which represents
+///     the maximum and minimum values that the next point can have without breaking the epsilon guarantees
+/// INSIGHT: A key difference between our implementation and the one from the original PGM work is that our models will
+///     all index from zero. That's because we need flexibility inside the data structure, so we can't reference global
+///     indexes. This allows us to simplify the underlying linear model (no intercept) and the construction logic
+/// IDEA:
+///     - Always accept the first point. Set the slope to 1 (doesn't matter)
+///     - Always accept the second point (two points can always be approximated)
+///         - After accepting the first point, set the slope to connect them directly
+///         - HELPFUL: Think of the first point as being at (0, 0), with key k_0.
+///                    Then the ith point with key k_i is at (i, k_i - k_0)
+///         - Then the MIN_LINE is the line that connects (0, EPS) and (1, (k_i - k_0) - EPS)
+///         - The MAX_LINE is the line that connects (0, -EPS) and (1, (k_i - k_0) + EPS)
+///     - For the ith point...
+///         -
+///
+///
+struct ShutUpRust;
+
+/// Helper struct to deal with points
 #[derive(Clone)]
-pub struct PGMSegmentation;
-/*
-impl<K, V, const EPSILON: usize> Segmentation<K, V, LinearModel<K, EPSILON>> for PGMSegmentation
-where
-    K: Key + Clone,
-    V: Clone,
-{
-    /// Given an iterator over entries, constructs the piecewise nodes and returns them as a Vector
-    fn make_segmentation(
-        mut data: impl Iterator<Item = Entry<K, V>>,
-        arena: &mut Arena<PiecewiseNode<K, V, LinearModel<K, EPSILON>>>,
-    ) -> Index {
-        // Helpful variables and lambda functions for reading/writing
-        let mut rank: usize = 0;
-        let mut in_fun = || {
-            let val = data.next();
-            rank += 1;
-            match val {
-                Some(entry) => Some((rank - 1, entry)),
-                None => None,
-            }
-        };
-        let mut head_node_id: Option<Index> = None;
-        let mut last_node_id: Option<Index> = None;
-        let mut model = OptimalPiecewiseLinearModel::<K, EPSILON>::new();
-        let mut entries: Vec<Entry<K, V>> = vec![];
-        let mut out_fun = |new_model: OptimalPiecewiseLinearModel<K, EPSILON>,
-                           new_entries: Vec<Entry<K, V>>| {
-            let seg = new_model.get_segment();
-            let node = PiecewiseNode {
-                model: seg.into(),
-                data: new_entries,
-                next: None,
-            };
-            let new_id = arena.insert(node);
-            match last_node_id {
-                Some(last_id) => {
-                    let last_node = arena.get_mut(last_id);
-                    if last_node.is_some() {
-                        last_node.unwrap().next = Some(new_id);
-                    }
-                }
-                None => {
-                    head_node_id = Some(new_id);
-                }
-            };
-            last_node_id = Some(new_id);
-        };
-
-        let Some((rank, entry)) = in_fun() else { panic!() };
-        model.add_point((entry.key, rank));
-        entries.push(entry);
-
-        let mut next_pair = in_fun();
-
-        while next_pair.is_some() {
-            let (rank, entry) = next_pair.unwrap();
-            if !model.add_point((entry.key, rank)) {
-                out_fun(model.clone(), entries.clone());
-                entries.clear();
-                model.add_point((entry.key, rank));
-            }
-            entries.push(entry);
-            next_pair = in_fun();
-        }
-        if model.points_in_hull > 0 {
-            out_fun(model, entries.clone());
-        }
-
-        head_node_id.unwrap()
-    }
-}
-
-type KeySigned = i128;
-
-fn key_cast<K: Key>(key: K) -> KeySigned {
-    num::cast::<K, KeySigned>(key).unwrap()
-}
-
-/// A slope of key-rank pairs
-#[derive(Clone, Copy)]
-struct Slope {
-    dx: KeySigned,
-    dy: i128,
-}
-
-/// Represents a key-rank pair
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Point<K: Key> {
     x: K,
     y: usize,
 }
+impl<K: Key> Point<K> {
+    fn new(x: K, y: usize) -> Self {
+        Self { x, y }
+    }
 
-impl<K: Key> Default for Point<K> {
-    fn default() -> Self {
-        Self { x: K::zero(), y: 0 }
+    /// Verbose but understandable slope
+    fn slope(self) -> f64 {
+        let run = num::cast::<K, f64>(self.x).unwrap();
+        // For simplicity let's just make sure it's nowhere near 0
+        assert!(run.abs() > 0.00001);
+        (self.y as f64) / run
     }
 }
-
-#[derive(Debug)]
-struct CanonicalSegment<K: Key> {
-    rectangle: [Point<K>; 4],
-    first: K,
-}
-
-#[derive(Clone)]
-struct OptimalPiecewiseLinearModel<K: Key, const EPSILON: usize> {
-    lower: Vec<Point<K>>,
-    upper: Vec<Point<K>>,
-    first_x: K,
-    last_x: K,
-    lower_start: usize,
-    upper_start: usize,
-    points_in_hull: usize,
-    rectangle: [Point<K>; 4],
-}
-
-impl<K: Key, const EPSILON: usize> OptimalPiecewiseLinearModel<K, EPSILON> {
-    fn new() -> Self {
-        Self {
-            lower: Vec::with_capacity(1 << 16),
-            upper: Vec::with_capacity(1 << 16),
-            first_x: K::min_value(),
-            last_x: K::min_value(),
-            lower_start: 0,
-            upper_start: 0,
-            points_in_hull: 0,
-            rectangle: [Default::default(); 4],
-        }
-    }
-
-    fn add_point(&mut self, pair: (K, usize)) -> bool {
-        let x = pair.0;
-        let y = pair.1;
-
-        if self.points_in_hull > 0 && x <= self.last_x {
-            // println!("Points must be increasing by x. {x:?} {:?}", self.last_x);
-            panic!("Points must be increasing by x. {x:?} {:?}", self.last_x);
-            return false;
-        }
-
-        self.last_x = x;
-
-        let p1 = Point {
-            x,
-            y: y.saturating_add(EPSILON),
-        };
-        let p2 = Point {
-            x,
-            y: y.saturating_sub(EPSILON),
-        };
-
-        if self.points_in_hull == 0 {
-            self.first_x = x;
-            self.rectangle[0] = p1;
-            self.rectangle[1] = p2;
-            self.upper.clear();
-            self.lower.clear();
-            self.upper.push(p1);
-            self.lower.push(p2);
-            self.upper_start = 0;
-            self.lower_start = 0;
-            self.points_in_hull += 1;
-            return true;
-        }
-
-        if self.points_in_hull == 1 {
-            self.rectangle[2] = p2;
-            self.rectangle[3] = p1;
-            self.upper.push(p1);
-            self.lower.push(p2);
-            self.points_in_hull += 1;
-            return true;
-        }
-
-        let slope1 = self.rectangle[2] - self.rectangle[0];
-        let slope2 = self.rectangle[3] - self.rectangle[1];
-        let outside_line1 = p1 - self.rectangle[2] < slope1;
-        let outside_line2 = p2 - self.rectangle[3] > slope2;
-
-        if outside_line1 || outside_line2 {
-            self.points_in_hull = 0;
-            return false;
-        }
-
-        if p1 - self.rectangle[1] < slope2 {
-            // Find extreme slope
-            let mut min = self.lower[self.lower_start] - p1;
-            let mut min_i = self.lower_start;
-            for i in (self.lower_start + 1)..self.lower.len() {
-                let val = self.lower[i] - p1;
-                if val > min {
-                    break;
-                }
-                min = val;
-                min_i = i;
-            }
-
-            self.rectangle[1] = self.lower[min_i];
-            self.rectangle[3] = p1;
-            self.lower_start = min_i;
-
-            // Hull update
-            let mut end = self.upper.len();
-            while end >= self.upper_start + 2
-                && cross(self.upper[end - 2], self.upper[end - 1], p1) <= 0 as KeySigned
-            {
-                end -= 1;
-            }
-
-            self.upper.resize(end, Default::default());
-            self.upper.push(p1);
-        }
-
-        if p2 - self.rectangle[0] > slope1 {
-            // Find extreme slope
-            let mut max = self.upper[self.upper_start] - p2;
-            let mut max_i = self.upper_start;
-            for i in (self.upper_start + 1)..self.upper.len() {
-                let val = self.upper[i] - p2;
-                if val < max {
-                    break;
-                }
-                max = val;
-                max_i = i;
-            }
-
-            self.rectangle[0] = self.upper[max_i];
-            self.rectangle[2] = p2;
-            self.upper_start = max_i;
-
-            // Hull update
-            let mut end = self.lower.len();
-            while end >= self.lower_start + 2
-                && cross(self.lower[end - 2], self.lower[end - 1], p2) >= 0 as KeySigned
-            {
-                end -= 1;
-            }
-
-            self.lower.resize(end, Default::default());
-            self.lower.push(p2);
-        }
-
-        self.points_in_hull += 1;
-        true
-    }
-
-    fn get_segment(&self) -> CanonicalSegment<K> {
-        if self.points_in_hull == 1 {
-            return CanonicalSegment::diagonal(self.rectangle[0], self.rectangle[1], self.first_x);
-        }
-
-        CanonicalSegment::new(self.rectangle, self.first_x)
-    }
-
-    // fn reset(&mut self) {
-    //     self.points_in_hull = 0;
-    //     self.lower.clear();
-    //     self.upper.clear();
-    // }
-}
-
-fn cross<K: Key>(o: Point<K>, a: Point<K>, b: Point<K>) -> KeySigned {
-    let oa = a - o;
-    let ob = b - o;
-    oa.dx * (ob.dy as KeySigned) - (oa.dy as KeySigned) * ob.dx
-}
-
-impl<K: Key, const EPSILON: usize> Into<LinearModel<K, EPSILON>> for CanonicalSegment<K> {
-    fn into(self) -> LinearModel<K, EPSILON> {
-        let (cs_slope, cs_intercept) = self.get_floating_point_segment(self.first);
-        LinearModel::new(self.first, cs_slope, cs_intercept as i32)
-    }
-}
-
-impl<K: Key> CanonicalSegment<K> {
-    fn diagonal(p0: Point<K>, p1: Point<K>, first: K) -> Self {
-        Self {
-            rectangle: [p0, p1, p0, p1],
-            first,
-        }
-    }
-
-    fn new(rectangle: [Point<K>; 4], first: K) -> Self {
-        Self { rectangle, first }
-    }
-
-    fn one_point(&self) -> bool {
-        self.rectangle[0] == self.rectangle[2] && self.rectangle[1] == self.rectangle[3]
-    }
-
-    // fn get_intersection(&self) -> (f64, f64) {
-    //     let p0 = self.rectangle[0];
-    //     let p1 = self.rectangle[1];
-    //     let p2 = self.rectangle[2];
-    //     let p3 = self.rectangle[3];
-    //     let slope1 = p2 - p0;
-    //     let slope2 = p3 - p1;
-    //
-    //     if self.one_point() || slope1 == slope2 {
-    //         return (num::cast::<K, f64>(p0.x).unwrap(), p0.y as f64);
-    //     }
-    //
-    //     let p0p1 = p1 - p0;
-    //     let a = slope1.dx * slope2.dy - slope1.dy * slope2.dx;
-    //     let b = (p0p1.dx * slope2.dy - p0p1.dy * slope2.dx) as f64 / (a as f64);
-    //     let i_x = num::cast::<K, f64>(p0.x).unwrap() + b * slope1.dx as f64;
-    //     let i_y = p0.y as f64 + b * slope1.dy as f64;
-    //     (i_x, i_y)
-    // }
-
-    fn get_floating_point_segment(&self, origin: K) -> (f64, i128) {
-        if self.one_point() {
-            return (
-                0.0,
-                (self.rectangle[0].y as i128 + self.rectangle[1].y as i128) / 2,
-            );
-        }
-
-        // Integral verson of the method (rounding version)
-        let slope = self.rectangle[3] - self.rectangle[1];
-        let intercept_n = slope.dy * key_cast(origin - self.rectangle[1].x);
-        let intercept_d = slope.dx;
-        let rounding_term = (if (intercept_n < 0) ^ (intercept_d < 0) {
-            -1
-        } else {
-            1
-        }) * intercept_d
-            / 2;
-        let intercept = (intercept_n + rounding_term) / intercept_d + self.rectangle[1].y as i128;
-
-        (slope.slope(), intercept)
-    }
-
-    // fn get_slope_range(&self) -> (f64, f64) {
-    //     if self.one_point() {
-    //         return (0.0, 1.0);
-    //     }
-    //
-    //     let min_slope = (self.rectangle[2] - self.rectangle[0]).slope();
-    //     let max_slope = (self.rectangle[3] - self.rectangle[1]).slope();
-    //     (min_slope, max_slope)
-    // }
-}
-
-impl Slope {
-    fn slope(&self) -> f64 {
-        self.dy as f64 / self.dx as f64
-    }
-}
-
-impl PartialEq for Slope {
-    fn eq(&self, other: &Self) -> bool {
-        self.dy * (other.dx as i128) == (self.dx as i128) * other.dy
-    }
-}
-
-impl PartialOrd for Slope {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        (self.dy * (other.dx as i128)).partial_cmp(&((self.dx as i128) * other.dy))
-    }
-}
-
-impl<K: Key> std::ops::Sub for Point<K> {
-    type Output = Slope;
+impl<K: Key> Sub<Self> for Point<K> {
+    type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Slope {
-            dx: key_cast(self.x) - key_cast(rhs.x),
-            dy: self.y as i128 - rhs.y as i128,
-        }
+        Point::new(rhs.x - self.x, rhs.y - self.y)
     }
 }
 
-#[cfg(test)]
-mod pgm_tests {
-    use super::*;
-    use crate::learned::generic::Model;
-
-    /// Tests that when we provide a huge list of numbers that are
-    /// perfectly linear, the segmentation algorithm returns one
-    /// segment with slope basically 1
-    #[test]
-    fn test_one_big_linear() {
-        let mut inp: Vec<Entry<i32, i32>> = Vec::new();
-        for i in 0..100_000 {
-            inp.push(Entry::new(i, i));
+/// A data structure that will grow to incorporate points while building a PGM and eventually
+/// produce a proper linear model, before moving on to the next one
+struct SimplePGMSegmentator<K: Key, V, const EPSILON: usize> {
+    first_k: Option<K>,
+    first_v: Option<V>,
+    max_slope: f64,
+    min_slope: f64,
+    num_entries: usize,
+    // For sanity checking that input is increasing
+    _last_k: Option<K>,
+}
+impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
+    fn new() -> Self {
+        Self {
+            first_k: None,
+            first_v: None,
+            max_slope: f64::MAX,
+            min_slope: f64::MIN,
+            num_entries: 0,
+            _last_k: None,
         }
-        let mut arena: Arena<PiecewiseNode<i32, i32, LinearModel<i32, 2>>> = Arena::new();
-        let head = PGMSegmentation::make_segmentation(inp.into_iter(), &mut arena);
-        assert!(arena.len() == 1);
-        let node = arena.get(head).unwrap();
-        let guess_100 = node.model.approximate(&100);
-        println!("{:?}", node.model);
-        assert!(guess_100.lo == 98);
-        assert!(guess_100.hi == 104);
     }
 
-    /// Tests that when we provide step-like series of points,
-    /// we get a corresponding number of models with near-zero slope
-    #[test]
-    fn test_step_function() {
-        let mut inp: Vec<Entry<i32, i32>> = Vec::new();
-        const STEPS: usize = 1_000;
-        const STEP_SIZE: usize = 10_000;
-        const POINTS_PER_STEP: usize = 100;
-        for step in 0..STEPS {
-            for point in 0..POINTS_PER_STEP {
-                let key = step * STEP_SIZE + point;
-                inp.push(Entry::new((step * STEP_SIZE + point) as i32, point as i32));
+    /// Tries to add an entry to this segmentor, returning a result about whether it was
+    /// successful.
+    fn try_add_entry(&mut self, entry: Entry<K, V>) -> Result<(), ()> {
+        if self.num_entries == 0 {
+            // If it's empty just add the point
+            self.first_k = Some(entry.key);
+            self.first_v = Some(entry.value);
+            self._last_k = Some(entry.key);
+            self.num_entries = 1;
+            return Ok(());
+        }
+        // Sanity checks
+        assert!(self.first_k.is_some());
+        assert!(self.first_v.is_some());
+        assert!(self._last_k.is_some());
+        assert!(self._last_k.unwrap() < entry.key);
+        // Get the worst case points we care about
+        let base_point = Point::new(self.first_k.unwrap(), 0);
+        let max_point = Point::new(entry.key, self.num_entries + 1 + EPSILON);
+        let min_point = Point::new(entry.key, self.num_entries + 1 - EPSILON);
+        let this_max = (max_point - base_point.clone()).slope();
+        let this_min = (min_point - base_point.clone()).slope();
+        if self.num_entries == 1 {
+            self.max_slope = this_max;
+            self.min_slope = this_min;
+        } else {
+            let new_max_slope = this_max.min(self.max_slope);
+            let new_min_slope = this_min.min(self.min_slope);
+            if new_min_slope >= new_max_slope {
+                return Err(());
+            }
+            self.max_slope = new_max_slope;
+            self.min_slope = new_min_slope;
+        }
+        // This point is fine to add, and we've already update the slope
+        self.num_entries += 1;
+        self._last_k = Some(entry.key);
+        Ok(())
+    }
+
+    // Outputs a linear model that fits all the points presented so far
+    fn to_linear_model(&self) -> LinearModel<K, EPSILON> {
+        assert!(self.first_k.is_some());
+        assert!(self.num_entries > 0);
+        let slope = if self.num_entries > 1 {
+            (self.max_slope + self.min_slope) / 2.0
+        } else {
+            // A model that only has one point can pick any slope, we pick 1 arbitrarily
+            1.0
+        };
+        LinearModel::new(self.first_k.unwrap(), slope)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.num_entries <= 0
+    }
+}
+
+impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, EPSILON>> for LinearModel<K, EPSILON> {
+    fn make_segmentation(data: impl Iterator<Item = crate::Entry<K, V>> + Clone) -> Vec<(Self, V)> {
+        let mut result: Vec<(Self, V)> = vec![];
+
+        let mut cur_segment: SimplePGMSegmentator<K, V, EPSILON> = SimplePGMSegmentator::new();
+        for entry in data.into_iter() {
+            match cur_segment.try_add_entry(entry) {
+                Ok(_) => {
+                    // Nothing to do, entry added successfully
+                }
+                Err(_) => {
+                    // Export the model currently specified by the segmentor
+                    result.push((cur_segment.to_linear_model(), cur_segment.first_v.clone().unwrap()));
+                    // Reset current segmentor
+                    cur_segment = SimplePGMSegmentator::new();
+                }
             }
         }
-        let mut arena: Arena<PiecewiseNode<i32, i32, LinearModel<i32, 2>>> = Arena::new();
-        let nodes = PGMSegmentation::make_segmentation(inp.into_iter(), &mut arena);
-        assert!(arena.len() == STEPS);
+
+        // Handle last segment
+        if !cur_segment.is_empty() {
+            result.push((cur_segment.to_linear_model(), cur_segment.first_v.clone().unwrap()));
+        }
+
+        result
     }
 }
- */

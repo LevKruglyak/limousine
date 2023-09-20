@@ -15,11 +15,14 @@ use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, ops::Deref, path::Pat
 
 /// An algorithm for turning a list of key-rank pairs into a piecewise model.
 pub trait Segmentation<K: Key, V, M: Model<K>>: Clone + 'static {
-    /// Given a list of entries and an arena to allocate nodes into, constructs a flat learned layer
-    fn make_segmentation(
-        data: impl Iterator<Item = Entry<K, V>> + Clone,
-        //arena: &mut Arena<PiecewiseNode<K, V, M>>,
-    ) -> Index;
+    /// Given a list of entries, return the split into models
+    /// ? Does make_segmentation work better as just a method on model?
+    /// Pro:
+    ///     Less traits
+    /// Con:
+    ///     Each model needs to carry around knowledge of what value type it's indexing,
+    ///     which seems unnecessary and potentially bad
+    fn make_segmentation(data: impl Iterator<Item = Entry<K, V>> + Clone) -> Vec<(Self, V)>;
 }
 
 /// The result of an approximation search
