@@ -115,7 +115,7 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
             // A model that only has one point can pick any slope, we pick 1 arbitrarily
             1.0
         };
-        LinearModel::new(self.first_k.unwrap(), slope)
+        LinearModel::new(self.first_k.unwrap(), slope, self.num_entries)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -151,7 +151,47 @@ impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, E
     }
 }
 
+/// We'll test this part just by initializing TONS of indexes and making sure every key in every index is
+/// properly indexed
 #[cfg(test)]
 mod pgm_segmentation_tests {
+    use rand::{distributions::Uniform, Rng};
+
     use super::*;
+
+    type Key = usize;
+    type Value = usize;
+
+    /// To test with different epsilon we need a struct that can handle that generic
+    struct PGMSegTestCase<const EPSILON: usize> {
+        verbose: bool,
+        entries: Vec<Entry<Key, Value>>,
+        models: Vec<LinearModel<Key, EPSILON>>,
+    }
+    impl<const EPSILON: usize> PGMSegTestCase<EPSILON> {
+        /// Generates a test key, meaning make the entries, sort + dedup them
+        fn generate(size: usize, verbose: Option<bool>) -> Self {
+            let verbose = verbose.unwrap_or(true);
+            let range = Uniform::from((Key::MIN)..(Key::MAX));
+            let mut random_values: Vec<usize> = rand::thread_rng().sample_iter(&range).take(size).collect();
+            random_values.sort();
+            random_values.dedup();
+            let entries: Vec<Entry<Key, Value>> = random_values
+                .into_iter()
+                .enumerate()
+                .map(|(ix, key)| Entry::new(key, ix))
+                .collect();
+            Self {
+                entries,
+                verbose,
+                models: vec![],
+            }
+        }
+
+        /// Assuming data has already been generated, segments it as a layer
+        fn train(&mut self) {}
+
+        /// Assuming data has already been generated and trained on, tests that every key is correctly approximated
+        fn test(&self) {}
+    }
 }

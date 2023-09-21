@@ -1,4 +1,7 @@
-use crate::{learned::generic::Segmentation, Entry};
+use crate::{
+    learned::generic::{ApproxPos, Model, Segmentation},
+    Entry,
+};
 
 use super::{pgm_model::LinearModel, pgm_segmentation::SimplePGMSegmentator};
 use egui::plot;
@@ -20,7 +23,8 @@ struct AppState {
     batch_add_size: usize,
     // For rendering the models at the proper y value, with proper length
     model_ranks: Vec<usize>,
-    model_sizes: Vec<usize>,
+    // For querying a point and showing predictions
+    query_point: Option<Entry<Key, Value>>,
 }
 
 impl AppState {
@@ -34,7 +38,7 @@ impl AppState {
             adding_ix: 0,
             batch_add_size: 5,
             model_ranks: vec![],
-            model_sizes: vec![],
+            query_point: None,
         }
     }
 
@@ -54,7 +58,6 @@ impl AppState {
     fn reset_state(&mut self) {
         self.models.clear();
         self.model_ranks.clear();
-        self.model_sizes.clear();
         self.cur_segment = SimplePGMSegmentator::new();
         self.adding_ix = 0;
     }
@@ -73,7 +76,6 @@ impl AppState {
                 // Push the last segment if it has elements
                 self.models.push(self.cur_segment.to_linear_model());
                 self.model_ranks.push(self.num_entries - self.cur_segment.num_entries);
-                self.model_sizes.push(self.cur_segment.num_entries);
                 self.cur_segment = SimplePGMSegmentator::new();
             }
             return;
@@ -90,7 +92,6 @@ impl AppState {
                     // Export model and clear
                     self.models.push(self.cur_segment.to_linear_model());
                     self.model_ranks.push(self.adding_ix - self.cur_segment.num_entries);
-                    self.model_sizes.push(self.cur_segment.num_entries);
                     self.cur_segment = SimplePGMSegmentator::new();
                 }
             }
@@ -111,14 +112,37 @@ impl AppState {
             let (model, value) = trained_result[ix];
             self.models.push(model);
             self.model_ranks.push(value as usize);
-            if ix + 1 < trained_result.len() {
-                self.model_sizes
-                    .push(trained_result[ix + 1].1 as usize - value as usize);
-            } else {
-                self.model_sizes.push(self.num_entries - value as usize);
-            }
         }
         self.adding_ix = self.num_entries;
+    }
+
+    /// Selects a random entry, and then shows the upper and lower bound for predicted position
+    fn do_query(&mut self) {
+        if self.keys.len() <= 0 {
+            return;
+        }
+        let ix: usize = (rand::thread_rng().gen::<usize>()) % self.keys.len();
+        self.query_point = Some(Entry::new(self.keys[ix] as Key, ix.try_into().unwrap()));
+    }
+
+    /// Returns the predicted upper and lower positions
+    fn get_query_bounds(&self) -> Option<ApproxPos> {
+        if self.query_point.is_none() || self.models.len() <= 0 {
+            return None;
+        }
+        let mut model_ix = 0;
+        while model_ix < self.models.len().saturating_sub(1) {
+            if self.models[model_ix + 1].key >= self.query_point.unwrap().key {
+                break;
+            }
+            model_ix += 1;
+        }
+        let base_rank = self.model_ranks[model_ix];
+        let range = self.models[model_ix].approximate(&self.query_point.unwrap().key);
+        return Some(ApproxPos {
+            lo: base_rank + range.lo,
+            hi: base_rank + range.hi,
+        });
     }
 }
 
@@ -149,14 +173,12 @@ impl eframe::App for AppState {
 
                     // Plot the models
                     assert!(self.models.len() == self.model_ranks.len());
-                    assert!(self.models.len() == self.model_sizes.len());
                     let mut model_lines: Vec<Line> = vec![];
                     for ix in 0..(self.models.len()) {
                         let model = self.models[ix];
                         let model_rank = self.model_ranks[ix];
-                        let model_size = self.model_sizes[ix];
                         let first_key = model.key;
-                        let end_key = self.keys[(self.keys.len() - 1).min(model_rank + model_size)];
+                        let end_key = self.keys[(self.keys.len() - 1).min(model_rank + model.size)];
                         let end_rank = model_rank as f64 + ((end_key.saturating_sub(first_key)) as f64 * model.slope);
                         let line = Line::new(PlotPoints::new(vec![
                             [first_key as f64, model_rank as f64],
@@ -182,6 +204,20 @@ impl eframe::App for AppState {
                         let segment_min_line =
                             Line::new(PlotPoints::new(vec![[first_key, first_rank], [cur_key, min_rank]])).width(2.0);
                         plot_ui.line(segment_min_line);
+                    }
+
+                    // Plot the point we're querying and the bounds
+                    if self.query_point.is_some() && self.get_query_bounds().is_some() {
+                        let approx = self.get_query_bounds().unwrap();
+                        let points = PlotPoints::new(vec![
+                            [self.query_point.unwrap().key as f64, approx.lo as f64],
+                            [
+                                self.query_point.unwrap().key as f64,
+                                self.query_point.unwrap().value as f64,
+                            ],
+                            [self.query_point.unwrap().key as f64, approx.hi as f64],
+                        ]);
+                        plot_ui.points(Points::new(points).radius(9.0).name("query"));
                     }
                 });
 
@@ -210,6 +246,10 @@ impl eframe::App for AppState {
 
             if ui.button("Reset State").clicked() {
                 self.reset_state();
+            }
+
+            if ui.button("Do Query").clicked() {
+                self.do_query();
             }
         });
     }

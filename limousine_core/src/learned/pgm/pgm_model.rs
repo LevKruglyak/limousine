@@ -21,14 +21,18 @@ pub struct LinearModel<K, const EPSILON: usize> {
     /// This implementation is not optimal w.r.t minimizing the number of segments, but it is almost certainly
     /// close and makes the actual segmentation algorithm + logic must simpler
     pub slope: f64,
+    /// This is not strictly needed, but ends up being a huge help for debugging stuff and testing
+    /// Plus, if we ever move away from the linked list approach per layer (and introduce direct indexing) we'll
+    /// need this anyway
+    pub size: usize,
 }
 
 /// Convenience methods on a LinearModel, most notably creation given key, slope, intercept
 /// NOTE: the provided `key` must represent the smallest key indexed by this model
 impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
-    pub fn new(key: K, slope: f64) -> Self {
+    pub fn new(key: K, slope: f64, size: usize) -> Self {
         debug_assert!(slope.is_normal());
-        Self { key, slope }
+        Self { key, slope, size }
     }
 }
 
@@ -69,7 +73,7 @@ mod pgm_model_tests {
         let key: usize = 10;
         let slope: f64 = 1.0;
         let slope_usize: usize = 1;
-        let model: LinearModel<usize, EPS> = LinearModel::new(key, slope);
+        let model: LinearModel<usize, EPS> = LinearModel::new(key, slope, 6);
         for test in 20..1000 {
             let test: usize = test;
             let approx = model.approximate(&test);
