@@ -1,4 +1,4 @@
-use crate::Entry;
+use crate::{learned::generic::Segmentation, Entry};
 
 use super::{pgm_model::LinearModel, pgm_segmentation::SimplePGMSegmentator};
 use egui::plot;
@@ -8,18 +8,23 @@ use std::borrow::Borrow;
 type Key = i32;
 type Value = i32;
 const EPSILON: usize = 4;
+type OurModel = LinearModel<Key, EPSILON>;
 
 struct AppState {
     num_entries: usize,
     keys: Vec<Key>,
-    models: Vec<(LinearModel<Key, EPSILON>, usize, usize)>,
+    models: Vec<OurModel>,
     cur_segment: SimplePGMSegmentator<Key, Value, EPSILON>,
     // For controlling how we step through
     adding_ix: usize,
     batch_add_size: usize,
+    // For rendering the models at the proper y value, with proper length
+    model_ranks: Vec<usize>,
+    model_sizes: Vec<usize>,
 }
 
 impl AppState {
+    /// Create an empty app state
     fn new(ctx: &eframe::CreationContext<'_>) -> Self {
         Self {
             num_entries: 200,
@@ -28,11 +33,52 @@ impl AppState {
             cur_segment: SimplePGMSegmentator::new(),
             adding_ix: 0,
             batch_add_size: 5,
+            model_ranks: vec![],
+            model_sizes: vec![],
         }
     }
 
+    /// Resete everything (data + state)
+    fn reset(&mut self) {
+        self.keys.clear();
+        let range = Uniform::from((Key::MIN)..(Key::MAX));
+        let mut random_values: Vec<i32> = rand::thread_rng().sample_iter(&range).take(self.num_entries).collect();
+        random_values.sort();
+        random_values.dedup();
+        self.keys = random_values;
+        self.reset_state();
+    }
+
+    /// Reset the app state
+    /// Useful when you want to do basically another round of training on a fresh layer
+    fn reset_state(&mut self) {
+        self.models.clear();
+        self.model_ranks.clear();
+        self.model_sizes.clear();
+        self.cur_segment = SimplePGMSegmentator::new();
+        self.adding_ix = 0;
+    }
+
+    /// Add the next `self.batch_add_size` keys to layer
+    /// If there are no more keys, and the current model has elements, it will wrap them up into
+    /// a model and add it. Otherwise it does nothing
     fn add_batched_elements(&mut self) {
+        if self.keys.len() <= 0 {
+            return;
+        }
         let ceil = (self.keys.len() - 1).min(self.adding_ix + self.batch_add_size);
+        if self.adding_ix >= ceil {
+            // We've ran through all the elements
+            if self.cur_segment.num_entries > 0 {
+                // Push the last segment if it has elements
+                self.models.push(self.cur_segment.to_linear_model());
+                self.model_ranks.push(self.num_entries - self.cur_segment.num_entries);
+                self.model_sizes.push(self.cur_segment.num_entries);
+                self.cur_segment = SimplePGMSegmentator::new();
+            }
+            return;
+        }
+        // Otherwise add as many elements as we can
         while self.adding_ix < ceil {
             let entry: Entry<Key, Value> = Entry::new(self.keys[self.adding_ix], 0);
             match self.cur_segment.try_add_entry(entry) {
@@ -42,16 +88,37 @@ impl AppState {
                 }
                 Err(_) => {
                     // Export model and clear
-                    let start_ix = self.adding_ix - self.cur_segment.num_entries;
-                    self.models.push((
-                        self.cur_segment.to_linear_model(),
-                        start_ix,
-                        self.cur_segment.num_entries,
-                    ));
+                    self.models.push(self.cur_segment.to_linear_model());
+                    self.model_ranks.push(self.adding_ix - self.cur_segment.num_entries);
+                    self.model_sizes.push(self.cur_segment.num_entries);
                     self.cur_segment = SimplePGMSegmentator::new();
                 }
             }
         }
+    }
+
+    /// Resets the state, and then fully trains on the data provided to create an entire layer
+    fn full_train(&mut self) {
+        self.reset_state();
+        let entries: Vec<Entry<Key, Value>> = self
+            .keys
+            .iter()
+            .enumerate()
+            .map(|(ix, key)| Entry::new(key.clone(), ix as i32))
+            .collect();
+        let trained_result = OurModel::make_segmentation(entries.into_iter());
+        for ix in 0..(trained_result.len()) {
+            let (model, value) = trained_result[ix];
+            self.models.push(model);
+            self.model_ranks.push(value as usize);
+            if ix + 1 < trained_result.len() {
+                self.model_sizes
+                    .push(trained_result[ix + 1].1 as usize - value as usize);
+            } else {
+                self.model_sizes.push(self.num_entries - value as usize);
+            }
+        }
+        self.adding_ix = self.num_entries;
     }
 }
 
@@ -80,26 +147,29 @@ impl eframe::App for AppState {
                     );
                     plot_ui.points(Points::new(points).radius(5.0).name("key-ranks"));
 
-                    let model_lines: Vec<Line> = self
-                        .models
-                        .iter()
-                        .map(|(model, start_ix, size)| {
-                            let first_key: Key = *model.borrow();
-                            let first_key = first_key as f64;
-                            let first_rank = start_ix.clone() as f64;
-                            let end_key = self.keys[start_ix + size] as f64;
-                            let end_rank = first_rank + (end_key - first_key) * model.slope;
-                            return Line::new(PlotPoints::new(vec![
-                                [first_key, first_rank],
-                                [self.keys[start_ix + size.clone()] as f64, end_rank],
-                            ]))
-                            .width(8.0);
-                        })
-                        .collect();
+                    // Plot the models
+                    assert!(self.models.len() == self.model_ranks.len());
+                    assert!(self.models.len() == self.model_sizes.len());
+                    let mut model_lines: Vec<Line> = vec![];
+                    for ix in 0..(self.models.len()) {
+                        let model = self.models[ix];
+                        let model_rank = self.model_ranks[ix];
+                        let model_size = self.model_sizes[ix];
+                        let first_key = model.key;
+                        let end_key = self.keys[(self.keys.len() - 1).min(model_rank + model_size)];
+                        let end_rank = model_rank as f64 + ((end_key.saturating_sub(first_key)) as f64 * model.slope);
+                        let line = Line::new(PlotPoints::new(vec![
+                            [first_key as f64, model_rank as f64],
+                            [end_key as f64, end_rank],
+                        ]))
+                        .width(8.0);
+                        model_lines.push(line);
+                    }
                     for line in model_lines {
                         plot_ui.line(line);
                     }
 
+                    // Plot the current segment once it has enough entries to be a little stable (not huge slopes)
                     if self.cur_segment.num_entries > 3 {
                         let first_key = self.cur_segment.first_k.unwrap() as f64;
                         let cur_key = self.keys[self.adding_ix] as f64;
@@ -118,16 +188,7 @@ impl eframe::App for AppState {
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut self.num_entries));
                 if ui.button("Number of Entries").clicked() {
-                    self.keys.clear();
-                    let range = Uniform::from((Key::MIN)..(Key::MAX));
-                    let mut random_values: Vec<i32> =
-                        rand::thread_rng().sample_iter(&range).take(self.num_entries).collect();
-                    random_values.sort();
-                    random_values.dedup();
-                    self.keys = random_values;
-                    self.adding_ix = 0;
-                    self.cur_segment = SimplePGMSegmentator::new();
-                    self.models.clear();
+                    self.reset();
                 }
             });
 
@@ -138,8 +199,17 @@ impl eframe::App for AppState {
                 }
             });
 
-            if ui.button("Reset").clicked() {
-                self.keys.clear();
+            if ui.button("Train Layer").clicked() {
+                self.full_train();
+            }
+
+            if ui.button("Reroll + Retrain").clicked() {
+                self.reset();
+                self.full_train();
+            }
+
+            if ui.button("Reset State").clicked() {
+                self.reset_state();
             }
         });
     }

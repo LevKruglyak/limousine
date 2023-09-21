@@ -12,11 +12,14 @@ use std::borrow::Borrow;
 /// EPSILON: The maximum error bound for approximations into this model
 #[derive(Copy, Clone, Debug)]
 pub struct LinearModel<K, const EPSILON: usize> {
-    key: K,
+    // The smallest key indexed by this model
+    pub key: K,
     /// Why don't we need an intercept?
     /// In our structures, each model will view the data its indexing as having offset 0
     /// This is because we need to "fracture" the underlying data representation so it's not looking at
     /// a huge layer, which would make inserts/updates/etc. nearly impossible.
+    /// This implementation is not optimal w.r.t minimizing the number of segments, but it is almost certainly
+    /// close and makes the actual segmentation algorithm + logic must simpler
     pub slope: f64,
 }
 
