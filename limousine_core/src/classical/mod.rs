@@ -53,16 +53,14 @@ impl<K, X, Base, BA> TopComponentInMemoryBuild<K, Base, BA, ()> for BTreeTopComp
 where
     Base: NodeLayer<K, BA, ()>,
     K: Ord + Copy,
-    BA: Address,
+    BA: Address + Copy,
 {
     fn build(base: &mut Base) -> Self {
         let mut inner = BTreeMap::new();
 
-        unsafe {
-            for (key, address, raw_node) in base.mut_range(Bound::Unbounded, Bound::Unbounded) {
-                inner.insert(key, address);
-                raw_node.as_mut().unwrap().set_parent(());
-            }
+        for view in base.mut_range(Bound::Unbounded, Bound::Unbounded) {
+            inner.insert(view.key(), view.address());
+            view.set_parent(());
         }
 
         Self {

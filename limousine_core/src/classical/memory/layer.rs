@@ -154,19 +154,17 @@ where
         let mut ptr = self.add_node(MemoryBTreeNode::empty());
         self.first = ptr;
 
-        unsafe {
-            for (key, address, raw_node) in base.mut_range(Bound::Unbounded, Bound::Unbounded) {
-                // If node too full, carry over to next
-                if self.deref(ptr).inner.is_half_full() {
-                    let mut new_address = self.add_node(MemoryBTreeNode::empty());
-                    self.deref_mut(ptr).next = Some(new_address);
+        for view in base.mut_range(Bound::Unbounded, Bound::Unbounded) {
+            // If node too full, carry over to next
+            if self.deref(ptr).inner.is_half_full() {
+                let mut new_address = self.add_node(MemoryBTreeNode::empty());
+                self.deref_mut(ptr).next = Some(new_address);
 
-                    ptr = new_address;
-                }
-
-                self.deref_mut(ptr).inner.insert(key, address);
-                raw_node.as_mut().unwrap().set_parent(ptr);
+                ptr = new_address;
             }
+
+            self.deref_mut(ptr).inner.insert(view.key(), view.address());
+            view.set_parent(ptr);
         }
     }
 
