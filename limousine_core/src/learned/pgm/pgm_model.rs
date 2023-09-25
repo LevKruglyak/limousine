@@ -46,14 +46,10 @@ impl<K: Key, const EPSILON: usize> Borrow<K> for LinearModel<K, EPSILON> {
 /// Implement LinearModel as a Model, meaning we can use it to approximate
 impl<K: Key, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON> {
     fn approximate(&self, key: &K) -> ApproxPos {
-        // To support generic floats, we need all these shenanigans
-        // TODO: check on godbolt that this is optimized away
-        let pos = num::cast::<f64, i64>(
-            self.slope * num::cast::<K, f64>(key.checked_sub(self.borrow()).unwrap_or(K::min_value())).unwrap(),
-        )
-        .unwrap();
-
+        let run = num::cast::<K, f64>(key.clone().saturating_sub(self.key)).unwrap();
+        let pos = (run * self.slope).floor() as i64;
         let pos = pos.max(0) as usize;
+        // println!("Run: {}, slope: {}, pos: {}", run, self.slope, pos);
 
         ApproxPos {
             lo: pos.saturating_sub(EPSILON),

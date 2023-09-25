@@ -23,8 +23,6 @@ impl<K: Key> Point<K> {
     /// Verbose but understandable slope
     fn slope(self) -> f64 {
         let run = num::cast::<K, f64>(self.x).unwrap();
-        // For simplicity let's just make sure it's nowhere near 0
-        assert!(run.abs() > 0.00001);
         (self.y as f64) / run
     }
 }
@@ -71,19 +69,25 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
             return Ok(());
         }
         // Sanity checks
-        assert!(self.first_k.is_some());
-        assert!(self.first_v.is_some());
-        assert!(self._last_k.is_some());
-        assert!(self._last_k.unwrap() < entry.key);
+        debug_assert!(self.first_k.is_some());
+        debug_assert!(self.first_v.is_some());
+        debug_assert!(self._last_k.is_some());
+        debug_assert!(self._last_k.unwrap() < entry.key);
         // Get the worst case points we care about
         let base_point = Point::new(self.first_k.unwrap(), 0);
         let max_point = Point::new(
             entry.key,
-            self.num_entries.saturating_add(1).saturating_add(EPSILON) as i32,
+            self.num_entries
+                .saturating_add(1) // The actual rank
+                .saturating_sub(1) // To deal with floating point annoyances
+                .saturating_add(EPSILON) as i32,
         );
         let min_point = Point::new(
             entry.key,
-            self.num_entries.saturating_add(1).saturating_sub(EPSILON) as i32,
+            self.num_entries
+                .saturating_add(1) // The actual rank
+                .saturating_add(1) // To deal with floating point annoyances
+                .saturating_sub(EPSILON) as i32,
         );
         let this_max = (max_point - base_point.clone()).slope();
         let this_min = (min_point - base_point.clone()).slope();
@@ -93,9 +97,15 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
         } else {
             let new_max_slope = this_max.min(self.max_slope);
             let new_min_slope = this_min.max(self.min_slope);
-            if new_min_slope >= new_max_slope {
+            if new_min_slope >= new_max_slope - 0.0000000000001 {
                 return Err(());
             }
+            // SANITY TESTING
+            // Max slope should be monotonically decreasing
+            debug_assert!(new_max_slope <= self.max_slope);
+            // Min slope should be monotonically increasing
+            debug_assert!(new_min_slope >= self.min_slope);
+            // Everything looks good
             self.max_slope = new_max_slope;
             self.min_slope = new_min_slope;
         }
@@ -129,7 +139,7 @@ impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, E
 
         let mut cur_segment: SimplePGMSegmentator<K, V, EPSILON> = SimplePGMSegmentator::new();
         for entry in data.into_iter() {
-            match cur_segment.try_add_entry(entry) {
+            match cur_segment.try_add_entry(entry.clone()) {
                 Ok(_) => {
                     // Nothing to do, entry added successfully
                 }
@@ -138,6 +148,7 @@ impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, E
                     result.push((cur_segment.to_linear_model(), cur_segment.first_v.clone().unwrap()));
                     // Reset current segmentor
                     cur_segment = SimplePGMSegmentator::new();
+                    cur_segment.try_add_entry(entry).unwrap();
                 }
             }
         }
@@ -155,6 +166,7 @@ impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, E
 /// properly indexed
 #[cfg(test)]
 mod pgm_segmentation_tests {
+    use kdam::{tqdm, Bar, BarExt};
     use rand::{distributions::Uniform, Rng};
 
     use super::*;
@@ -167,11 +179,17 @@ mod pgm_segmentation_tests {
         verbose: bool,
         entries: Vec<Entry<Key, Value>>,
         models: Vec<LinearModel<Key, EPSILON>>,
+        values: Vec<Value>,
+        last_model_ix: usize,
+        last_base_rank: usize,
     }
     impl<const EPSILON: usize> PGMSegTestCase<EPSILON> {
         /// Generates a test key, meaning make the entries, sort + dedup them
         fn generate(size: usize, verbose: Option<bool>) -> Self {
             let verbose = verbose.unwrap_or(true);
+            if verbose {
+                println!("Generating {} entries with eps={}", size, EPSILON);
+            }
             let range = Uniform::from((Key::MIN)..(Key::MAX));
             let mut random_values: Vec<usize> = rand::thread_rng().sample_iter(&range).take(size).collect();
             random_values.sort();
@@ -185,13 +203,80 @@ mod pgm_segmentation_tests {
                 entries,
                 verbose,
                 models: vec![],
+                values: vec![],
+                last_model_ix: 0,
+                last_base_rank: 0,
             }
         }
 
         /// Assuming data has already been generated, segments it as a layer
-        fn train(&mut self) {}
+        fn train(&mut self) {
+            if self.verbose {
+                println!("Training on {} entries with eps={}", self.entries.len(), EPSILON);
+            }
+            let trained: Vec<(LinearModel<Key, EPSILON>, Value)> =
+                LinearModel::make_segmentation(self.entries.clone().into_iter());
+            self.models.clear();
+            self.values.clear();
+            trained.into_iter().for_each(|(model, value)| {
+                self.models.push(model);
+                self.values.push(value);
+            });
+        }
+
+        /// Helper function for determining if a single entry is approximated within bounds
+        fn is_entry_well_approximated(&mut self, entry: Entry<Key, Value>) -> bool {
+            let mut model_ix = self.last_model_ix;
+            let mut base_rank = self.last_base_rank;
+            while model_ix < self.models.len().saturating_sub(1) {
+                if self.models[model_ix + 1].key > entry.key {
+                    break;
+                }
+                base_rank += self.models[model_ix].size;
+                model_ix += 1;
+            }
+            let range = self.models[model_ix].approximate(&entry.key);
+            self.last_base_rank = base_rank;
+            self.last_model_ix = model_ix;
+            return base_rank + range.lo <= entry.value && entry.value < base_rank + range.hi;
+        }
 
         /// Assuming data has already been generated and trained on, tests that every key is correctly approximated
-        fn test(&self) {}
+        fn test(&mut self) {
+            let mut pb = tqdm!(total = self.entries.len());
+            for entry in self.entries.clone() {
+                assert!(self.is_entry_well_approximated(entry));
+                pb.update(1);
+            }
+        }
+    }
+
+    /// TODO: All of the below tests seem like great places for a macro
+    #[test]
+    fn test_eps_4() {
+        let mut test_case: PGMSegTestCase<4> = PGMSegTestCase::generate(10_000_000, None);
+        test_case.train();
+        test_case.test();
+    }
+
+    #[test]
+    fn test_eps_8() {
+        let mut test_case: PGMSegTestCase<8> = PGMSegTestCase::generate(10_000_000, None);
+        test_case.train();
+        test_case.test();
+    }
+
+    #[test]
+    fn test_eps_16() {
+        let mut test_case: PGMSegTestCase<16> = PGMSegTestCase::generate(10_000_000, None);
+        test_case.train();
+        test_case.test();
+    }
+
+    #[test]
+    fn test_eps_64() {
+        let mut test_case: PGMSegTestCase<64> = PGMSegTestCase::generate(10_000_000, None);
+        test_case.train();
+        test_case.test();
     }
 }

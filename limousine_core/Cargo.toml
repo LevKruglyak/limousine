@@ -16,6 +16,7 @@ bumpalo = { version = "3.13.0", features = ["boxed"] }
 egui = "0.22.0"
 eframe = "0.22.0"
 rand = "0.8.5"
+kdam = "0.4.1"
 
 [features]
 default = []
