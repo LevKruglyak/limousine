@@ -562,7 +562,7 @@ mod pgm_layer_tests {
     #[test]
     fn test_replace() {
         let num_elements: usize = 1_000_000;
-        let num_trials: usize = 10;
+        let num_trials: usize = 100;
         let mut pb = tqdm!(total = num_trials);
         for _ in 0..num_trials {
             pb.update(1);
