@@ -36,20 +36,20 @@ impl<K: Key> Sub<Self> for Point<K> {
 
 /// A data structure that will grow to incorporate points while building a PGM and eventually
 /// produce a proper linear model, before moving on to the next one
-pub struct SimplePGMSegmentator<K: Key, V, const EPSILON: usize> {
+pub struct SimplePGMSegmentator<K: Key, V: Clone, const EPSILON: usize> {
     pub first_k: Option<K>,
-    pub first_v: Option<V>,
+    pub evec: Vec<Entry<K, V>>,
     pub max_slope: f64,
     pub min_slope: f64,
     pub num_entries: usize,
     // For sanity checking that input is increasing
     _last_k: Option<K>,
 }
-impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
+impl<K: Key, V: Clone, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
     pub fn new() -> Self {
         Self {
             first_k: None,
-            first_v: None,
+            evec: vec![],
             max_slope: f64::MAX,
             min_slope: f64::MIN,
             num_entries: 0,
@@ -63,14 +63,14 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
         if self.num_entries == 0 {
             // If it's empty just add the point
             self.first_k = Some(entry.key);
-            self.first_v = Some(entry.value);
+            self.evec = vec![entry.clone()];
             self._last_k = Some(entry.key);
             self.num_entries = 1;
             return Ok(());
         }
         // Sanity checks
         debug_assert!(self.first_k.is_some());
-        debug_assert!(self.first_v.is_some());
+        debug_assert!(self.evec.len() == self.num_entries);
         debug_assert!(self._last_k.is_some());
         debug_assert!(self._last_k.unwrap() < entry.key);
         // Get the worst case points we care about
@@ -97,7 +97,8 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
         } else {
             let new_max_slope = this_max.min(self.max_slope);
             let new_min_slope = this_min.max(self.min_slope);
-            if new_min_slope >= new_max_slope - 0.0000000000001 {
+            if new_min_slope >= new_max_slope {
+                // We can't fit this point in the model
                 return Err(());
             }
             // SANITY TESTING
@@ -112,6 +113,7 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
         // This point is fine to add, and we've already update the slope
         self.num_entries += 1;
         self._last_k = Some(entry.key);
+        self.evec.push(entry);
         Ok(())
     }
 
@@ -128,14 +130,19 @@ impl<K: Key, V, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
         LinearModel::new(self.first_k.unwrap(), slope, self.num_entries)
     }
 
+    // Outputs the a vector of values that generated a linear model
+    pub fn to_entries(&self) -> Vec<Entry<K, V>> {
+        self.evec.clone()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.num_entries <= 0
     }
 }
 
 impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, EPSILON>> for LinearModel<K, EPSILON> {
-    fn make_segmentation(data: impl Iterator<Item = crate::Entry<K, V>> + Clone) -> Vec<(Self, V)> {
-        let mut result: Vec<(Self, V)> = vec![];
+    fn make_segmentation(data: impl Iterator<Item = crate::Entry<K, V>> + Clone) -> Vec<(Self, Vec<Entry<K, V>>)> {
+        let mut result: Vec<(Self, Vec<Entry<K, V>>)> = vec![];
 
         let mut cur_segment: SimplePGMSegmentator<K, V, EPSILON> = SimplePGMSegmentator::new();
         for entry in data.into_iter() {
@@ -145,7 +152,7 @@ impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, E
                 }
                 Err(_) => {
                     // Export the model currently specified by the segmentor
-                    result.push((cur_segment.to_linear_model(), cur_segment.first_v.clone().unwrap()));
+                    result.push((cur_segment.to_linear_model(), cur_segment.to_entries()));
                     // Reset current segmentor
                     cur_segment = SimplePGMSegmentator::new();
                     cur_segment.try_add_entry(entry).unwrap();
@@ -155,7 +162,7 @@ impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, E
 
         // Handle last segment
         if !cur_segment.is_empty() {
-            result.push((cur_segment.to_linear_model(), cur_segment.first_v.clone().unwrap()));
+            result.push((cur_segment.to_linear_model(), cur_segment.to_entries()));
         }
 
         result
@@ -214,13 +221,13 @@ mod pgm_segmentation_tests {
             if self.verbose {
                 println!("Training on {} entries with eps={}", self.entries.len(), EPSILON);
             }
-            let trained: Vec<(LinearModel<Key, EPSILON>, Value)> =
+            let trained: Vec<(LinearModel<Key, EPSILON>, Vec<Entry<Key, Value>>)> =
                 LinearModel::make_segmentation(self.entries.clone().into_iter());
             self.models.clear();
             self.values.clear();
-            trained.into_iter().for_each(|(model, value)| {
+            trained.into_iter().for_each(|(model, values)| {
                 self.models.push(model);
-                self.values.push(value);
+                self.values.push(values[0].value);
             });
         }
 

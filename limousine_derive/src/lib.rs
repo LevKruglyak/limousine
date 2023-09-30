@@ -15,39 +15,38 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::Ident;
 
-/// Macro to materialize an hybrid index structure. To use, specify
-/// a name for the generated structure and a layout. The layout consists of
-/// a list of layer types, ordered from highest to lowest; for example:
+/// Creates an hybrid index structure.
 ///
-/// ```ignore
-/// // Note: this is just a syntax example, this macro needs to be called
-/// // from the [`limousine_engine`](https://crates.io/crates/limousine_engine) crate.
+/// To use this macro, provide a name for the generated structure and a layout. The layout defines
+/// a list of layer types, arranged from the highest to the lowest layer.
+///
+/// # Example
+/// ```rust,ignore
+/// // Note: this is illustrative syntax. Ensure the macro is invoked from within
+/// // the [`limousine_engine`](https://crates.io/crates/limousine_engine) crate.
 ///
 /// create_hybrid_index! {
 ///     name: MyHybridIndex,
 ///     layout: {
-///         pgm(4),
-///         pgm(4),
-///         btree(32),          // base layer
+///         btree_top(),                          // optimized top layer
+///         pgm(fanout = 4),
+///         pgm(fanout = 4),
+///         btree(fanout = 32),                
+///         btree(fanout = 32, persist),          // base layer (stored on disk)
 ///     }
 /// }
 /// ```
-/// Optionally, we can also specify the top component, which is allowed to grow vertically
-/// indefinitely. By default, this is set to the ```BTreeMap``` structure from the Rust standard
-/// library, however alternative implmentations based LSM and LSH trees are also provided.
 ///
-/// TODO: example
+/// # Supported Top Component Types
+/// - **btree_top()**
 ///
-/// The supported component types in the layout are:
+/// # Supported Internal/Base Component Types
+/// - **btree(fanout = usize, persist?)**
+/// - **pgm(epsilon = usize)**
 ///
-/// 1. **btree(fanout: usize)**
-/// 2. **disk_btree(fanout: usize)**
-/// 3. **pgm(epsilon: usize)**
-///
-/// Note that not all layouts are valid; for instance trying to place a disk layer over an
-/// in-memory layer will result in an error. These rules are enforced automatically by the macro.
-/// The macro will generate a structure with the provided name, alongside an implementation of the
-/// `Index` trait.
+/// Note: Not all layouts are valid. For example, placing a disk layer over an in-memory layer
+/// will raise an error. The macro enforces these rules and generates a structure with the
+/// given name, as well as an implementation of the `Index` trait.
 #[proc_macro]
 pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse hybrid index description

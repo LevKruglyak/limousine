@@ -22,7 +22,7 @@ pub trait Segmentation<K: Key, V, M: Model<K>>: Clone + 'static {
     /// Con:
     ///     Each model needs to carry around knowledge of what value type it's indexing,
     ///     which seems unnecessary and potentially bad
-    fn make_segmentation(data: impl Iterator<Item = Entry<K, V>> + Clone) -> Vec<(Self, V)>;
+    fn make_segmentation(data: impl Iterator<Item = Entry<K, V>> + Clone) -> Vec<(Self, Vec<Entry<K, V>>)>;
 }
 
 /// The result of an approximation search

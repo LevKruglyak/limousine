@@ -109,9 +109,9 @@ impl AppState {
             .collect();
         let trained_result = OurModel::make_segmentation(entries.into_iter());
         for ix in 0..(trained_result.len()) {
-            let (model, value) = trained_result[ix];
-            self.models.push(model);
-            self.model_ranks.push(value as usize);
+            let (model, values) = &trained_result[ix];
+            self.models.push(model.clone());
+            self.model_ranks.push(values[0].value as usize);
         }
         self.adding_ix = self.num_entries;
     }
