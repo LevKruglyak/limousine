@@ -15,39 +15,38 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::Ident;
 
-/// Macro to materialize an hybrid index structure. To use, specify
-/// a name for the generated structure and a layout. The layout consists of
-/// a list of layer types, ordered from highest to lowest; for example:
+/// Creates an hybrid index structure.
 ///
-/// ```ignore
-/// // Note: this is just a syntax example, this macro needs to be called
-/// // from the [`limousine_engine`](https://crates.io/crates/limousine_engine) crate.
+/// To use this macro, provide a name for the generated structure and a layout. The layout defines
+/// a list of layer types, arranged from the highest to the lowest layer.
+///
+/// # Example
+/// ```rust,ignore
+/// // Note: this is illustrative syntax. Ensure the macro is invoked from within
+/// // the [`limousine_engine`](https://crates.io/crates/limousine_engine) crate.
 ///
 /// create_hybrid_index! {
 ///     name: MyHybridIndex,
 ///     layout: {
-///         pgm(4),
-///         pgm(4),
-///         btree(32),          // base layer
+///         btree_top(),                          // optimized top layer
+///         pgm(fanout = 4),
+///         pgm(fanout = 4),
+///         btree(fanout = 32),                
+///         btree(fanout = 32, persist),          // base layer (stored on disk)
 ///     }
 /// }
 /// ```
-/// Optionally, we can also specify the top component, which is allowed to grow vertically
-/// indefinitely. By default, this is set to the ```BTreeMap``` structure from the Rust standard
-/// library, however alternative implmentations based LSM and LSH trees are also provided.
 ///
-/// TODO: example
+/// # Supported Top Component Types
+/// - **btree_top()**
 ///
-/// The supported component types in the layout are:
+/// # Supported Internal/Base Component Types
+/// - **btree(fanout = usize, persist?)**
+/// - **pgm(epsilon = usize)**
 ///
-/// 1. **btree(fanout: usize)**
-/// 2. **disk_btree(fanout: usize)**
-/// 3. **pgm(epsilon: usize)**
-///
-/// Note that not all layouts are valid; for instance trying to place a disk layer over an
-/// in-memory layer will result in an error. These rules are enforced automatically by the macro.
-/// The macro will generate a structure with the provided name, alongside an implementation of the
-/// `Index` trait.
+/// Note: Not all layouts are valid. For example, placing a disk layer over an in-memory layer
+/// will raise an error. The macro enforces these rules and generates a structure with the
+/// given name, as well as an implementation of the `Index` trait.
 #[proc_macro]
 pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse hybrid index description
@@ -68,7 +67,7 @@ pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenS
         pub mod #mod_name {
             use ::limousine_engine::private::*;
 
-            #(#alias_body)*
+            #alias_body
 
             #index_body
 
@@ -81,17 +80,43 @@ pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenS
     implementation.into()
 }
 
-fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
+fn create_type_aliases(layout: &IndexLayout) -> (TokenStream, Vec<Ident>) {
+    let address_alias: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .map(|i| Ident::new(format!("A{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    let mut type_alias_body = proc_macro2::TokenStream::new();
+
+    // Add body as the first component
+    let alias = address_alias[0].clone();
+    let body = layout.base.address();
+    type_alias_body.extend(quote::quote! {
+        type #alias = #body;
+    });
+
+    // Add internal components
+    for (mut index, component) in layout.internal.iter().rev().enumerate() {
+        index += 1;
+
+        let alias = address_alias[index].clone();
+        let body = component.address();
+        type_alias_body.extend(quote! {
+            type #alias = #body;
+        });
+    }
+
+    let alias = address_alias.last().unwrap().clone();
+    type_alias_body.extend(quote! { type #alias = (); });
+
     let type_alias: Vec<Ident> = (0..=layout.internal.len() + 1)
         .map(|i| Ident::new(format!("C{}", i).as_str(), Span::call_site()))
         .collect();
 
-    let mut type_alias_body = Vec::new();
-
     // Add body as the first component
+    let parent_address_alias = address_alias[1].clone();
     let alias = type_alias[0].clone();
-    let body = layout.base.to_tokens();
-    type_alias_body.push(quote::quote! {
+    let body = layout.base.to_tokens(parent_address_alias);
+    type_alias_body.extend(quote::quote! {
         type #alias<K, V> = #body;
     });
 
@@ -99,11 +124,13 @@ fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
     for (mut index, component) in layout.internal.iter().rev().enumerate() {
         index += 1;
 
-        let previous_alias = type_alias[index - 1].clone();
-        let body = component.to_tokens(quote! { #previous_alias<K, V> });
+        let base_address_alias = address_alias[index - 1].clone();
+        let parent_address_alias = address_alias[index + 1].clone();
+
+        let body = component.to_tokens(base_address_alias, parent_address_alias);
 
         let alias = type_alias[index].clone();
-        type_alias_body.push(quote! {
+        type_alias_body.extend(quote! {
             type #alias<K, V> = #body;
         });
     }
@@ -111,11 +138,11 @@ fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
     // Add top component
     let index = layout.internal.len() + 1;
 
-    let previous_alias = type_alias[index - 1].clone();
-    let body = layout.top.to_tokens(quote! { #previous_alias<K, V> });
+    let base_address_alias = address_alias[index - 1].clone();
+    let body = layout.top.to_tokens(base_address_alias);
 
     let alias = type_alias[index].clone();
-    type_alias_body.push(quote! {
+    type_alias_body.extend(quote! {
         type #alias<K, V> = #body;
     });
 
@@ -263,11 +290,9 @@ fn create_insert_body(
         let field = fields[index].clone();
         let prev_field = fields[index - 1].clone();
 
-        let search = search_vars[search_vars.len() - 2 - index].clone();
-
         search_body.extend(quote! {
             let #var;
-            if let Some(x) = self.#field.insert(&self.#prev_field, #search, #prev_var) {
+            if let Some(x) = self.#field.insert(&mut self.#prev_field, #prev_var) {
                 #var = x;
             } else {
                 return result;
@@ -284,7 +309,7 @@ fn create_insert_body(
     let prev_field = fields[index - 1].clone();
 
     search_body.extend(quote! {
-        let #var = self.#field.insert(&self.#prev_field, #prev_var);
+        let #var = self.#field.insert(&mut self.#prev_field, #prev_var);
     });
 
     search_body.extend(quote! { result });
@@ -303,7 +328,7 @@ fn create_empty_body(
     let var = fields[0].clone();
 
     empty_body.extend(quote! {
-        let #var = #alias::empty();
+        let mut #var = #alias::empty();
     });
 
     // Add internal components
@@ -313,7 +338,7 @@ fn create_empty_body(
         let prev_var = fields[index - 1].clone();
 
         empty_body.extend(quote! {
-            let #var = #alias::build(&#prev_var);
+            let mut #var = #alias::build(&mut #prev_var);
         });
     }
 
@@ -323,7 +348,7 @@ fn create_empty_body(
     let prev_var = fields[index - 1].clone();
 
     empty_body.extend(quote! {
-        let #var = #alias::build(&#prev_var);
+        let mut #var = #alias::build(&mut #prev_var);
     });
 
     empty_body.extend(quote! {
@@ -347,7 +372,7 @@ fn create_build_body(
     let var = fields[0].clone();
 
     build_body.extend(quote! {
-        let #var = #alias::build(iter);
+        let mut #var = #alias::build(iter);
     });
 
     // Add internal components
@@ -357,7 +382,7 @@ fn create_build_body(
         let prev_var = fields[index - 1].clone();
 
         build_body.extend(quote! {
-            let #var = #alias::build(&#prev_var);
+            let mut #var = #alias::build(&mut #prev_var);
         });
     }
 
@@ -367,7 +392,7 @@ fn create_build_body(
     let prev_var = fields[index - 1].clone();
 
     build_body.extend(quote! {
-        let #var = #alias::build(&#prev_var);
+        let mut #var = #alias::build(&mut #prev_var);
     });
 
     build_body.extend(quote! {
