@@ -16,13 +16,15 @@ trait_set! {
 ///
 /// In order to avoid circular type dependencies during composition, it is generic over
 /// its own address type, as well as its parent type. (SA, PA respectively)
-pub trait LinkedNode<K, SA, PA>: 'static + KeyBounded<K>
+pub trait Model<K, SA, PA>: 'static + KeyBounded<K>
 where
     SA: Address,
     PA: Address,
 {
     // Address to the next node in the current component
     fn next(&self) -> Option<SA>;
+
+    fn previous(&self) -> Option<SA>;
 
     // Address to the parent node in the above component
     fn parent(&self) -> Option<PA>;
@@ -39,7 +41,7 @@ where
 {
     /// Node type stored in the layer. Each node roughly represents a model in the hybrid index
     /// which indexes some finite/lower-bounded collection of `Keyed` elements.
-    type Node: LinkedNode<K, SA, PA>;
+    type Node: Model<K, SA, PA>;
 
     /// Immutable address dereference which returns a reference to a node.
     fn deref(&self, ptr: SA) -> &Self::Node;
@@ -57,6 +59,8 @@ where
 
     /// First node in the current node layer
     fn first(&self) -> SA;
+
+    fn last(&self) -> SA;
 
     /// An immutable iterator over the layer, returning (Key, Address) pairs
     fn range<'n>(&'n self, start: Bound<SA>, end: Bound<SA>) -> Iter<'n, K, Self, SA, PA> {
