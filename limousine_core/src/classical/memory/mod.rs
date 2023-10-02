@@ -66,10 +66,6 @@ where
                 .map(|(key, address, parent)| PropogateInsert::Single(key, address, parent)),
             PropogateInsert::Replace { .. } => {
                 unimplemented!()
-                // self.inner
-                //     .fill(base.range(Bound::Unbounded, Bound::Unbounded));
-                //
-                // Some(PropogateInsert::Rebuild)
             }
         }
     }
@@ -152,7 +148,6 @@ where
 {
     fn empty() -> Self {
         let mut result = MemoryBTreeLayer::empty();
-        result.add_node(MemoryBTreeNode::empty());
 
         Self { inner: result }
     }

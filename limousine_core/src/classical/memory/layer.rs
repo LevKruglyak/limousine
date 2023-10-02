@@ -65,6 +65,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     pub fn insert(&mut self, key: K, value: V, mut ptr: Index) -> Option<(K, Index, PA)>
     where
         K: Copy + Ord + StaticBounded,
+        PA: Address,
     {
         if self.inner[ptr].is_full() {
             let parent = self.inner.parent(ptr).unwrap();
@@ -100,48 +101,39 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         mut ptr: Index,
     ) -> Option<(K, Index, PA)>
     where
+        K: Copy + Ord + StaticBounded,
         V: Address,
+        PA: Address,
         B: NodeLayer<K, V, Index>,
     {
-        if self.deref_mut(ptr).inner.is_full() {
-            let parent = self.deref(ptr).parent().unwrap();
+        if self.inner[ptr].is_full() {
+            let parent = self.inner.parent(ptr).unwrap();
 
             // Split
-            let (split_point, new_node) = self.deref_mut(ptr).inner.split();
-
-            let mut new_node_ptr = self.add_node(MemoryBTreeNode {
-                inner: new_node,
-                next: None,
-                parent: None,
-            });
-
-            // Link to next node
-            let old_next = self.deref_mut(ptr).next.replace(new_node_ptr);
-            self.deref_mut(new_node_ptr).next = old_next;
+            let (split_point, new_node) = self.inner[ptr].split();
+            let new_node_ptr = self.inner.insert_after(new_node, ptr);
 
             // Update all of the parents for the split node
-            for entry in self.deref(new_node_ptr).inner.entries() {
+            for entry in self.inner[new_node_ptr].entries() {
                 base.deref_mut(entry.value.clone()).set_parent(new_node_ptr);
             }
 
             // Insert into the right node
             if key < split_point {
-                self.deref_mut(ptr).inner.insert(key, value.clone());
+                self.inner[ptr].insert(key, value.clone());
                 base.deref_mut(value).set_parent(ptr);
             } else {
-                self.deref_mut(new_node_ptr)
-                    .inner
-                    .insert(key, value.clone());
+                self.inner[new_node_ptr].insert(key, value.clone());
                 base.deref_mut(value).set_parent(new_node_ptr);
             }
 
             return Some((
-                *self.deref(new_node_ptr).inner.borrow(),
+                *self.inner[new_node_ptr].lower_bound(),
                 new_node_ptr,
                 parent,
             ));
         } else {
-            self.deref_mut(ptr).inner.insert(key, value.clone());
+            self.inner[ptr].insert(key, value.clone());
             base.deref_mut(value).set_parent(ptr);
         }
 
@@ -159,41 +151,3 @@ where
 
     impl_node_layer!(Index);
 }
-
-//
-//     pub fn insert(&mut self, key: K, value: V, mut ptr: Index) -> Option<(K, Index, PA)> {
-//         if self.deref_mut(ptr).inner.is_full() {
-//             let parent = self.deref(ptr).parent().unwrap();
-//
-//             // Split
-//             let (split_point, new_node) = self.deref_mut(ptr).inner.split();
-//
-//             let mut new_node_ptr = self.add_node(MemoryBTreeNode {
-//                 inner: new_node,
-//                 next: None,
-//                 parent: None,
-//             });
-//
-//             // Link to next node
-//             let old_next = self.deref_mut(ptr).next.replace(new_node_ptr);
-//             self.deref_mut(new_node_ptr).next = old_next;
-//
-//             // Insert into the right node
-//             if key < split_point {
-//                 self.deref_mut(ptr).inner.insert(key, value);
-//             } else {
-//                 self.deref_mut(new_node_ptr).inner.insert(key, value);
-//             }
-//
-//             return Some((
-//                 *self.deref(new_node_ptr).inner.borrow(),
-//                 new_node_ptr,
-//                 parent,
-//             ));
-//         } else {
-//             self.deref_mut(ptr).inner.insert(key, value);
-//         }
-//
-//         None
-//     }
-// }
