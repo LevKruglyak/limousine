@@ -1,7 +1,7 @@
+use crate::common::bounded::KeyBounded;
+use crate::common::bounded::StaticBounded;
 use crate::common::entry::Entry;
 use crate::common::stack_map::StackMap;
-use crate::kv::KeyBounded;
-use crate::kv::StaticBounded;
 use std::fmt::Debug;
 
 #[derive(Clone, Default)]

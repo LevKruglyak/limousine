@@ -1,18 +1,9 @@
 mod layer;
 
-// use crate::BaseComponent;
-// use crate::InternalComponent;
-// use crate::Key;
-// use crate::NodeLayer;
-// use crate::TopComponent;
-// use crate::Value;
-// use layer::MemoryBTreeLayer;
-// use std::borrow::Borrow;
-// use std::collections::BTreeMap;
+use crate::common::bounded::StaticBounded;
 use crate::common::linked_list::Index;
 use crate::common::macros::impl_node_layer;
 use crate::component::*;
-use crate::kv::StaticBounded;
 use layer::*;
 use std::ops::{Bound, RangeBounds};
 

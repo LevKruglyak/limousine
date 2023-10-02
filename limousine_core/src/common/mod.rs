@@ -1,3 +1,4 @@
+pub mod bounded;
 pub mod disk;
 pub mod entry;
 pub mod linked_list;
