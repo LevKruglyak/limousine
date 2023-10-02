@@ -1,102 +1,133 @@
-//! Contains some components to build piecewise models which approximate the location of entries,
-//! for use in a learned index of some form. For example, the PGM index uses linear models for nodes.
+mod generic;
 
-use super::{ApproxPos, InternalLayer, InternalLayerBuild, NodeLayer};
-use crate::{
-    path_with_extension,
-    search::{lower_bound, OptimalSearch, Search},
-    Key, Result,
-};
-use bytemuck::Pod;
-use mmap_buffer::Buffer;
-use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, ops::Deref, path::Path};
+use crate::common::search::*;
+use crate::component::*;
+use crate::kv::Key;
+use generic::pgm::{LinearModel, PGMSegmentation};
+// use generic::pgm_node::LinearModel;
+// use generic::pgm_node::PGMLayer;
+use generic::*;
+use std::collections::HashMap;
+use std::ops::Bound;
+use std::ops::RangeBounds;
 
-pub mod pgm;
-pub mod pgm_node;
+// -------------------------------------------------------
+//                  PGM Internal Component
+// -------------------------------------------------------
 
-/// An algorithm for turning a list of key-rank pairs into a piecewise model.
-pub trait Segmentation<K: Key, M: Model<K>> {
-    fn make_segmentation(key_ranks: impl ExactSizeIterator<Item = (usize, K)>) -> Vec<M>;
+type PGMLayer<K, const EPSILON: usize> =
+    PiecewiseModel<K, LinearModel<K, EPSILON>, PGMSegmentation>;
+
+pub struct PGMInternalComponent<K, Base: NodeLayer<K>, const EPSILON: usize> {
+    inner: PGMLayer<K, EPSILON>,
+    mapping: Vec<Base::Address>,
 }
 
-/// A model for approximate the location of a key, for use in a larged piecewise learned index
-/// layer. Must implement `Keyed<K>`, here the `.key()` method represents the maximum key which
-/// this model represents.
-pub trait Model<K: Key>: Pod + Borrow<K> + Debug {
-    /// Returns the approximate position of the specified key.
-    fn approximate(&self, key: &K) -> ApproxPos;
-}
+impl<K: Key, Base: NodeLayer<K>, const EPSILON: usize> NodeLayer<K>
+    for PGMInternalComponent<K, Base, EPSILON>
+{
+    type Node = <PGMLayer<K, EPSILON> as NodeLayer<K>>::Node;
+    type Address = <PGMLayer<K, EPSILON> as NodeLayer<K>>::Address;
 
-/// A piecewise collection of models that approximates the locations a large range of keys.
-pub struct PiecewiseModel<K: Key, M: Model<K>, S: Segmentation<K, M>> {
-    models: Buffer<M>,
-    _ph: PhantomData<(K, S)>,
-}
+    fn deref(&self, ptr: Self::Address) -> &Self::Node {
+        self.inner.deref(ptr)
+    }
 
-impl<K: Key, M: Model<K>, S: Segmentation<K, M>> InternalLayer<K> for PiecewiseModel<K, M, S> {
-    fn search(&self, key: &K, range: ApproxPos) -> ApproxPos {
-        // First pass
-        let model = self.models[lower_bound(OptimalSearch::search_by_key_with_offset(
-            &self.models[range.lo..range.hi],
-            key,
-            range.lo,
-        ))];
+    fn deref_mut(&mut self, ptr: Self::Address) -> &mut Self::Node {
+        self.inner.deref_mut(ptr)
+    }
 
-        // println!("found model {:?}", model);
+    type Iter<'n> = <PGMLayer<K, EPSILON> as NodeLayer<K>>::Iter<'n>;
 
-        let pos = model.approximate(key);
-        pos
+    fn full_range<'n>(&'n self) -> Self::Iter<'n> {
+        self.inner.full_range()
+    }
+
+    fn range<'n>(
+        &'n self,
+        start: Bound<Self::Address>,
+        end: Bound<Self::Address>,
+    ) -> Self::Iter<'n> {
+        self.inner.range(start, end)
     }
 }
 
-impl<K: Key, M: Model<K>, S: Segmentation<K, M>> InternalLayerBuild<K> for PiecewiseModel<K, M, S> {
-    fn load(path: impl AsRef<Path>) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        let models = Buffer::load_from_disk(path_with_extension(path.as_ref(), "models"))?;
+impl<K: Key, Base: NodeLayer<K>, const EPSILON: usize> InternalComponent<K, Base>
+    for PGMInternalComponent<K, Base, EPSILON>
+where
+    Base::Address: std::fmt::Debug,
+{
+    fn search(&self, base: &Base, ptr: Self::Address, key: &K) -> Base::Address {
+        let mut approx_pos = self.inner.approximate(ptr, key);
 
-        Ok(Self {
-            models,
-            _ph: PhantomData,
-        })
+        // Adjust to avoid out-of-bounds
+        if approx_pos.lo >= self.mapping.len() {
+            approx_pos.lo = self.mapping.len() - 1;
+        }
+
+        if approx_pos.hi > self.mapping.len() {
+            approx_pos.hi = self.mapping.len();
+        }
+
+        let start = Bound::Included(self.mapping[approx_pos.lo].clone());
+        let end = Bound::Included(self.mapping[approx_pos.hi - 1].clone());
+
+        for (base_key, base_address) in base.range(start, end) {
+            if key >= &base_key {
+                return base_address;
+            }
+        }
+
+        unreachable!()
     }
 
-    fn build(base: impl ExactSizeIterator<Item = K>) -> Self
-    where
-        Self: Sized,
-    {
-        let models = Buffer::from_vec_in_memory(S::make_segmentation(base.enumerate()));
+    fn insert<'n>(
+        &'n mut self,
+        base: &Base,
+        ptr: Self::Address,
+        prop: PropogateInsert<K, Base>,
+    ) -> Option<PropogateInsert<K, Self>> {
+        // Don't care what prop is, we always rebuild
+        self.mapping = Vec::new();
+
+        // TODO: move
+        let models = PGMSegmentation::make_segmentation(base.full_range().enumerate().map(
+            |(rank, (key, address))| {
+                self.mapping.push(address);
+                return (key, rank);
+            },
+        ));
+
+        self.inner = PGMLayer::new(models);
+
+        Some(PropogateInsert::Rebuild)
+    }
+
+    fn memory_size(&self) -> usize {
+        self.inner.len() * std::mem::size_of::<LinearModel<K, EPSILON>>()
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<K: Key, Base: NodeLayer<K>, const EPSILON: usize> InternalComponentInMemoryBuild<K, Base>
+    for PGMInternalComponent<K, Base, EPSILON>
+{
+    fn build(base: &Base) -> Self {
+        let mapping = base.full_range().map(|(_, address)| address).collect();
+
+        // TODO: move
+        let models = PGMSegmentation::make_segmentation(
+            base.full_range()
+                .enumerate()
+                .map(|(rank, (key, address))| (key, rank)),
+        );
 
         Self {
-            models,
-            _ph: PhantomData,
+            inner: PiecewiseModel::new(models),
+            mapping,
         }
-    }
-
-    fn build_on_disk(
-        base: impl ExactSizeIterator<Item = K>,
-        path: impl AsRef<Path>,
-    ) -> crate::Result<Self>
-    where
-        Self: Sized,
-    {
-        let models = Buffer::from_slice_on_disk(
-            &S::make_segmentation(base.enumerate())[..],
-            path_with_extension(path.as_ref(), "models"),
-        )?;
-
-        Ok(Self {
-            models,
-            _ph: PhantomData,
-        })
-    }
-}
-
-impl<K: Key, M: Model<K>, S: Segmentation<K, M>> NodeLayer<K> for PiecewiseModel<K, M, S> {
-    type Node = M;
-
-    fn nodes(&self) -> &[Self::Node] {
-        &self.models.deref()
     }
 }

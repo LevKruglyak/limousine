@@ -1,28 +1,96 @@
-use crate::Key;
+use super::Segmentation;
+use crate::kv::*;
+use crate::learned::generic::*;
+use num::{Bounded, CheckedSub, Num, NumCast};
 
-use super::{pgm_node::LinearModel, Segmentation};
+/// A simple linear model for a key-rank segment of data.
+#[derive(Copy, Clone, Debug)]
+pub struct LinearModel<K, const EPSILON: usize> {
+    pub key: K,
+    pub slope: f64,
+    pub intercept: i32,
+}
+
+impl<K, const EPSILON: usize> LinearModel<K, EPSILON> {
+    pub fn new(key: K, slope: f64, intercept: i32) -> Self {
+        debug_assert!(slope.is_normal());
+        Self {
+            key,
+            slope,
+            intercept,
+        }
+    }
+
+    /// Create a segment which always approximates the intercept
+    pub fn intercept(n: usize) -> Self
+    where
+        K: Bounded,
+    {
+        Self {
+            key: K::min_value(),
+            slope: 0.0,
+            intercept: n as i32,
+        }
+    }
+}
+
+impl<K, const EPSILON: usize> KeyBounded<K> for LinearModel<K, EPSILON> {
+    fn lower_bound(&self) -> &K {
+        &self.key
+    }
+}
+
+impl<K, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON>
+where
+    K: CheckedSub + NumCast + Bounded + 'static,
+{
+    fn approximate(&self, key: &K) -> ApproxPos {
+        // To support generic floats, we need all these shenanigans
+        // TODO: check on godbolt that this is optimized away
+        let pos = num::cast::<f64, i64>(
+            self.slope
+                * num::cast::<K, f64>(
+                    key.checked_sub(self.lower_bound())
+                        .unwrap_or(K::min_value()),
+                )
+                .unwrap(),
+        )
+        .unwrap()
+            + (self.intercept as i64);
+
+        let pos = pos.max(0) as usize;
+
+        ApproxPos {
+            lo: pos.saturating_sub(EPSILON),
+            hi: pos + EPSILON + 2,
+        }
+    }
+}
 
 /// The optimal linear segmentation algorithm, translated
 /// almost directly from the official PGMIndex repository
 pub struct PGMSegmentation;
 
-impl<K: Key, const EPSILON: usize> Segmentation<K, LinearModel<K, EPSILON>> for PGMSegmentation {
+impl<K, const EPSILON: usize> Segmentation<K, LinearModel<K, EPSILON>> for PGMSegmentation
+where
+    K: Key,
+{
     fn make_segmentation(
-        key_ranks: impl ExactSizeIterator<Item = (usize, K)>,
+        key_ranks: impl Iterator<Item = (K, usize)>,
     ) -> Vec<LinearModel<K, EPSILON>> {
-        let key_ranks: Vec<(usize, K)> = key_ranks.collect();
+        let key_ranks: Vec<(K, usize)> = key_ranks.collect();
 
         let in_fun = |i: usize| {
-            let x: K = key_ranks[i].1;
+            let x: K = key_ranks[i].0;
             // Here there is an adjustment for inputs with duplicate keys: at the end
             // of a run of duplicate keys equal to x=first[i] such that
             // x+1!=first[i+1], we map the values x+1,...,first[i+1]-1 to their
             // correct rank i
             let flag = i > 0
                 && i + 1 < key_ranks.len()
-                && x == key_ranks[i - 1].1
-                && x != key_ranks[i + 1].1
-                && x + K::one() != key_ranks[i + 1].1;
+                && x == key_ranks[i - 1].0
+                && x != key_ranks[i + 1].0
+                && x + K::one() != key_ranks[i + 1].0;
 
             if flag {
                 (x + K::one(), i)

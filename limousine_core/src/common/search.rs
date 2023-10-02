@@ -72,7 +72,7 @@ impl Search for BinarySearch {
 pub struct LinearSearch;
 
 impl Search for LinearSearch {
-    fn search_by_key<K: Ord + Copy, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize> {
+    fn search_by_key<K: Ord, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize> {
         let mut index = 0;
         let size = slice.len();
 
@@ -86,24 +86,6 @@ impl Search for LinearSearch {
             Ok(index)
         } else {
             Err(index)
-        }
-    }
-}
-
-/// If a slice has less than `LINEAR_SEARCH_THRESHOLD` bytes, use a linear search
-/// TODO: experimentally determine
-const LINEAR_SEARCH_THRESHOLD: usize = 8 * 64;
-
-/// Decides whether to use a linear or binary search based on some experimentally determined
-/// threshold on the size of the given slice.
-pub struct OptimalSearch;
-
-impl Search for OptimalSearch {
-    fn search_by_key<K: Ord + Copy, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize> {
-        if slice.len() * std::mem::size_of::<T>() > LINEAR_SEARCH_THRESHOLD {
-            BinarySearch::search_by_key(slice, x)
-        } else {
-            LinearSearch::search_by_key(slice, x)
         }
     }
 }
@@ -127,23 +109,12 @@ mod search_tests {
     }
 
     #[test]
-    fn linear_search() {
+    fn binary_linear_search() {
         let array = [1, 2, 3, 4, 7, 10, 24, 55, 56, 57, 100];
         for i in -10..110 {
             assert_eq!(
                 BinarySearch::search(&array[..], &i),
                 LinearSearch::search(&array[..], &i)
-            );
-        }
-    }
-
-    #[test]
-    fn optimal_search() {
-        let array = [1, 2, 3, 4, 7, 10, 24, 55, 56, 57, 100];
-        for i in -10..110 {
-            assert_eq!(
-                BinarySearch::search(&array[..], &i),
-                OptimalSearch::search(&array[..], &i)
             );
         }
     }

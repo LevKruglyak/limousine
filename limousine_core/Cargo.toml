@@ -9,10 +9,9 @@ license = "Apache-2.0"
 repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
-num = "0.4.1"
+generational-arena = "0.2.9"
+num = "0.4.0"
 trait-set = "0.3.0"
-bytemuck = { version = "1.14", features = ["min_const_generics"] }
-mmap_buffer = "0.1.4"
 
 [features]
 default = []
