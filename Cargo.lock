@@ -102,7 +102,7 @@ dependencies = [
  "cfg-if",
  "once_cell",
  "version_check",
- ]
+]
 
 [[package]]
 name = "aho-corasick"
