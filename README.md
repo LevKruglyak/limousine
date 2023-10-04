@@ -4,7 +4,7 @@
 
 **Limousine** is an exploration into the world of hybrid indexes. Traditional indexes, like BTrees, have been optimized for decades, offering consistent performance for both inserts and reads. On the other hand, learned indexes, which leverage statistical models to approximate the locations of keys, bring massive benefits in memory usage and read performance. However, they come with their own set of trade-offs; most notably there isn't a canonical or efficient algorithm for performing inserts.
 
-This project experiments with hybrid indexes — a combination of traditional BTree layers and learned index layers. The goal is to harness the strengths of both indexing methods, in addition to improving the state of the art for learned index insertion. While developing mutable hybrid indexes that efficiently support insertions and deletions is an active area of research, this crate offers a fully-functioning prototype, capable of turning a layout specification into a working design.
+This project experiments with hybrid indexes — a combination of traditional BTree layers and learned index layers. The goal is to harness the strengths of both indexing methods, in addition to improving the state of the art for learned index insertion. While developing efficient and mutable hybrid indexes is an active area of research, this crate offers a fully-functioning prototype, capable of turning a layout specification into a working design.
 
 Most of our work with learned indexes was inspired by [PGM Index](https://github.com/gvinciguerra/PGM-index).
 
