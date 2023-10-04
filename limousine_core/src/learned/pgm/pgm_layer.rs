@@ -557,6 +557,8 @@ mod pgm_layer_tests {
         above.replace(&mut beneath, poison_head, poison_tail, data_head, data_tail);
         // Magic?
         test_are_layers_normal(&beneath, &above);
+        test_is_layer_normal(&beneath, None);
+        test_is_layer_normal(&above, None);
     }
 
     #[test]
