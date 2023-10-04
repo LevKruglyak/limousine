@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 pub mod classical;
 pub mod component;
 pub mod iter;

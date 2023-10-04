@@ -5,7 +5,7 @@ use crate::common::linked_list::Index;
 use crate::common::macros::impl_node_layer;
 use crate::component::*;
 use layer::*;
-use std::ops::{Bound, RangeBounds};
+
 
 // -------------------------------------------------------
 //                  Internal Component
@@ -138,7 +138,7 @@ where
     PA: Address,
 {
     fn empty() -> Self {
-        let mut result = MemoryBTreeLayer::empty();
+        let result = MemoryBTreeLayer::empty();
 
         Self { inner: result }
     }
