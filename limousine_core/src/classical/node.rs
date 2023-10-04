@@ -43,7 +43,7 @@ impl<K, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
         K: StaticBounded,
     {
         if self.is_empty() {
-            &K::min_ref()
+            K::min_ref()
         } else {
             &self.inner.entries()[0].key
         }

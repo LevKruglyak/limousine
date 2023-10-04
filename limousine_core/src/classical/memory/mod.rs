@@ -45,8 +45,8 @@ where
         node.inner.search_lub(key).clone()
     }
 
-    fn insert<'n>(
-        &'n mut self,
+    fn insert(
+        &mut self,
         base: &mut B,
         prop: PropogateInsert<K, BA, BTreeInternalAddress>,
     ) -> Option<PropogateInsert<K, BTreeInternalAddress, PA>> {
@@ -111,8 +111,8 @@ where
     V: 'static,
     PA: Address,
 {
-    fn insert<'n>(
-        &'n mut self,
+    fn insert(
+        &mut self,
         ptr: BTreeInternalAddress,
         key: K,
         value: V,

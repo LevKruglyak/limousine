@@ -124,7 +124,7 @@ where
 
     pub fn key(&self) -> K {
         let current = self.current.clone().unwrap();
-        self.layer.lower_bound(current).clone()
+        *self.layer.lower_bound(current)
     }
 
     pub fn address(&self) -> SA {

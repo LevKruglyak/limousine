@@ -27,7 +27,7 @@ where
     BA: Address,
 {
     fn search(&self, _: &Base, key: &K) -> BA {
-        self.inner.range(..=key).next_back().unwrap().1.clone()
+        *self.inner.range(..=key).next_back().unwrap().1
     }
 
     fn insert(&mut self, base: &mut Base, prop: PropogateInsert<K, BA, ()>) {
