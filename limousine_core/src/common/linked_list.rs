@@ -29,9 +29,12 @@ impl<N, PA> LinkedNode<N, PA> {
 }
 
 impl<N, PA> LinkedList<N, PA> {
-    pub fn new(inner: N) -> Self {
+    pub fn empty() -> Self
+    where
+        N: Default,
+    {
         let mut arena = Arena::new();
-        let ptr = arena.insert(LinkedNode::new(inner));
+        let ptr = arena.insert(LinkedNode::new(Default::default()));
 
         LinkedList {
             arena,
@@ -183,16 +186,16 @@ mod tests {
 
     #[test]
     fn test_linked_list_new() {
-        let list: LinkedList<i32, ()> = LinkedList::new(1);
+        let list: LinkedList<u32, ()> = LinkedList::empty();
 
         assert_eq!(list.len(), 1);
-        assert_eq!(list[list.first], 1);
+        assert_eq!(list[list.first], Default::default());
         assert_eq!(list.first, list.last);
     }
 
     #[test]
     fn test_linked_list_insert_after() {
-        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+        let mut list: LinkedList<u32, ()> = LinkedList::empty();
 
         let first_ptr = list.first;
         let second_ptr = list.insert_after(2, first_ptr);
@@ -204,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_insert_before() {
-        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+        let mut list: LinkedList<u32, ()> = LinkedList::empty();
 
         let first_ptr = list.first;
         let zero_ptr = list.insert_before(0, first_ptr);
@@ -216,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_clear() {
-        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+        let mut list: LinkedList<u32, ()> = LinkedList::empty();
         list.insert_after(2, list.first);
 
         assert_eq!(list.arena.len(), 2);
