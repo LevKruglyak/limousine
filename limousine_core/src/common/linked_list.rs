@@ -122,7 +122,7 @@ where
     }
 
     fn previous(&self) -> Option<Index> {
-        self.next
+        self.previous
     }
 
     fn parent(&self) -> Option<PA> {

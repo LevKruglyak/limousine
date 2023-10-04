@@ -110,6 +110,7 @@ where
     SA: Address,
     PA: Address,
 {
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn new(layer: &'n mut N) -> Self {
         Self {
             layer,
