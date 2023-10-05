@@ -1,8 +1,8 @@
 mod layer;
 
 use crate::common::bounded::StaticBounded;
-use crate::common::linked_list::Index;
 use crate::common::macros::impl_node_layer;
+use crate::common::memory_list::Index;
 use crate::component::*;
 use layer::*;
 use std::ops::{Bound, RangeBounds};
