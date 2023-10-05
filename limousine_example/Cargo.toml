@@ -14,4 +14,5 @@ rand_distr = "0.4.3"
 sys-info = "0.9.1"
 
 limousine_core = { path = "../limousine_core" }
+limousine_derive = { path = "../limousine_derive" }
 limousine_engine = { path = "../limousine_engine" }

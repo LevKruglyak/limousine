@@ -15,7 +15,7 @@ pub fn create_implementation(name: Ident, layout: HybridLayout) -> proc_macro::T
     let mut implementation = proc_macro2::TokenStream::new();
     implementation.extend(quote! {
         pub mod #mod_name {
-            use ::limousine_engine::private::*;
+            use crate::private::*;
 
             #alias_body
 

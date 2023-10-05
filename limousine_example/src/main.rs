@@ -1,6 +1,11 @@
 #![allow(unused)]
 
-use limousine_engine::prelude::*;
+// In development, we use local copies to avoid depending on the package registry
+use limousine_core as private;
+use limousine_derive::create_hybrid_index;
+
+// In practice, we should use
+// use limousine_engine::prelude::*;
 
 create_hybrid_index! {
     name: Index1,

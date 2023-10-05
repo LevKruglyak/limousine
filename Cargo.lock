@@ -1293,7 +1293,18 @@ checksum = "f7012b1bbb0719e1097c47611d3898568c546d597c2e74d66f6087edd5233ff4"
 
 [[package]]
 name = "limousine_core"
-version = "0.1.0"
+version = "0.2.0"
+dependencies = [
+ "generational-arena",
+ "num",
+ "trait-set",
+]
+
+[[package]]
+name = "limousine_core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3cc0fa256939efd8d815fa8bfcbf990cbdcd08dc953402ee85034963de7eca5"
 dependencies = [
  "generational-arena",
  "num",
@@ -1302,7 +1313,18 @@ dependencies = [
 
 [[package]]
 name = "limousine_derive"
-version = "0.1.0"
+version = "0.2.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
+name = "limousine_derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a91b6417886ff7db8521707dd43d3246ab1bdbe17cc5969cf471e0673c62df47"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1311,10 +1333,10 @@ dependencies = [
 
 [[package]]
 name = "limousine_engine"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
- "limousine_core",
- "limousine_derive",
+ "limousine_core 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "limousine_derive 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1325,7 +1347,8 @@ dependencies = [
  "eframe",
  "egui",
  "itertools",
- "limousine_core",
+ "limousine_core 0.2.0",
+ "limousine_derive 0.2.0",
  "limousine_engine",
  "rand",
  "rand_distr",
