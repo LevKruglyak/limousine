@@ -4,7 +4,7 @@ use crate::common::entry::Entry;
 use crate::common::stack_map::StackMap;
 use std::fmt::Debug;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct BTreeNode<K, V, const FANOUT: usize> {
     inner: StackMap<K, V, FANOUT>,
 }
@@ -12,6 +12,12 @@ pub struct BTreeNode<K, V, const FANOUT: usize> {
 impl<K: Debug, V: Debug, const FANOUT: usize> Debug for BTreeNode<K, V, FANOUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{:?}", &self.inner))
+    }
+}
+
+impl<K, V, const FANOUT: usize> Default for BTreeNode<K, V, FANOUT> {
+    fn default() -> Self {
+        Self::empty()
     }
 }
 

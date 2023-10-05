@@ -1,7 +1,7 @@
 use crate::common::bounded::*;
 use crate::iter::{Iter, MutIter};
 use num::PrimInt;
-use std::ops::{Bound, RangeBounds};
+use std::ops::{Bound};
 use std::path::Path;
 use trait_set::trait_set;
 

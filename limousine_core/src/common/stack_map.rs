@@ -70,6 +70,7 @@ impl<K, V, const FANOUT: usize> Default for StackMap<K, V, FANOUT> {
     }
 }
 
+#[allow(unused)]
 impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     pub fn empty() -> Self {
         StackMap {
@@ -269,6 +270,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     }
 }
 
+#[allow(unused)]
 impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     /// Borrow a slice view into the entries stored in the `StackMap`
     pub fn entries(&self) -> &[Entry<K, V>] {

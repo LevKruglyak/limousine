@@ -3,11 +3,9 @@ use crate::common::bounded::*;
 use crate::common::macros::impl_node_layer;
 use crate::common::memory_list::*;
 use crate::component::*;
-use generational_arena::{Arena, Index};
-use std::borrow::Borrow;
-use std::fmt::Debug;
-use std::ops::{Bound, RangeBounds};
-use std::ptr::NonNull;
+use generational_arena::Index;
+
+use std::ops::Bound;
 
 // ----------------------------------------
 // Layer Type
@@ -20,7 +18,7 @@ pub struct MemoryBTreeLayer<K, V, const FANOUT: usize, PA> {
 impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     pub fn empty() -> Self {
         Self {
-            inner: MemoryList::new(BTreeNode::empty()),
+            inner: MemoryList::empty(),
         }
     }
 
@@ -61,7 +59,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         }
     }
 
-    pub fn insert(&mut self, key: K, value: V, mut ptr: Index) -> Option<(K, Index, PA)>
+    pub fn insert(&mut self, key: K, value: V, ptr: Index) -> Option<(K, Index, PA)>
     where
         K: Copy + Ord + StaticBounded,
         PA: Address,
@@ -97,7 +95,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         key: K,
         value: V,
         base: &mut B,
-        mut ptr: Index,
+        ptr: Index,
     ) -> Option<(K, Index, PA)>
     where
         K: Copy + Ord + StaticBounded,
