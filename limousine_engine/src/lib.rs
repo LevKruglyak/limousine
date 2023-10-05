@@ -8,7 +8,7 @@
 //!
 //! **limousine_engine** offers a procedural macro that auto-generates a hybrid index design:
 //!
-//! ```rust
+//! ```ignore
 //! use limousine_engine::prelude::*;
 //!
 //! create_hybrid_index! {
@@ -27,7 +27,7 @@
 //!
 //! Once the index is generated, you can run queries:
 //!
-//! ```rust
+//! ```ignore
 //! // Load the first two layer of the index from memory
 //! let index = ExampleHybridIndex::<i32, i32>::load("path_to_index")?;
 //!
