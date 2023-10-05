@@ -1,6 +1,12 @@
 [package]
 name = "limousine_engine"
+<<<<<<< HEAD
 version = "0.2.2"
+||||||| merged common ancestors
+version = "0.2.0.1"
+=======
+version = "0.2.1"
+>>>>>>> ceb8f0bf9099d96f44d29374361c4428844f83bd
 edition = "2021"
 description = "limousine_engine can reason about a large design continuum of hybrid index designs and materialize an optimal implementation using procedural macros."
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
