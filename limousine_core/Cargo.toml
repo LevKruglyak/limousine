@@ -1,7 +1,7 @@
 [package]
 name = "limousine_core"
 description = "Building blocks for hybrid index data structures."
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
 keywords = ["btree", "pgm", "database", "proc_macro", "limousine"]
