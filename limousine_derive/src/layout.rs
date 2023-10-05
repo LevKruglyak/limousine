@@ -1,95 +1,69 @@
-use crate::component::*;
-use proc_macro2::{Ident, Span};
-use syn::{
-    bracketed,
-    parse::{Parse, ParseStream},
-    Token,
-};
+use crate::bail;
+use crate::component::{BaseComponent, InternalComponent, ParsedComponent, TopComponent};
+use syn::parse::Parse;
+use syn::Token;
 
-#[derive(Debug)]
-pub struct IndexLayout {
-    name: String,
+pub struct HybridLayout {
     pub top: TopComponent,
     pub internal: Vec<InternalComponent>,
     pub base: BaseComponent,
 }
 
-impl IndexLayout {
-    pub fn name(&self) -> Ident {
-        Ident::new(&self.name, Span::mixed_site())
-    }
-}
-
-impl Parse for IndexLayout {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let span = input.span();
-        let name: syn::Result<Ident> = input.parse();
-        if name
-            .map(|ident| ident != *"name")
-            .unwrap_or(true)
-        {
-            return Err(syn::Error::new(span, "No name specified for the index!"));
-        }
-
-        let _: Token![:] = input.parse()?;
-        let name: Ident = input.parse()?;
-        let _: Token![,] = input.parse()?;
-
-        let span = input.span();
-        let layout: syn::Result<Ident> = input.parse();
-        if layout
-            .map(|ident| ident != *"layout")
-            .unwrap_or(true)
-        {
-            return Err(syn::Error::new(span, "No layout specified for the index!"));
-        }
-
-        let _: Token![:] = input.parse()?;
-        let content;
-        bracketed!(content in input);
-
-        let components: Vec<ParsedComponent> = content
+impl Parse for HybridLayout {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Get all of the components in order
+        let components: Vec<ParsedComponent> = input
             .parse_terminated(ParsedComponent::parse, Token![,])
             .map(|parsed| parsed.into_iter().collect())?;
 
         let mut in_persisted_region: bool = false;
 
-        let first = components
-            .first()
-            .ok_or(syn::Error::new(Span::call_site(), "Empty layout!"))?;
-        in_persisted_region |= first.component.is_persisted();
+        // Parse the top component
+        let top;
+        if let Some(first) = components.first() {
+            in_persisted_region |= first.is_persisted();
 
-        let top = TopComponent::from_general(first.component)
-            .ok_or(syn::Error::new(first.span, "Invalid top component type!"))?;
-
-        if components.len() == 1 {
-            return Err(syn::Error::new(
-                Span::call_site(),
-                "No internal or base layers provided!",
-            ));
+            if let Some(top_component) = TopComponent::try_new(first.into()) {
+                top = top_component;
+            } else {
+                bail!(first.ident(), "Invalid top component type!");
+            }
+        } else {
+            bail!("Empty layout!");
         }
 
-        let mut internal: Vec<InternalComponent> = Vec::new();
-        for parsed in &components[1..components.len() - 1] {
-            if !parsed.component.is_persisted() && in_persisted_region {
-                return Err(syn::Error::new(
-                    parsed.span,
-                    "Cannot have an in-memory component below a persisted component!",
-                ));
+        // Parse the internal components
+        if components.len() == 1 {
+            bail!("No internal or base layers specified!");
+        }
+
+        let mut internal = Vec::new();
+        for parsed in &components[1..] {
+            if !parsed.is_persisted() && in_persisted_region {
+                bail!(
+                    parsed.ident(),
+                    "Cannot have an in-memory component below a persisted component!"
+                );
             }
 
-            in_persisted_region |= parsed.component.is_persisted();
+            in_persisted_region |= parsed.is_persisted();
 
-            internal.push(InternalComponent::from_general(parsed.component).ok_or(
-                syn::Error::new(first.span, "Invalid internal component type!"),
-            )?);
+            if let Some(internal_component) = InternalComponent::try_new(parsed.into()) {
+                internal.push(internal_component);
+            } else {
+                bail!(parsed.ident(), "Invalid internal component type!");
+            }
         }
 
-        let base = BaseComponent::from_general(components.last().unwrap().component)
-            .ok_or(syn::Error::new(first.span, "Invalid base component type."))?;
+        // Parse base components
+        let base;
+        if let Some(base_component) = BaseComponent::try_new(components.last().unwrap().into()) {
+            base = base_component;
+        } else {
+            bail!("Invalid base component type!")
+        }
 
         Ok(Self {
-            name: name.to_string(),
             top,
             internal,
             base,
