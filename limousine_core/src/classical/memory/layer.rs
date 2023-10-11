@@ -1,26 +1,24 @@
 use crate::classical::node::BTreeNode;
 use crate::common::bounded::*;
-use crate::common::linked_list::*;
 use crate::common::macros::impl_node_layer;
+use crate::common::memory_list::*;
 use crate::component::*;
-use generational_arena::{Index};
+use generational_arena::Index;
 
-
-use std::ops::{Bound};
-
+use std::ops::Bound;
 
 // ----------------------------------------
 // Layer Type
 // ----------------------------------------
 
 pub struct MemoryBTreeLayer<K, V, const FANOUT: usize, PA> {
-    inner: LinkedList<BTreeNode<K, V, FANOUT>, PA>,
+    inner: MemoryList<BTreeNode<K, V, FANOUT>, PA>,
 }
 
 impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     pub fn empty() -> Self {
         Self {
-            inner: LinkedList::empty(),
+            inner: MemoryList::empty(),
         }
     }
 
@@ -146,7 +144,7 @@ where
     V: 'static,
     PA: Address,
 {
-    type Node = <LinkedList<BTreeNode<K, V, FANOUT>, PA> as NodeLayer<K, Index, PA>>::Node;
+    type Node = <MemoryList<BTreeNode<K, V, FANOUT>, PA> as NodeLayer<K, Index, PA>>::Node;
 
     impl_node_layer!(Index);
 }
