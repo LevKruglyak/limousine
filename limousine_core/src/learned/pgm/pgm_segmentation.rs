@@ -3,7 +3,7 @@
 use std::ops::Sub;
 
 use crate::{
-    learned::generic::{Model, Segmentation},
+    learned::generic::{LearnedModel, Segmentation},
     Entry, Key,
 };
 

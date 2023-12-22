@@ -1,16 +1,9 @@
 mod layer;
 
-// use crate::BaseComponent;
-// use crate::InternalComponent;
-// use crate::Key;
-// use crate::NodeLayer;
-// use crate::TopComponent;
-// use crate::Value;
-// use layer::MemoryBTreeLayer;
-// use std::borrow::Borrow;
-// use std::collections::BTreeMap;
-use crate::kv::StaticBounded;
-use crate::{common::entry::Entry, component::*};
+use crate::common::linked_list::Index;
+use crate::common::macros::impl_node_layer;
+use crate::component::*;
+use crate::{common::bounded::StaticBounded, Entry};
 use layer::*;
 use std::ops::{Bound, RangeBounds};
 
@@ -32,29 +25,13 @@ where
     BA: Address,
     PA: Address,
 {
-    type Node =
-        <MemoryBTreeLayer<K, BA, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
+    type Node = <MemoryBTreeLayer<K, BA, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
 
-    fn deref(&self, ptr: BTreeInternalAddress) -> &Self::Node {
-        self.inner.deref(ptr)
-    }
-
-    fn deref_mut(&mut self, ptr: BTreeInternalAddress) -> &mut Self::Node {
-        self.inner.deref_mut(ptr)
-    }
-
-    fn first(&self) -> BTreeInternalAddress {
-        self.inner.first()
-    }
-
-    unsafe fn deref_unsafe(&self, ptr: BTreeInternalAddress) -> *mut Self::Node {
-        self.inner.deref_unsafe(ptr)
-    }
+    impl_node_layer!(Index);
 }
 
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
-    InternalComponent<K, B, BA, BTreeInternalAddress, PA>
-    for BTreeInternalComponent<K, X, FANOUT, BA, PA>
+    InternalComponent<K, B, BA, BTreeInternalAddress, PA> for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
     K: StaticBounded,
     BA: Address,
@@ -66,8 +43,8 @@ where
         node.inner.search_lub(key).clone()
     }
 
-    fn insert<'n>(
-        &'n mut self,
+    fn insert(
+        &mut self,
         base: &mut B,
         prop: PropogateInsert<K, BA, BTreeInternalAddress>,
     ) -> Option<PropogateInsert<K, BTreeInternalAddress, PA>> {
@@ -78,18 +55,13 @@ where
                 .map(|(key, address, parent)| PropogateInsert::Single(key, address, parent)),
             PropogateInsert::Replace { .. } => {
                 unimplemented!()
-                // self.inner
-                //     .fill(base.range(Bound::Unbounded, Bound::Unbounded));
-                //
-                // Some(PropogateInsert::Rebuild)
             }
         }
     }
 }
 
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
-    InternalComponentInMemoryBuild<K, B, BA, BTreeInternalAddress, PA>
-    for BTreeInternalComponent<K, X, FANOUT, BA, PA>
+    InternalComponentInMemoryBuild<K, B, BA, BTreeInternalAddress, PA> for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
     K: StaticBounded,
     BA: Address,
@@ -116,31 +88,15 @@ pub struct BTreeBaseComponent<K, V, const FANOUT: usize, PA> {
     inner: MemoryBTreeLayer<K, V, FANOUT, PA>,
 }
 
-impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddress, PA>
-    for BTreeBaseComponent<K, V, FANOUT, PA>
+impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddress, PA> for BTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: StaticBounded,
     V: 'static,
     PA: Address,
 {
-    type Node =
-        <MemoryBTreeLayer<K, V, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
+    type Node = <MemoryBTreeLayer<K, V, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
 
-    fn deref(&self, ptr: BTreeInternalAddress) -> &Self::Node {
-        self.inner.deref(ptr)
-    }
-
-    fn deref_mut(&mut self, ptr: BTreeInternalAddress) -> &mut Self::Node {
-        self.inner.deref_mut(ptr)
-    }
-
-    fn first(&self) -> BTreeInternalAddress {
-        self.inner.first()
-    }
-
-    unsafe fn deref_unsafe(&self, ptr: BTreeBaseAddress) -> *mut Self::Node {
-        self.inner.deref_unsafe(ptr)
-    }
+    impl_node_layer!(Index);
 }
 
 impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>
@@ -150,8 +106,8 @@ where
     V: 'static,
     PA: Address,
 {
-    fn insert<'n>(
-        &'n mut self,
+    fn insert(
+        &mut self,
         ptr: BTreeInternalAddress,
         key: K,
         value: V,
@@ -169,8 +125,7 @@ where
     }
 }
 
-impl<K, V, const FANOUT: usize, PA> BaseComponentInMemoryBuild<K, V>
-    for BTreeBaseComponent<K, V, FANOUT, PA>
+impl<K, V, const FANOUT: usize, PA> BaseComponentInMemoryBuild<K, V> for BTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: StaticBounded,
     V: 'static,
@@ -178,7 +133,6 @@ where
 {
     fn empty() -> Self {
         let mut result = MemoryBTreeLayer::empty();
-        result.add_node(MemoryBTreeNode::empty());
 
         Self { inner: result }
     }

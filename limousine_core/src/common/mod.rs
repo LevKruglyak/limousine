@@ -1,6 +1,7 @@
-pub mod address;
+pub mod bounded;
 pub mod disk;
 pub mod entry;
-pub mod heap_map;
+pub mod linked_list;
+pub mod macros;
 pub mod search;
 pub mod stack_map;

@@ -1,4 +1,4 @@
-use crate::kv::KeyBounded;
+use crate::common::bounded::KeyBounded;
 use std::borrow::Borrow;
 use std::fmt::Debug;
 

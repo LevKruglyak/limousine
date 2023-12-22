@@ -1,5 +1,5 @@
 use crate::{
-    learned::generic::{ApproxPos, Model, Segmentation},
+    learned::generic::{ApproxPos, LearnedModel, Segmentation},
     Entry,
 };
 

@@ -87,17 +87,11 @@ impl Parse for ParsedComponent {
                     },
                 })
             }
-            _ => Err(syn::Error::new(
-                span,
-                input.error("Invalid component type!"),
-            )),
+            _ => Err(syn::Error::new(span, input.error("Invalid component type!"))),
         };
 
         if !attrs.is_empty() {
-            return Err(syn::Error::new(
-                span,
-                input.error("Invalid attribute specified!"),
-            ));
+            return Err(syn::Error::new(span, input.error("Invalid attribute specified!")));
         }
 
         result
@@ -117,9 +111,9 @@ impl TopComponent {
         }
     }
 
-    pub fn to_tokens(&self, base_address: impl ToTokens) -> TokenStream {
-        match self {
-            &TopComponent::BTreeTop => {
+    pub fn as_tokens(&self, base_address: impl ToTokens) -> TokenStream {
+        match *self {
+            TopComponent::BTreeTop => {
                 quote! { BTreeTopComponent<K, V, #base_address> }
             }
         }
@@ -141,36 +135,24 @@ impl InternalComponent {
         }
     }
 
-    pub fn to_tokens(
-        &self,
-        base_address: impl ToTokens,
-        parent_address: impl ToTokens,
-    ) -> TokenStream {
-        match self {
-            &InternalComponent::BTree {
-                fanout,
-                persist: false,
-            } => quote!(BTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>)
-                .to_token_stream(),
+    pub fn as_tokens(&self, base_address: impl ToTokens, parent_address: impl ToTokens) -> TokenStream {
+        match *self {
+            InternalComponent::BTree { fanout, persist: false } => {
+                quote!(BTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>).to_token_stream()
+            }
 
-            &InternalComponent::BTree {
-                fanout,
-                persist: true,
-            } => quote!(BTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>)
-                .to_token_stream(),
+            InternalComponent::BTree { fanout, persist: true } => {
+                quote!(BTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>).to_token_stream()
+            }
             _ => quote!(Bad),
         }
     }
 
     pub fn address(&self) -> TokenStream {
-        match self {
-            &InternalComponent::BTree { persist: false, .. } => {
-                quote!(BTreeInternalAddress).to_token_stream()
-            }
+        match *self {
+            InternalComponent::BTree { persist: false, .. } => quote!(BTreeInternalAddress).to_token_stream(),
 
-            &InternalComponent::BTree { persist: true, .. } => {
-                quote!(BTreeInternalAddress).to_token_stream()
-            }
+            InternalComponent::BTree { persist: true, .. } => quote!(BTreeInternalAddress).to_token_stream(),
 
             _ => quote!(Bad),
         }
@@ -192,31 +174,25 @@ impl BaseComponent {
         }
     }
 
-    pub fn to_tokens(&self, base_address: impl ToTokens) -> TokenStream {
-        match self {
-            &BaseComponent::BTree {
-                fanout,
-                persist: false,
-            } => quote!(BTreeBaseComponent<K, V, #fanout, #base_address>).to_token_stream(),
+    pub fn as_tokens(&self, base_address: impl ToTokens) -> TokenStream {
+        match *self {
+            BaseComponent::BTree { fanout, persist: false } => {
+                quote!(BTreeBaseComponent<K, V, #fanout, #base_address>).to_token_stream()
+            }
 
-            &BaseComponent::BTree {
-                fanout,
-                persist: true,
-            } => quote!(BTreeBaseComponent<K, V, #fanout, #base_address>).to_token_stream(),
+            BaseComponent::BTree { fanout, persist: true } => {
+                quote!(BTreeBaseComponent<K, V, #fanout, #base_address>).to_token_stream()
+            }
 
             _ => quote!(Bad),
         }
     }
 
     pub fn address(&self) -> TokenStream {
-        match self {
-            &BaseComponent::BTree { persist: false, .. } => {
-                quote!(BTreeBaseAddress).to_token_stream()
-            }
+        match *self {
+            BaseComponent::BTree { persist: false, .. } => quote!(BTreeBaseAddress).to_token_stream(),
 
-            &BaseComponent::BTree { persist: true, .. } => {
-                quote!(BTreeBaseAddress).to_token_stream()
-            }
+            BaseComponent::BTree { persist: true, .. } => quote!(BTreeBaseAddress).to_token_stream(),
 
             _ => quote!(Bad),
         }

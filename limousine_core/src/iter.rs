@@ -1,4 +1,4 @@
-use crate::{Address, LinkedNode, NodeLayer};
+use crate::{Address, Model, NodeLayer};
 use std::mem::MaybeUninit;
 use std::ops::{Bound, RangeBounds};
 
@@ -110,6 +110,7 @@ where
     SA: Address,
     PA: Address,
 {
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn new(layer: &'n mut N) -> Self {
         Self {
             layer,
@@ -124,7 +125,7 @@ where
 
     pub fn key(&self) -> K {
         let current = self.current.clone().unwrap();
-        self.layer.lower_bound(current).clone()
+        *self.layer.lower_bound(current)
     }
 
     pub fn address(&self) -> SA {

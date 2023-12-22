@@ -1,8 +1,8 @@
 //! This file defines the Model portion of the PGM, which is simply just a linear approximator
 
 use crate::{
-    kv::Key,
-    learned::generic::{ApproxPos, Model},
+    learned::generic::{ApproxPos, LearnedModel},
+    Key,
 };
 
 use std::borrow::Borrow;
@@ -34,6 +34,15 @@ impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
         debug_assert!(slope.is_normal());
         Self { key, slope, size }
     }
+
+    /// Construct an empty model, which will set at en end of the layer as a sentinel
+    pub fn sentinel() -> Self {
+        Self {
+            key: K::max_value(),
+            slope: 0.0,
+            size: 0,
+        }
+    }
 }
 
 /// Allows us to use a model as a key, which should represent the smallest key indexed by this model
@@ -44,7 +53,7 @@ impl<K: Key, const EPSILON: usize> Borrow<K> for LinearModel<K, EPSILON> {
 }
 
 /// Implement LinearModel as a Model, meaning we can use it to approximate
-impl<K: Key, const EPSILON: usize> Model<K> for LinearModel<K, EPSILON> {
+impl<K: Key, const EPSILON: usize> LearnedModel<K> for LinearModel<K, EPSILON> {
     fn approximate(&self, key: &K) -> ApproxPos {
         let run = num::cast::<K, f64>(key.clone().saturating_sub(self.key)).unwrap();
         let pos = (run * self.slope).floor() as i64;

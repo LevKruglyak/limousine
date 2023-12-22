@@ -1,83 +1,37 @@
+use super::{pgm_inner::PGMInner, pgm_model::LinearModel};
+use crate::{
+    common::{
+        bounded::{KeyBounded, StaticBounded},
+        linked_list::{LinkedList, LinkedNode},
+        macros::impl_node_layer,
+    },
+    learned::generic::Segmentation,
+    Address, Entry, Key, Model, NodeLayer,
+};
+use generational_arena::{Arena, Index};
 use std::{borrow::Borrow, ops::Bound};
 
-use generational_arena::{Arena, Index};
+/// Shorthands for the types containing core "interesting data"
+type PGMInnards<K, V, const EPSILON: usize> = PGMInner<K, V, EPSILON>;
+type PGMNode<K, V, const EPSILON: usize> = LinkedNode<PGMInnards<K, V, EPSILON>, Index>;
 
-use crate::{
-    kv::{KeyBounded, StaticBounded},
-    learned::generic::Segmentation,
-    Address, Entry, Key, LinkedNode, NodeLayer,
-};
-
-use super::{pgm_model::LinearModel, pgm_node::PGMNode};
-
-type Node<K, V, const EPSILON: usize> = PGMNode<K, V, EPSILON>;
-
-pub struct MemoryPGMNode<K: Key, V, const EPSILON: usize, PA> {
-    pub inner: Node<K, V, EPSILON>,
-    pub next: Option<Index>,
-    pub previous: Option<Index>,
-    pub parent: Option<PA>,
+/// A PGMLayer with internals optimized for usage as an in-memory structure
+pub struct MemoryPGMLayer<K: Key, V, const EPSILON: usize, PA> {
+    pub inner: LinkedList<PGMInnards<K, V, EPSILON>, PA>,
 }
 
-impl<K: Key, V: Clone, const EPSILON: usize, PA> MemoryPGMNode<K, V, EPSILON, PA> {}
-
-impl<K: StaticBounded + Key, V: Clone, const EPSILON: usize, PA> KeyBounded<K> for MemoryPGMNode<K, V, EPSILON, PA> {
-    fn lower_bound(&self) -> &K {
-        self.inner.borrow()
-    }
-}
-
-// TODO: I think we need to make LinkedNode's be doubly linked
-impl<K: StaticBounded + Key, V: 'static + Clone, const EPSILON: usize, PA: 'static> LinkedNode<K, Index, PA>
-    for MemoryPGMNode<K, V, EPSILON, PA>
+/// Implement the addressing and mutability constraints required by a NodeLayer
+/// NOTE: Since we use LinkedList internally, this is easy
+///
+impl<K: Key, V: Clone, const EPSILON: usize, PA> NodeLayer<K, Index, PA> for MemoryPGMLayer<K, V, EPSILON, PA>
 where
+    K: Copy + StaticBounded + 'static,
+    V: 'static,
     PA: Address,
 {
-    fn next(&self) -> Option<Index> {
-        self.next
-    }
+    type Node = <LinkedList<PGMInnards<K, V, EPSILON>, PA> as NodeLayer<K, Index, PA>>::Node;
 
-    fn parent(&self) -> Option<PA> {
-        self.parent.clone()
-    }
-
-    fn set_parent(&mut self, parent: PA) {
-        self.parent = Some(parent);
-    }
-}
-
-/// ----------------------------------------
-/// Layer Type
-/// ----------------------------------------
-
-pub struct MemoryPGMLayer<K: Key, V: Clone, const EPSILON: usize, PA> {
-    pub arena: Arena<MemoryPGMNode<K, V, EPSILON, PA>>,
-    pub head: Option<Index>,
-}
-
-impl<K: Key, V, const EPSILON: usize, PA> NodeLayer<K, Index, PA> for MemoryPGMLayer<K, V, EPSILON, PA>
-where
-    K: 'static + StaticBounded + Clone,
-    V: 'static + Clone,
-    PA: Address,
-{
-    type Node = MemoryPGMNode<K, V, EPSILON, PA>;
-
-    fn deref(&self, ptr: Index) -> &Self::Node {
-        self.arena.get(ptr).unwrap()
-    }
-
-    fn deref_mut(&mut self, ptr: Index) -> &mut Self::Node {
-        self.arena.get_mut(ptr).unwrap()
-    }
-
-    unsafe fn deref_unsafe(&self, ptr: Index) -> *mut Self::Node {
-        self.arena.get(ptr).unwrap() as *const Self::Node as *mut Self::Node
-    }
-
-    fn first(&self) -> Index {
-        self.head.unwrap()
-    }
+    impl_node_layer!(Index);
 }
 
 impl<K, V, const EPSILON: usize, PA> MemoryPGMLayer<K, V, EPSILON, PA>
@@ -87,33 +41,21 @@ where
     PA: Address,
 {
     /// Make an empty layer
-    pub fn empty() -> Self {
+    /// NOTE: This actually means a layer with a sentinel at the end, because _all_ layers should have
+    /// sentinels at the end
+    pub fn new() -> Self {
         Self {
-            arena: Arena::new(),
-            head: None,
+            inner: LinkedList::new(PGMInnards::sentinel()),
         }
     }
 
     /// Wipe this layer and rebuild it with the data in iter
     pub fn fill(&mut self, iter: impl Iterator<Item = Entry<K, V>> + Clone) {
-        self.arena.clear();
+        self.inner.clear(PGMInnards::sentinel());
         let blueprint = LinearModel::<K, EPSILON>::make_segmentation(iter);
-        let mut ptr: Option<Index> = None;
         for (model, entries) in blueprint {
-            let mut node = Node::from_model_n_vec(model, entries);
-            let new_ptr = self.arena.insert(MemoryPGMNode {
-                inner: node,
-                next: None,
-                previous: ptr,
-                parent: None,
-            });
-            if self.head.is_none() {
-                self.head = Some(new_ptr);
-            }
-            if ptr.is_some() {
-                self.deref_mut(ptr.unwrap()).next = Some(new_ptr);
-            }
-            ptr = Some(new_ptr);
+            let mut innards = PGMInnards::from_model_n_vec(model, entries);
+            let new_ptr = self.inner.append_before_sentinel(innards);
         }
     }
 
@@ -130,20 +72,15 @@ where
         let vec: Vec<Entry<K, V>> = test.map(|x| Entry::new(x.key(), x.address())).collect();
         self.fill(vec.into_iter());
         // Second pass: set parent pointer of base layer
-        let mut parent = self.head;
-        debug_assert!(parent.is_some());
-        let mut next_parent = if parent.is_some() {
-            self.deref(parent.unwrap()).next()
-        } else {
-            None
-        };
+        let mut parent_ptr = self.inner.first();
+        let mut next_parent_ptr = self.inner.deref(parent_ptr).next();
         for view in base.mut_range(Bound::Unbounded, Bound::Unbounded) {
-            if next_parent.is_none() || &view.key() < self.deref(next_parent.unwrap()).lower_bound() {
-                view.set_parent(parent.unwrap());
+            if next_parent_ptr.is_none() || &view.key() < self.deref(next_parent_ptr.unwrap()).lower_bound() {
+                view.set_parent(parent_ptr);
             } else {
-                parent = next_parent;
-                next_parent = self.deref(parent.unwrap()).next();
-                view.set_parent(parent.unwrap());
+                parent_ptr = next_parent_ptr.unwrap();
+                next_parent_ptr = self.inner.deref(parent_ptr).next();
+                view.set_parent(parent_ptr);
             }
         }
     }
@@ -151,7 +88,7 @@ where
     /// Assume that base B has had some potentially large continguous change.
     /// We will handle this by simply replacing all nodes in this layer who have a child participating in the change.
     /// `poison_head` is the address of the first node that needs to be replaced in this layer
-    /// `poison_tail` is the address of the last node (INCLUSIVE) in that needs to be replaced in this layer
+    /// `poison_tail` is the address of the last node (INCLUSIVE) that needs to be replaced in this layer
     /// `data_head` is the address of the first piece of data in the new node filling in the gap
     /// `data_tail` is the address of the last piece of data in the new node filling in the gap
     pub fn replace<B>(&mut self, base: &mut B, poison_head: Index, poison_tail: Index, data_head: V, data_tail: V)
@@ -176,27 +113,11 @@ where
         // println!("Replace is seeing {} entries", entries.len());
         // Then lets make the new chain
         let blueprint = LinearModel::<K, EPSILON>::make_segmentation(entries.into_iter());
-        let mut chain_head: Option<Index> = None;
-        let mut last_added_ptr: Option<Index> = None;
-        for (model, entries) in blueprint {
-            let new_inner = PGMNode::from_model_n_vec(model, entries);
-            let new_ptr = self.arena.insert(MemoryPGMNode {
-                inner: new_inner,
-                next: None,
-                previous: last_added_ptr,
-                parent: None,
-            });
-            if chain_head.is_none() {
-                chain_head = Some(new_ptr);
-            }
-            if last_added_ptr.is_some() {
-                let node = self.deref_mut(last_added_ptr.unwrap());
-                node.next = Some(new_ptr);
-            }
-            last_added_ptr = Some(new_ptr);
-        }
-        let chain_head = chain_head.unwrap();
-        let chain_tail = last_added_ptr.unwrap();
+        let mut new_innards: Vec<PGMInnards<K, V, EPSILON>> = blueprint
+            .into_iter()
+            .map(|(model, entries)| PGMInnards::from_model_n_vec(model, entries))
+            .collect();
+        /*
         // We need to fix the linked list in this layer
         if self.head == Some(poison_head) {
             self.head = Some(chain_head);
@@ -247,6 +168,7 @@ where
                 bot_ptr = next_bot_ptr.unwrap();
             }
         }
+         */
     }
 }
 
@@ -255,7 +177,7 @@ mod pgm_layer_tests {
     use kdam::{tqdm, Bar, BarExt};
     use rand::{distributions::Uniform, Rng};
 
-    use crate::learned::generic::Model;
+    use crate::learned::generic::LearnedModelModel;
 
     use super::*;
 
