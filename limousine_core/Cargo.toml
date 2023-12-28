@@ -12,6 +12,8 @@ repository = "https://github.com/LevKruglyak/limousine"
 generational-arena = "0.2.9"
 num = "0.4.0"
 trait-set = "0.3.0"
+marble = "15.0"
+bytemuck = "1.14"
 
 [features]
 default = []
