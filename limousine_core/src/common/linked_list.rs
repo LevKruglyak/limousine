@@ -21,8 +21,8 @@ pub struct LinkedNode<N, PA> {
     parent: Option<PA>,
 }
 
-impl<N, PA> LinkedNode<N, PA> {
-    fn new(node: N) -> Self {
+impl<N, PA: Address> LinkedNode<N, PA> {
+    pub fn new(node: N) -> Self {
         Self {
             inner: node,
             next: None,
@@ -31,16 +31,33 @@ impl<N, PA> LinkedNode<N, PA> {
         }
     }
 
+    pub fn init(node: N, next: Option<Index>, previous: Option<Index>, parent: Option<PA>) -> Self {
+        Self {
+            inner: node,
+            next,
+            previous,
+            parent,
+        }
+    }
+
     pub fn next(&self) -> Option<Index> {
         self.next
+    }
+
+    pub fn set_next(&mut self, next: Option<Index>) {
+        self.next = next;
     }
 
     pub fn previous(&self) -> Option<Index> {
         self.previous
     }
+
+    pub fn parent(&self) -> Option<PA> {
+        self.parent.clone()
+    }
 }
 
-impl<N, PA> LinkedList<N, PA> {
+impl<N, PA: Address> LinkedList<N, PA> {
     pub fn new(inner: N) -> Self {
         let mut arena = Arena::new();
         let ptr = arena.insert(LinkedNode::new(inner));

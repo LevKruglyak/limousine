@@ -18,7 +18,7 @@ pub struct MemoryBTreeLayer<K, V, const FANOUT: usize, PA> {
     inner: LinkedList<BTreeNode<K, V, FANOUT>, PA>,
 }
 
-impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
+impl<K, V, const FANOUT: usize, PA: Address> MemoryBTreeLayer<K, V, FANOUT, PA> {
     pub fn empty() -> Self {
         Self {
             inner: LinkedList::new(BTreeNode::empty()),
