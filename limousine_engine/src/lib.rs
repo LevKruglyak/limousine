@@ -47,8 +47,11 @@
 
 /// Include this at the top of the file when materializing a hybrid index or using a hybrid index.
 pub mod prelude {
-    // pub use limousine_core::ImmutableIndex;
     pub use limousine_derive::create_hybrid_index;
+
+    pub use limousine_core::Index;
+    pub use limousine_core::IndexBuild;
+    pub use limousine_core::IndexBuildDisk;
 }
 
 #[doc(hidden)]

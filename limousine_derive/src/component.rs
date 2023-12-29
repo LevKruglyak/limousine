@@ -136,6 +136,12 @@ impl InternalComponent {
             }
         }
     }
+
+    pub fn is_persisted(&self) -> bool {
+        match *self {
+            InternalComponent::BTree { persist, .. } => persist,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -174,6 +180,12 @@ impl BaseComponent {
             BaseComponent::BTree { persist: true, .. } => {
                 quote!(BTreeBaseAddress).to_token_stream()
             }
+        }
+    }
+
+    pub fn is_persisted(&self) -> bool {
+        match *self {
+            BaseComponent::BTree { persist, .. } => persist,
         }
     }
 }

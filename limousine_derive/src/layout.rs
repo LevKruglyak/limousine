@@ -9,6 +9,15 @@ pub struct HybridLayout {
     pub base: BaseComponent,
 }
 
+impl HybridLayout {
+    pub fn is_persisted(&self) -> bool {
+        self.internal
+            .iter()
+            .any(|component| component.is_persisted())
+            || self.base.is_persisted()
+    }
+}
+
 impl Parse for HybridLayout {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         // Get all of the components in order

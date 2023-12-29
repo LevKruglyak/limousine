@@ -2,104 +2,7 @@ use crate::HybridLayout;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 
-pub fn create_implementation(name: Ident, layout: HybridLayout) -> proc_macro::TokenStream {
-    let mod_name = proc_macro2::Ident::new(
-        format!("__implmentation_{}", name.to_string().to_lowercase()).as_str(),
-        proc_macro2::Span::call_site(),
-    );
-
-    let (alias_body, alias) = create_type_aliases(&layout);
-    let (index_body, index_fields) = create_index_struct(&name, &layout, &alias);
-    let index_impl = create_index_impl(&name, &layout, &alias, &index_fields);
-
-    let mut implementation = proc_macro2::TokenStream::new();
-    implementation.extend(quote! {
-        pub mod #mod_name {
-            use ::limousine_engine::private::*;
-
-            #alias_body
-
-            #index_body
-
-            #index_impl
-        }
-
-        use #mod_name::#name;
-    });
-
-    implementation.into()
-}
-
-fn create_type_aliases(layout: &HybridLayout) -> (TokenStream, Vec<Ident>) {
-    let address_alias: Vec<Ident> = (0..=layout.internal.len() + 1)
-        .map(|i| Ident::new(format!("A{}", i).as_str(), Span::call_site()))
-        .collect();
-
-    let mut type_alias_body = proc_macro2::TokenStream::new();
-
-    // Add body as the first component
-    let alias = address_alias[0].clone();
-    let body = layout.base.address_type();
-    type_alias_body.extend(quote::quote! {
-        type #alias = #body;
-    });
-
-    // Add internal components
-    for (mut index, component) in layout.internal.iter().rev().enumerate() {
-        index += 1;
-
-        let alias = address_alias[index].clone();
-        let body = component.address_type();
-        type_alias_body.extend(quote! {
-            type #alias = #body;
-        });
-    }
-
-    let alias = address_alias.last().unwrap().clone();
-    type_alias_body.extend(quote! { type #alias = (); });
-
-    let type_alias: Vec<Ident> = (0..=layout.internal.len() + 1)
-        .map(|i| Ident::new(format!("C{}", i).as_str(), Span::call_site()))
-        .collect();
-
-    // Add body as the first component
-    let parent_address_alias = address_alias[1].clone();
-    let alias = type_alias[0].clone();
-    let body = layout.base.component_type(parent_address_alias);
-    type_alias_body.extend(quote::quote! {
-        type #alias<K, V> = #body;
-    });
-
-    // Add internal components
-    for (mut index, component) in layout.internal.iter().rev().enumerate() {
-        index += 1;
-
-        let base_address_alias = address_alias[index - 1].clone();
-        let parent_address_alias = address_alias[index + 1].clone();
-
-        let body = component.component_type(base_address_alias, parent_address_alias);
-
-        let alias = type_alias[index].clone();
-        type_alias_body.extend(quote! {
-            type #alias<K, V> = #body;
-        });
-    }
-
-    // Add top component
-    let index = layout.internal.len() + 1;
-
-    let base_address_alias = address_alias[index - 1].clone();
-    let body = layout.top.component_type(base_address_alias);
-
-    let alias = type_alias[index].clone();
-    type_alias_body.extend(quote! {
-        type #alias<K, V> = #body;
-    });
-
-    (type_alias_body, type_alias)
-}
-
-fn create_index_struct(
+pub fn create_index_struct(
     name: &Ident,
     _layout: &HybridLayout,
     alias: &[Ident],
@@ -131,6 +34,42 @@ fn create_index_struct(
     };
 
     (body, fields)
+}
+
+pub fn create_index_impl(
+    name: &Ident,
+    layout: &HybridLayout,
+    aliases: &[Ident],
+    fields: &[Ident],
+) -> TokenStream {
+    let search_body = create_search_body(layout, aliases, fields);
+    let insert_body = create_insert_body(layout, aliases, fields);
+    let empty_body = create_empty_body(layout, aliases, fields);
+    let build_body = create_build_body(layout, aliases, fields);
+
+    let body = quote! {
+        impl<K: Key, V: Value> Index<K, V> for #name<K, V> {
+            fn search(&self, key: &K) -> Option<&V> {
+                #search_body
+            }
+
+            fn insert(&mut self, key: K, value: V) -> Option<V> {
+                #insert_body
+            }
+        }
+
+        impl<K: Key, V: Value> IndexBuild<K, V> for #name<K, V> {
+            fn empty() -> Self {
+                #empty_body
+            }
+
+            fn build(iter: impl Iterator<Item = (K, V)>) -> Self {
+                #build_body
+            }
+        }
+    };
+
+    body
 }
 
 fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident]) -> TokenStream {
@@ -338,38 +277,4 @@ fn create_build_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident])
     });
 
     build_body
-}
-
-fn create_index_impl(
-    name: &Ident,
-    layout: &HybridLayout,
-    aliases: &[Ident],
-    fields: &[Ident],
-) -> TokenStream {
-    let search_body = create_search_body(layout, aliases, fields);
-    let insert_body = create_insert_body(layout, aliases, fields);
-    let empty_body = create_empty_body(layout, aliases, fields);
-    let build_body = create_build_body(layout, aliases, fields);
-
-    let body = quote! {
-        impl<K: Key, V: Value> #name<K, V> {
-            pub fn search(&self, key: &K) -> Option<&V> {
-                #search_body
-            }
-
-            pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-                #insert_body
-            }
-
-            pub fn empty() -> Self {
-                #empty_body
-            }
-
-            pub fn build(iter: impl Iterator<Item = (K, V)>) -> Self {
-                #build_body
-            }
-        }
-    };
-
-    body
 }
