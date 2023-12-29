@@ -9,9 +9,9 @@ pub use generational_arena::Index;
 /// PA - Parent address type
 /// NOTE: We never allow this to be empty
 pub struct LinkedList<N, PA> {
-    arena: Arena<LinkedNode<N, PA>>,
-    first: Index,
-    last: Index,
+    pub arena: Arena<LinkedNode<N, PA>>,
+    pub first: Index,
+    pub last: Index,
 }
 
 pub struct LinkedNode<N, PA> {
