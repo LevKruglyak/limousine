@@ -13,7 +13,7 @@ trait_set! {
     pub trait Address = Eq + Clone + 'static;
 
     /// General value type, thread-safe
-    pub trait Value = Send + Sync + Default + Copy + 'static;
+    pub trait Value = Sync + Copy + Debug + 'static;
 
     /// General key type, thread safe, and primitive integer type
     pub trait Key = Value + PrimInt + StaticBounded + Debug;
@@ -21,7 +21,7 @@ trait_set! {
 
 // Type dependence hierarchy
 
-/// A `LinkedNode` is a model in a `NodeLayer`, representing a set of entries above a
+/// A `Model` is a model in a `NodeLayer`, representing a set of entries above a
 /// lower bound. In addition to storing a pointer to its neighbor, it also stores a
 /// pointer to its parent, which is in a different layer.
 ///

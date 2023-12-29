@@ -19,12 +19,12 @@ fn main() {
 
     let num = 10_000_000;
 
-    let mut index: MyHybridIndex<u128, u128> = MyHybridIndex::empty();
-    let start = std::time::Instant::now();
-    for i in 0..num {
-        index.insert(i, i * i);
-    }
-    println!("{:?} after {:?} ms", index.search(&10), start.elapsed().as_millis());
+    // let mut index: MyHybridIndex<u128, u128> = MyHybridIndex::empty();
+    // let start = std::time::Instant::now();
+    // for i in 0..num {
+    //     index.insert(i, i * i);
+    // }
+    // println!("{:?} after {:?} ms", index.search(&10), start.elapsed().as_millis());
 
     //     let start = std::time::Instant::now();
     //     for i in 0..num {

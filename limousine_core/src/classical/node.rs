@@ -71,7 +71,6 @@ impl<K, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
         self.inner.insert(key, value)
     }
 
-    // TODO: should allocation go here?
     pub fn split(&mut self) -> (K, Self)
     where
         K: Clone,

@@ -1,41 +1,33 @@
-//! This file defines the Model portion of the PGM, which is simply just a linear approximator
+//! This file defines the Model portion of the PGM, which is simply just a
+//! linear approximator.
+//! NOTE: We are making a simplification and forcing approximation lines
+//! to pass through the origin, which slightly degrades performance
 
 use crate::{
+    component::Key,
     learned::generic::{ApproxPos, LearnedModel},
-    Key,
 };
-
 use std::borrow::Borrow;
 
 /// A simple linear model for a key-rank segment of data.
-/// K: The type of keys in the model
-/// EPSILON: The maximum error bound for approximations into this model
 #[derive(Copy, Clone, Debug)]
 pub struct LinearModel<K, const EPSILON: usize> {
-    // The smallest key indexed by this model
+    /// Define the approximation line. See note at top of file about forcing
+    /// approximations to pass through the origin.
     pub key: K,
-    /// Why don't we need an intercept?
-    /// In our structures, each model will view the data its indexing as having offset 0
-    /// This is because we need to "fracture" the underlying data representation so it's not looking at
-    /// a huge layer, which would make inserts/updates/etc. nearly impossible.
-    /// This implementation is not optimal w.r.t minimizing the number of segments, but it is almost certainly
-    /// close and makes the actual segmentation algorithm + logic must simpler
     pub slope: f64,
-    /// This is not strictly needed, but ends up being a huge help for debugging stuff and testing
-    /// Plus, if we ever move away from the linked list approach per layer (and introduce direct indexing) we'll
-    /// need this anyway
+    /// How many entries are indexed by this model. Not strictly needed but
+    /// useful for debugging.
     pub size: usize,
 }
-
-/// Convenience methods on a LinearModel, most notably creation given key, slope, intercept
-/// NOTE: the provided `key` must represent the smallest key indexed by this model
 impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
+    /// Construct a new model from the smallest key, slope, and size
     pub fn new(key: K, slope: f64, size: usize) -> Self {
         debug_assert!(slope.is_normal());
         Self { key, slope, size }
     }
 
-    /// Construct an empty model, which will set at en end of the layer as a sentinel
+    /// Construct a sentinel model which will sit at the end of a layer
     pub fn sentinel() -> Self {
         Self {
             key: K::max_value(),
@@ -45,21 +37,29 @@ impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
     }
 }
 
-/// Allows us to use a model as a key, which should represent the smallest key indexed by this model
+/// Functionality for borrowing a model as it's minimum key
 impl<K: Key, const EPSILON: usize> Borrow<K> for LinearModel<K, EPSILON> {
     fn borrow(&self) -> &K {
         &self.key
     }
 }
+impl<K: Key, const EPSILON: usize> Borrow<K> for &LinearModel<K, EPSILON> {
+    fn borrow(&self) -> &K {
+        &self.key
+    }
+}
+impl<K: Key, const EPSILON: usize> Borrow<K> for &mut LinearModel<K, EPSILON> {
+    fn borrow(&self) -> &K {
+        &self.key
+    }
+}
 
-/// Implement LinearModel as a Model, meaning we can use it to approximate
+/// Actual approximation logic for linear models
 impl<K: Key, const EPSILON: usize> LearnedModel<K> for LinearModel<K, EPSILON> {
     fn approximate(&self, key: &K) -> ApproxPos {
         let run = num::cast::<K, f64>(key.clone().saturating_sub(self.key)).unwrap();
         let pos = (run * self.slope).floor() as i64;
         let pos = pos.max(0) as usize;
-        // println!("Run: {}, slope: {}, pos: {}", run, self.slope, pos);
-
         ApproxPos {
             lo: pos.saturating_sub(EPSILON),
             hi: pos + EPSILON + 2,

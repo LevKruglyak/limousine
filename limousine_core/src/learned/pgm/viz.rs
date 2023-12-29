@@ -1,9 +1,12 @@
+//! Visualize the PGM segmentation algorithm for sanity bug catching
+
 use crate::{
-    learned::generic::{ApproxPos, LearnedModel, Segmentation},
+    learned::{
+        generic::{ApproxPos, LearnedModel, Segmentation},
+        pgm::{pgm_model::LinearModel, pgm_segmentation::SimplePGMSegmentator},
+    },
     Entry,
 };
-
-use super::{pgm_model::LinearModel, pgm_segmentation::SimplePGMSegmentator};
 use egui::plot;
 use rand::{distributions::Uniform, random, Rng};
 use std::borrow::Borrow;

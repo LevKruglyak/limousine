@@ -8,7 +8,6 @@ pub use generational_arena::Index;
 /// N - Data that defines a node (for BTree this is Stackmap, for PGM this is data + model)
 /// PA - Parent address type
 /// NOTE: We never allow this to be empty
-/// QUESTION: Can we restrict N so that we don't have to tell both the node and the list what the parent address is?
 pub struct LinkedList<N, PA> {
     arena: Arena<LinkedNode<N, PA>>,
     first: Index,
@@ -98,12 +97,12 @@ impl<N, PA> LinkedList<N, PA> {
         new_node_ptr
     }
 
-    pub fn replace(&mut self, poison_head: Index, poison_tail: Index, new_data: impl Iterator<Item = N>) {
+    pub fn replace(&mut self, poison_head: Index, poison_tail: Index, mut new_data: impl Iterator<Item = N>) {
         // Add in the first new node
         let mut new_ptr = self.insert_before(new_data.next().unwrap(), poison_head);
         // Add in the rest
-        for ix in 1..new_data.len() {
-            new_ptr = self.insert_after(new_data[ix], new_ptr);
+        for node in new_data {
+            new_ptr = self.insert_after(node, new_ptr);
         }
     }
 

@@ -1,13 +1,11 @@
-//! Code defining how to create a layer of PGMs given data
+//! Implementations of PGM segmentation algorithms.
 
-use std::ops::Sub;
-
+use crate::learned::pgm::pgm_model::LinearModel;
 use crate::{
     learned::generic::{LearnedModel, Segmentation},
-    Entry, Key,
+    Entry, Key, Value,
 };
-
-use super::pgm_model::LinearModel;
+use std::ops::Sub;
 
 /// Helper struct to deal with points
 #[derive(Clone)]
@@ -36,7 +34,7 @@ impl<K: Key> Sub<Self> for Point<K> {
 
 /// A data structure that will grow to incorporate points while building a PGM and eventually
 /// produce a proper linear model, before moving on to the next one
-pub struct SimplePGMSegmentator<K: Key, V: Clone, const EPSILON: usize> {
+pub struct SimplePGMSegmentator<K: Key, V: Value, const EPSILON: usize> {
     pub first_k: Option<K>,
     pub evec: Vec<Entry<K, V>>,
     pub max_slope: f64,
@@ -45,7 +43,7 @@ pub struct SimplePGMSegmentator<K: Key, V: Clone, const EPSILON: usize> {
     // For sanity checking that input is increasing
     _last_k: Option<K>,
 }
-impl<K: Key, V: Clone, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
+impl<K: Key, V: Value, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON> {
     pub fn new() -> Self {
         Self {
             first_k: None,
@@ -140,12 +138,13 @@ impl<K: Key, V: Clone, const EPSILON: usize> SimplePGMSegmentator<K, V, EPSILON>
     }
 }
 
-impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, EPSILON>> for LinearModel<K, EPSILON> {
-    fn make_segmentation(data: impl Iterator<Item = crate::Entry<K, V>> + Clone) -> Vec<(Self, Vec<Entry<K, V>>)> {
+/// Segmentation using the simple segmentor (trying to add and splitting when needed)
+impl<K: Key, V: Value, const EPSILON: usize> Segmentation<K, V, LinearModel<K, EPSILON>> for LinearModel<K, EPSILON> {
+    fn make_segmentation(data: impl Iterator<Item = Entry<K, V>>) -> Vec<(Self, Vec<Entry<K, V>>)> {
         let mut result: Vec<(Self, Vec<Entry<K, V>>)> = vec![];
 
         let mut cur_segment: SimplePGMSegmentator<K, V, EPSILON> = SimplePGMSegmentator::new();
-        for entry in data.into_iter() {
+        for entry in data {
             match cur_segment.try_add_entry(entry.clone()) {
                 Ok(_) => {
                     // Nothing to do, entry added successfully
@@ -155,6 +154,7 @@ impl<K: Key, V: Clone, const EPSILON: usize> Segmentation<K, V, LinearModel<K, E
                     result.push((cur_segment.to_linear_model(), cur_segment.to_entries()));
                     // Reset current segmentor
                     cur_segment = SimplePGMSegmentator::new();
+                    /// Should be fine to unwrap here since adding first entry always works
                     cur_segment.try_add_entry(entry).unwrap();
                 }
             }
@@ -258,32 +258,19 @@ mod pgm_segmentation_tests {
         }
     }
 
-    /// TODO: All of the below tests seem like great places for a macro
-    #[test]
-    fn test_eps_4() {
-        let mut test_case: PGMSegTestCase<4> = PGMSegTestCase::generate(10_000_000, None);
-        test_case.train();
-        test_case.test();
+    /// Test with different epsilons
+    macro_rules! test_eps {
+        ($fname: ident, $val: expr) => {
+            #[test]
+            fn $fname() {
+                let mut test_case: PGMSegTestCase<$val> = PGMSegTestCase::generate(10_000_000, None);
+                test_case.train();
+                test_case.test();
+            }
+        };
     }
-
-    #[test]
-    fn test_eps_8() {
-        let mut test_case: PGMSegTestCase<8> = PGMSegTestCase::generate(10_000_000, None);
-        test_case.train();
-        test_case.test();
-    }
-
-    #[test]
-    fn test_eps_16() {
-        let mut test_case: PGMSegTestCase<16> = PGMSegTestCase::generate(10_000_000, None);
-        test_case.train();
-        test_case.test();
-    }
-
-    #[test]
-    fn test_eps_64() {
-        let mut test_case: PGMSegTestCase<64> = PGMSegTestCase::generate(10_000_000, None);
-        test_case.train();
-        test_case.test();
-    }
+    test_eps!(test_eps4, 4);
+    test_eps!(test_eps8, 8);
+    test_eps!(test_eps16, 16);
+    test_eps!(test_eps64, 64);
 }

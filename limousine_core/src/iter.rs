@@ -2,10 +2,7 @@ use crate::{Address, Model, NodeLayer};
 use std::mem::MaybeUninit;
 use std::ops::{Bound, RangeBounds};
 
-// ----------------------------------------
-// Iterator Type
-// ----------------------------------------
-
+/// A custom generic iterator used for easily reasoning about layers as linked lists
 pub struct Iter<'n, K, N, SA, PA> {
     layer: &'n N,
     current: Option<SA>,
@@ -13,6 +10,7 @@ pub struct Iter<'n, K, N, SA, PA> {
     _ph: std::marker::PhantomData<(K, PA)>,
 }
 
+/// Implements a basic range constructor for our iterator type
 impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Iter<'n, K, N, SA, PA>
 where
     SA: Address,
@@ -45,6 +43,7 @@ where
     }
 }
 
+/// Implements the actual iterator behavior for our custom iterator types
 impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Iterator for Iter<'n, K, N, SA, PA>
 where
     K: Copy,
@@ -81,6 +80,7 @@ where
     }
 }
 
+/// A special type giving mutable access to a given node in a layer
 pub struct MutNodeView<'n, K, N, SA, PA> {
     layer: &'n N,
     current: Option<SA>,
@@ -90,7 +90,7 @@ pub struct MutNodeView<'n, K, N, SA, PA> {
 impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Clone for MutNodeView<'n, K, N, SA, PA>
 where
     N: NodeLayer<K, SA, PA>,
-    SA: Address + Clone,
+    SA: Address,
     PA: Address,
     K: Copy,
 {
@@ -138,6 +138,9 @@ where
     }
 }
 
+/// An iterator over a layer which can mutate any node in that layer
+/// NOTE: Very similar to the `Iter` defined above, key difference being
+/// instead of a layer it has a `MutNodeView` of a layer
 pub struct MutIter<'n, K, N, SA, PA> {
     view: MutNodeView<'n, K, N, SA, PA>,
     current: Option<SA>,

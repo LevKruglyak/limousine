@@ -33,7 +33,6 @@ where
     fn insert(&mut self, base: &mut Base, prop: PropogateInsert<K, BA, ()>) {
         match prop {
             PropogateInsert::Single(key, address, _parent) => {
-                // TODO: figure out how to leverage parent?
                 self.inner.insert(key, address);
                 base.deref_mut(address).set_parent(());
             }

@@ -5,56 +5,49 @@ use crate::{
         linked_list::{LinkedList, LinkedNode},
         macros::impl_node_layer,
     },
+    component::{Address, Key, Model, NodeLayer, Value},
     learned::generic::Segmentation,
-    Address, Entry, Key, Model, NodeLayer,
+    Entry,
 };
 use generational_arena::{Arena, Index};
 use std::{borrow::Borrow, ops::Bound};
 
 /// Shorthands for the types containing core "interesting data"
-type PGMInnards<K, V, const EPSILON: usize> = PGMInner<K, V, EPSILON>;
-type PGMNode<K, V, const EPSILON: usize> = LinkedNode<PGMInnards<K, V, EPSILON>, Index>;
+type PGMNode<K, V, const EPSILON: usize> = LinkedNode<PGMInner<K, V, EPSILON>, Index>;
+type PGMChain<K, V, const EPSILON: usize, PA> = LinkedList<PGMInner<K, V, EPSILON>, PA>;
 
 /// A PGMLayer with internals optimized for usage as an in-memory structure
-pub struct MemoryPGMLayer<K: Key, V, const EPSILON: usize, PA> {
-    pub inner: LinkedList<PGMInnards<K, V, EPSILON>, PA>,
+pub struct MemoryPGMLayer<K: Key, V: Value, const EPSILON: usize, PA> {
+    pub inner: PGMChain<K, V, EPSILON, PA>,
 }
 
 /// Implement the addressing and mutability constraints required by a NodeLayer
 /// NOTE: Since we use LinkedList internally, this is easy
 ///
-impl<K: Key, V: Clone, const EPSILON: usize, PA> NodeLayer<K, Index, PA> for MemoryPGMLayer<K, V, EPSILON, PA>
-where
-    K: Copy + StaticBounded + 'static,
-    V: 'static,
-    PA: Address,
+impl<K: Key, V: Value, const EPSILON: usize, PA: Address> NodeLayer<K, Index, PA>
+    for MemoryPGMLayer<K, V, EPSILON, PA>
 {
-    type Node = <LinkedList<PGMInnards<K, V, EPSILON>, PA> as NodeLayer<K, Index, PA>>::Node;
+    type Node = <LinkedList<PGMInner<K, V, EPSILON>, PA> as NodeLayer<K, Index, PA>>::Node;
 
     impl_node_layer!(Index);
 }
 
-impl<K, V, const EPSILON: usize, PA> MemoryPGMLayer<K, V, EPSILON, PA>
-where
-    K: Clone + Key,
-    V: 'static + Clone,
-    PA: Address,
-{
+impl<K: Key, V: Value, const EPSILON: usize, PA: Address> MemoryPGMLayer<K, V, EPSILON, PA> {
     /// Make an empty layer
     /// NOTE: This actually means a layer with a sentinel at the end, because _all_ layers should have
     /// sentinels at the end
     pub fn new() -> Self {
         Self {
-            inner: LinkedList::new(PGMInnards::sentinel()),
+            inner: LinkedList::new(PGMInner::sentinel()),
         }
     }
 
     /// Wipe this layer and rebuild it with the data in iter
     pub fn fill(&mut self, iter: impl Iterator<Item = Entry<K, V>> + Clone) {
-        self.inner.clear(PGMInnards::sentinel());
+        self.inner.clear(PGMInner::sentinel());
         let blueprint = LinearModel::<K, EPSILON>::make_segmentation(iter);
         for (model, entries) in blueprint {
-            let mut innards = PGMInnards::from_model_n_vec(model, entries);
+            let mut innards = PGMInner::from_model_n_vec(model, entries);
             let new_ptr = self.inner.append_before_sentinel(innards);
         }
     }
@@ -113,9 +106,9 @@ where
         // println!("Replace is seeing {} entries", entries.len());
         // Then lets make the new chain
         let blueprint = LinearModel::<K, EPSILON>::make_segmentation(entries.into_iter());
-        let mut new_innards: Vec<PGMInnards<K, V, EPSILON>> = blueprint
+        let mut new_innards: Vec<PGMInner<K, V, EPSILON>> = blueprint
             .into_iter()
-            .map(|(model, entries)| PGMInnards::from_model_n_vec(model, entries))
+            .map(|(model, entries)| PGMInner::from_model_n_vec(model, entries))
             .collect();
         /*
         // We need to fix the linked list in this layer
@@ -177,7 +170,7 @@ mod pgm_layer_tests {
     use kdam::{tqdm, Bar, BarExt};
     use rand::{distributions::Uniform, Rng};
 
-    use crate::learned::generic::LearnedModelModel;
+    use crate::learned::generic::LearnedModel;
 
     use super::*;
 
@@ -236,7 +229,7 @@ mod pgm_layer_tests {
         while bot_ptr.is_some() {
             let mem_node = beneath.deref(bot_ptr.unwrap());
             num_bot_nodes += 1;
-            bot_ptr = mem_node.next;
+            bot_ptr = mem_node.next();
         }
 
         // Then pick a random node to start replacing at, a random number of elements to replace, and a random number of new elements to train on
@@ -259,7 +252,7 @@ mod pgm_layer_tests {
                 end_replace_address = bot_ptr;
             }
             let mem_node = beneath.deref(bot_ptr.unwrap());
-            bot_ptr = mem_node.next;
+            bot_ptr = mem_node.next();
             ix += 1;
         }
         assert!(start_replace_address.is_some());
@@ -371,7 +364,7 @@ mod pgm_layer_tests {
     }
 
     /// Helper function to ensure a memory node has a model that works
-    fn test_mem_node_model<V: Clone + 'static>(mem_node: &MemoryPGMNode<Key, V, EPSILON, Index>) {
+    fn test_mem_node_model<V: Value>(mem_node: &MemoryPGMNode<Key, V, EPSILON, Index>) {
         let node = &mem_node.inner;
         for (ix, entry) in node.entries().iter().enumerate() {
             let pred_ix = node.approximate(&entry.key);
