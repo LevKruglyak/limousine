@@ -1,3 +1,5 @@
+use std::ops::Bound;
+
 use crate::common::bounded::KeyBounded;
 use crate::{Address, Model, NodeLayer};
 use generational_arena::Arena;
@@ -8,6 +10,7 @@ pub use generational_arena::Index;
 /// N - Data that defines a node (for BTree this is Stackmap, for PGM this is data + model)
 /// PA - Parent address type
 /// NOTE: We never allow this to be empty
+/// TODO: Solidify the sentinel requirement. First value added should be a sentinel.
 pub struct LinkedList<N, PA> {
     pub arena: Arena<LinkedNode<N, PA>>,
     pub first: Index,
@@ -50,6 +53,10 @@ impl<N, PA: Address> LinkedNode<N, PA> {
 
     pub fn previous(&self) -> Option<Index> {
         self.previous
+    }
+
+    pub fn set_previous(&mut self, previous: Option<Index>) {
+        self.previous = previous;
     }
 
     pub fn parent(&self) -> Option<PA> {
@@ -114,9 +121,59 @@ impl<N, PA: Address> LinkedList<N, PA> {
         new_node_ptr
     }
 
+    pub fn delete_subchain(&mut self, start: Bound<Index>, end: Bound<Index>) {
+        // First translate the bounds
+        let mut cur_ix: Index;
+        match start {
+            Bound::Included(ix) => {
+                cur_ix = ix;
+            }
+            Bound::Excluded(ix) => {
+                let next_ix = self.arena[ix].next();
+                if next_ix.is_some() {
+                    cur_ix = next_ix.unwrap();
+                } else {
+                    // Nothing to delete
+                    return;
+                }
+            }
+            Bound::Unbounded => {
+                cur_ix = self.first;
+            }
+        }
+        let sentinel_ix = match end {
+            Bound::Included(ix) => self.arena[ix].next().unwrap(),
+            Bound::Excluded(ix) => ix,
+            Bound::Unbounded => self.last,
+        };
+        // Remember info that will let us tape the list back together
+        let before = self.arena[cur_ix].previous();
+        let mut after = self.arena[cur_ix].next().unwrap();
+        // Do the deleting
+        while cur_ix != sentinel_ix {
+            after = self.arena[cur_ix].next().unwrap();
+            let temp = self.arena[cur_ix].next().unwrap();
+            self.arena.remove(cur_ix);
+            cur_ix = temp;
+        }
+        // Retape
+        match before {
+            Some(ix) => {
+                self.arena[ix].set_next(Some(after));
+                self.arena[after].set_previous(Some(ix));
+            }
+            None => {
+                self.first = after;
+                self.arena[after].set_previous(None);
+            }
+        }
+    }
+
     pub fn replace(&mut self, poison_head: Index, poison_tail: Index, mut new_data: impl Iterator<Item = N>) {
         // Add in the first new node
         let mut new_ptr = self.insert_before(new_data.next().unwrap(), poison_head);
+        // Now we delete everything that was poisoned
+        self.delete_subchain(Bound::Included(poison_head), Bound::Included(poison_tail));
         // Add in the rest
         for node in new_data {
             new_ptr = self.insert_after(node, new_ptr);

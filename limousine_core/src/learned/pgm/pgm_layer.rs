@@ -77,6 +77,36 @@ impl<K: Key, V: Value, const EPSILON: usize, PA: Address> MemoryPGMLayer<K, V, E
         }
     }
 
+    pub fn new_replace<B>(&mut self, base: &mut B, poison_head: Index, poison_tail: Index, data_head: V, data_tail: V)
+    where
+        V: Address,
+        B: NodeLayer<K, V, Index>,
+    {
+        // Inefficient but correct
+        // First let's construct a vector of all the things we're adding
+        let mut bot_ptr = Some(data_head.clone());
+        let mut entries: Vec<Entry<K, V>> = vec![];
+        while bot_ptr.is_some() {
+            let node = base.deref(bot_ptr.unwrap());
+            entries.push(Entry::new(node.lower_bound().clone(), bot_ptr.unwrap()));
+            if bot_ptr == Some(data_tail.clone()) {
+                // Exit early
+                break;
+            }
+            bot_ptr = node.next();
+        }
+        // Now we can train new nodes over this added data
+        let blueprint = LinearModel::<K, EPSILON>::make_segmentation(entries.into_iter());
+        let new_innards: Vec<PGMInner<K, V, EPSILON>> = blueprint
+            .into_iter()
+            .map(|(model, entries)| PGMInner::from_model_n_vec(model, entries))
+            .collect();
+        // Replace all the nodes in the parent layer
+        self.inner.replace(poison_head, poison_tail, new_innards.into_iter());
+        // Finally we need to set the parent pointers in the bottom layer
+        unimplemented!("MemoryPGMLayer::new_replace");
+    }
+
     /// Assume that base B has had some potentially large continguous change.
     /// We will handle this by simply replacing all nodes in this layer who have a child participating in the change.
     /// `poison_head` is the address of the first node that needs to be replaced in this layer
