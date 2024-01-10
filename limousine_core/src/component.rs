@@ -10,7 +10,7 @@ use trait_set::trait_set;
 // Until `trait_alias` is stabilized, we have to use a macro
 trait_set! {
     /// A simple address trait,
-    pub trait Address = Eq + Clone + 'static;
+    pub trait Address = Sync + Copy + Eq + Clone + Debug + 'static;
 
     /// General value type, thread-safe
     pub trait Value = Sync + Copy + Debug + 'static;
@@ -50,7 +50,7 @@ where
 /// a `first` and `last` node.
 pub trait NodeLayer<K, SA, PA>: 'static + Sized
 where
-    K: Copy,
+    K: Key,
     SA: Address,
     PA: Address,
 {
@@ -112,7 +112,7 @@ where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
     SA: Address,
-    K: Copy,
+    K: Key,
 {
     fn search(&self, base: &Base, key: &K) -> BA;
 
@@ -124,7 +124,7 @@ where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
     SA: Address,
-    K: Copy,
+    K: Key,
 {
     fn build(base: &mut Base) -> Self;
 }
@@ -136,7 +136,7 @@ where
     BA: Address,
     SA: Address,
     PA: Address,
-    K: Copy,
+    K: Key,
 {
     fn search(&self, base: &Base, ptr: SA, key: &K) -> BA;
 
@@ -149,7 +149,7 @@ where
     BA: Address,
     SA: Address,
     PA: Address,
-    K: Copy,
+    K: Key,
 {
     fn build(base: &mut Base) -> Self;
 }
@@ -160,7 +160,7 @@ where
     BA: Address,
     SA: Address,
     PA: Address,
-    K: Copy,
+    K: Key,
 {
     fn build(base: &Base, path: impl AsRef<Path>) -> Self;
 }
@@ -170,7 +170,7 @@ where
     Self: NodeLayer<K, SA, PA>,
     SA: Address,
     PA: Address,
-    K: Copy,
+    K: Key,
 {
     fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropogateInsert<K, SA, PA>>;
 

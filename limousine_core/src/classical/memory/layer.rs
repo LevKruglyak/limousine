@@ -44,7 +44,7 @@ impl<K, V, const FANOUT: usize, PA: Address> MemoryBTreeLayer<K, V, FANOUT, PA> 
 
     pub fn fill_with_parent<B>(&mut self, base: &mut B)
     where
-        K: Copy + Ord,
+        K: Key,
         V: Address,
         B: NodeLayer<K, V, Index>,
     {
@@ -64,7 +64,7 @@ impl<K, V, const FANOUT: usize, PA: Address> MemoryBTreeLayer<K, V, FANOUT, PA> 
 
     pub fn insert(&mut self, key: K, value: V, mut ptr: Index) -> Option<(K, Index, PA)>
     where
-        K: Copy + Ord + StaticBounded,
+        K: Key,
         PA: Address,
     {
         if self.inner[ptr].is_full() {
@@ -91,7 +91,7 @@ impl<K, V, const FANOUT: usize, PA: Address> MemoryBTreeLayer<K, V, FANOUT, PA> 
 
     pub fn insert_with_parent<B>(&mut self, key: K, value: V, base: &mut B, mut ptr: Index) -> Option<(K, Index, PA)>
     where
-        K: Copy + Ord + StaticBounded,
+        K: Key,
         V: Address,
         PA: Address,
         B: NodeLayer<K, V, Index>,
@@ -127,7 +127,7 @@ impl<K, V, const FANOUT: usize, PA: Address> MemoryBTreeLayer<K, V, FANOUT, PA> 
     }
 }
 
-impl<K, V, const FANOUT: usize, PA> NodeLayer<K, Index, PA> for MemoryBTreeLayer<K, V, FANOUT, PA>
+impl<K: Key, V, const FANOUT: usize, PA> NodeLayer<K, Index, PA> for MemoryBTreeLayer<K, V, FANOUT, PA>
 where
     K: Copy + StaticBounded + 'static,
     V: 'static,

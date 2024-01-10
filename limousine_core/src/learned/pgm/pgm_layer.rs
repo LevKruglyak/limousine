@@ -22,7 +22,6 @@ pub struct MemoryPGMLayer<K: Key, V: Value, const EPSILON: usize, PA> {
 
 /// Implement the addressing and mutability constraints required by a NodeLayer
 /// NOTE: Since we use LinkedList internally, this is easy
-///
 impl<K: Key, V: Value, const EPSILON: usize, PA: Address> NodeLayer<K, Index, PA>
     for MemoryPGMLayer<K, V, EPSILON, PA>
 {
@@ -77,7 +76,13 @@ impl<K: Key, V: Value, const EPSILON: usize, PA: Address> MemoryPGMLayer<K, V, E
         }
     }
 
-    pub fn new_replace<B>(&mut self, base: &mut B, poison_head: Index, poison_tail: Index, data_head: V, data_tail: V)
+    /// Assume that base B has had some potentially large continguous change.
+    /// We will handle this by simply replacing all nodes in this layer who have a child participating in the change.
+    /// `poison_head` is the address of the first node that needs to be replaced in this layer
+    /// `poison_tail` is the address of the last node (INCLUSIVE) that needs to be replaced in this layer
+    /// `data_head` is the address of the first piece of data in the new node filling in the gap
+    /// `data_tail` is the address of the last piece of data in the new node filling in the gap
+    pub fn replace<B>(&mut self, base: &mut B, poison_head: Index, poison_tail: Index, data_head: V, data_tail: V)
     where
         V: Address,
         B: NodeLayer<K, V, Index>,
@@ -95,6 +100,7 @@ impl<K: Key, V: Value, const EPSILON: usize, PA: Address> MemoryPGMLayer<K, V, E
             }
             bot_ptr = node.next();
         }
+        println!("Replace is seeing {} entries", entries.len());
         // Now we can train new nodes over this added data
         let blueprint = LinearModel::<K, EPSILON>::make_segmentation(entries.into_iter());
         let new_innards: Vec<PGMInner<K, V, EPSILON>> = blueprint
@@ -102,95 +108,32 @@ impl<K: Key, V: Value, const EPSILON: usize, PA: Address> MemoryPGMLayer<K, V, E
             .map(|(model, entries)| PGMInner::from_model_n_vec(model, entries))
             .collect();
         // Replace all the nodes in the parent layer
-        self.inner.replace(poison_head, poison_tail, new_innards.into_iter());
+        let (new_parent_head, new_parent_tail) =
+            self.inner
+                .replace(poison_head, poison_tail, new_innards.clone().into_iter());
         // Finally we need to set the parent pointers in the bottom layer
-        unimplemented!("MemoryPGMLayer::new_replace");
-    }
-
-    /// Assume that base B has had some potentially large continguous change.
-    /// We will handle this by simply replacing all nodes in this layer who have a child participating in the change.
-    /// `poison_head` is the address of the first node that needs to be replaced in this layer
-    /// `poison_tail` is the address of the last node (INCLUSIVE) that needs to be replaced in this layer
-    /// `data_head` is the address of the first piece of data in the new node filling in the gap
-    /// `data_tail` is the address of the last piece of data in the new node filling in the gap
-    pub fn replace<B>(&mut self, base: &mut B, poison_head: Index, poison_tail: Index, data_head: V, data_tail: V)
-    where
-        V: Address,
-        B: NodeLayer<K, V, Index>,
-    {
-        // Inefficient but correct
-        // First let's construct a vector of all the things we're adding
-        let mut finished = false;
-        let mut bot_ptr = data_head.clone();
-        let mut entries: Vec<Entry<K, V>> = vec![];
-        while !finished {
-            let node = base.deref(bot_ptr.clone());
-            entries.push(Entry::new(node.lower_bound().clone(), bot_ptr.clone()));
-            let next_bot_ptr = node.next();
-            finished = (bot_ptr == data_tail) || next_bot_ptr.is_none();
-            if next_bot_ptr.is_some() {
-                bot_ptr = next_bot_ptr.unwrap();
+        let mut kid = data_head;
+        let mut kite = new_parent_head;
+        loop {
+            let next_kite = self.deref(kite).next();
+            let kid_key = base.deref(kid).lower_bound();
+            let is_match = kite == new_parent_tail // Kids guaranteed to fall into new range
+                || match next_kite {
+                    Some(next_ix) => {
+                        let next_bound = self.deref(next_ix).lower_bound();
+                        kid_key < next_bound
+                    },
+                    None => true,
+                };
+            if !is_match {
+                kite = next_kite.unwrap();
             }
-        }
-        println!("Replace is seeing {} entries", entries.len());
-        // Then lets make the new chain
-        let blueprint = LinearModel::<K, EPSILON>::make_segmentation(entries.into_iter());
-        let mut new_innards: Vec<PGMInner<K, V, EPSILON>> = blueprint
-            .into_iter()
-            .map(|(model, entries)| PGMInner::from_model_n_vec(model, entries))
-            .collect();
-        /*
-        // We need to fix the linked list in this layer
-        if self.head == Some(poison_head) {
-            self.head = Some(chain_head);
-        } else {
-            let node = self.deref(poison_head);
-            let previous_address = node.previous.unwrap();
-            let mut prev_node = self.deref_mut(previous_address);
-            prev_node.next = Some(chain_head);
-        }
-        let poison_tail_node = self.deref(poison_tail);
-        let after_chain_address = poison_tail_node.next;
-        let last_chain_node = self.deref_mut(chain_tail);
-        last_chain_node.next = after_chain_address;
-        // We need to clean up the linked list in this layer
-        let mut finished = false;
-        let mut bot_ptr = poison_head;
-        while !finished {
-            finished = bot_ptr == poison_tail;
-            let next_address = self.deref(bot_ptr).next;
-            self.arena.remove(bot_ptr);
-            if next_address.is_some() {
-                bot_ptr = next_address.unwrap();
-            } else {
+            base.deref_mut(kid).set_parent(kite);
+            if kid == data_tail {
                 break;
             }
+            kid = base.deref(kid).next().unwrap();
         }
-        // Finally we need to fix the parent pointers in the layer beneath us
-        let mut finished = false;
-        let mut top_ptr = chain_head;
-        let mut bot_ptr = data_head;
-        let mut entries: Vec<Entry<K, V>> = vec![];
-        while !finished {
-            let next_top_ptr = self.deref(top_ptr).next;
-            if next_top_ptr == None {
-                base.deref_mut(bot_ptr.clone()).set_parent(top_ptr);
-            } else {
-                let next_node = self.deref(next_top_ptr.unwrap());
-                let bot_node = base.deref(bot_ptr.clone());
-                if next_node.lower_bound() <= bot_node.lower_bound() {
-                    top_ptr = next_top_ptr.unwrap();
-                }
-                base.deref_mut(bot_ptr.clone()).set_parent(top_ptr);
-            }
-            let node = base.deref(bot_ptr.clone());
-            let next_bot_ptr = node.next();
-            finished = (bot_ptr == data_tail) || next_bot_ptr.is_none();
-            if next_bot_ptr.is_some() {
-                bot_ptr = next_bot_ptr.unwrap();
-            }
-        }
-         */
     }
 }
 
@@ -262,7 +205,8 @@ mod pgm_layer_tests {
         // Then pick a random node to start replacing at, a random number of elements to replace, and a random number of new elements to train on
         let start_replace_ix: usize = rand::thread_rng().gen_range(0..(num_bot_nodes - 2)); // 2 arbitrary
         let mut num_replace: usize = rand::thread_rng().gen_range(2..(num_bot_nodes / 10)); // 10 is arbitrary
-        num_replace = num_replace.min(num_bot_nodes - start_replace_ix);
+                                                                                            // TODO: Need -2 here because test doesn't construct sentinel. See linked_list note about standardizing api
+        num_replace = num_replace.min(num_bot_nodes - start_replace_ix - 2);
         let num_new = rand::thread_rng().gen_range(100..1000); // _everything_ is arbitrary
 
         // Translate the first replacing node and last replace
@@ -295,8 +239,8 @@ mod pgm_layer_tests {
 
         // Generate linked-list of new entries
         let min_new = start_replace_node.lower_bound().clone();
-        let max_new = end_replace_node.lower_bound() + 1;
-        let new_entries = generate_random_entries(num_new, min_new, max_new);
+        let max_new = end_replace_node.lower_bound();
+        let new_entries = generate_random_entries(num_new, min_new, *max_new);
         let blueprint = LinearModel::<KType, EPSILON>::make_segmentation(new_entries.into_iter());
         let mut first_added: Option<Index> = None;
         let mut last_added: Option<Index> = None;

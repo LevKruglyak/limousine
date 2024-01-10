@@ -1,4 +1,4 @@
-use crate::{Address, Model, NodeLayer};
+use crate::{Address, Key, Model, NodeLayer};
 use std::mem::MaybeUninit;
 use std::ops::{Bound, RangeBounds};
 
@@ -11,7 +11,7 @@ pub struct Iter<'n, K, N, SA, PA> {
 }
 
 /// Implements a basic range constructor for our iterator type
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Iter<'n, K, N, SA, PA>
+impl<'n, K: Key, SA, PA, N: NodeLayer<K, SA, PA>> Iter<'n, K, N, SA, PA>
 where
     SA: Address,
     PA: Address,
@@ -44,7 +44,7 @@ where
 }
 
 /// Implements the actual iterator behavior for our custom iterator types
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Iterator for Iter<'n, K, N, SA, PA>
+impl<'n, K: Key, SA, PA, N: NodeLayer<K, SA, PA>> Iterator for Iter<'n, K, N, SA, PA>
 where
     K: Copy,
     SA: Address,
@@ -87,7 +87,7 @@ pub struct MutNodeView<'n, K, N, SA, PA> {
     _ph: std::marker::PhantomData<(K, PA)>,
 }
 
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Clone for MutNodeView<'n, K, N, SA, PA>
+impl<'n, K: Key, SA, PA, N: NodeLayer<K, SA, PA>> Clone for MutNodeView<'n, K, N, SA, PA>
 where
     N: NodeLayer<K, SA, PA>,
     SA: Address,
@@ -103,7 +103,7 @@ where
     }
 }
 
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> MutNodeView<'n, K, N, SA, PA>
+impl<'n, K: Key, SA, PA, N: NodeLayer<K, SA, PA>> MutNodeView<'n, K, N, SA, PA>
 where
     K: Copy,
     N: NodeLayer<K, SA, PA>,
@@ -148,7 +148,7 @@ pub struct MutIter<'n, K, N, SA, PA> {
     _ph: std::marker::PhantomData<(K, PA)>,
 }
 
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> MutIter<'n, K, N, SA, PA>
+impl<'n, K: Key, SA, PA, N: NodeLayer<K, SA, PA>> MutIter<'n, K, N, SA, PA>
 where
     K: Copy,
     SA: Address,
@@ -180,7 +180,7 @@ where
     }
 }
 
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Iterator for MutIter<'n, K, N, SA, PA>
+impl<'n, K: Key, SA, PA, N: NodeLayer<K, SA, PA>> Iterator for MutIter<'n, K, N, SA, PA>
 where
     K: Copy + 'n,
     SA: Address,

@@ -18,10 +18,9 @@ pub struct BTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA> {
     _ph: std::marker::PhantomData<X>,
 }
 
-impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, BTreeInternalAddress, PA>
+impl<K: Key, X, const FANOUT: usize, BA, PA> NodeLayer<K, BTreeInternalAddress, PA>
     for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: StaticBounded,
     BA: Address,
     PA: Address,
 {
@@ -33,7 +32,7 @@ where
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
     InternalComponent<K, B, BA, BTreeInternalAddress, PA> for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: StaticBounded,
+    K: Key,
     BA: Address,
     PA: Address,
 {
@@ -63,7 +62,7 @@ where
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
     InternalComponentInMemoryBuild<K, B, BA, BTreeInternalAddress, PA> for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: StaticBounded,
+    K: Key,
     BA: Address,
     PA: Address,
 {
@@ -90,7 +89,7 @@ pub struct BTreeBaseComponent<K, V, const FANOUT: usize, PA> {
 
 impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddress, PA> for BTreeBaseComponent<K, V, FANOUT, PA>
 where
-    K: StaticBounded,
+    K: Key,
     V: 'static,
     PA: Address,
 {
@@ -102,7 +101,7 @@ where
 impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>
     for BTreeBaseComponent<K, V, FANOUT, PA>
 where
-    K: StaticBounded,
+    K: Key,
     V: 'static,
     PA: Address,
 {

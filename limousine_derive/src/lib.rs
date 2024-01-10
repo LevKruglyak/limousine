@@ -77,6 +77,7 @@ pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenS
         use #mod_name::#name;
     });
 
+    // panic!("{}", implementation.to_string());
     implementation.into()
 }
 
@@ -204,8 +205,7 @@ fn create_search_body(layout: &IndexLayout, _aliases: &[Ident], fields: &[Ident]
         let field = component_vars[index].clone();
         let next = component_vars[index + 1].clone();
 
-        search_body
-            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+        search_body.extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
     }
 
     // Base component
@@ -243,8 +243,7 @@ fn create_insert_body(layout: &IndexLayout, _aliases: &[Ident], fields: &[Ident]
         let field = component_vars[index].clone();
         let next = component_vars[index + 1].clone();
 
-        search_body
-            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+        search_body.extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
     }
 
     // Base component

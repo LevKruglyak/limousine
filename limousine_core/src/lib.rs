@@ -17,4 +17,9 @@ pub use classical::BTreeBaseAddress;
 pub use classical::BTreeInternalAddress;
 pub use common::entry::Entry;
 
+pub use learned::pgm::{
+    pgm_component::{PGMAddress, PGMBaseCopmonent, PGMInternalComponent},
+    pgm_layer::MemoryPGMLayer,
+};
+
 pub use component::*;

@@ -144,7 +144,10 @@ impl InternalComponent {
             InternalComponent::BTree { fanout, persist: true } => {
                 quote!(BTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>).to_token_stream()
             }
-            _ => quote!(Bad),
+
+            InternalComponent::PGM { epsilon } => {
+                quote!(PGMInternalComponent<K, V, #epsilon, #base_address, #parent_address>).to_token_stream()
+            }
         }
     }
 
@@ -154,7 +157,7 @@ impl InternalComponent {
 
             InternalComponent::BTree { persist: true, .. } => quote!(BTreeInternalAddress).to_token_stream(),
 
-            _ => quote!(Bad),
+            InternalComponent::PGM { epsilon: _ } => quote!(PGMAddress).to_token_stream(),
         }
     }
 }
@@ -184,17 +187,15 @@ impl BaseComponent {
                 quote!(BTreeBaseComponent<K, V, #fanout, #base_address>).to_token_stream()
             }
 
-            _ => quote!(Bad),
+            BaseComponent::PGM { epsilon } => quote!(PGMBaseCopmonent<K, V, #epsilon, #base_address>).to_token_stream(),
         }
     }
 
     pub fn address(&self) -> TokenStream {
         match *self {
-            BaseComponent::BTree { persist: false, .. } => quote!(BTreeBaseAddress).to_token_stream(),
+            BaseComponent::BTree { persist: _, .. } => quote!(BTreeBaseAddress).to_token_stream(),
 
-            BaseComponent::BTree { persist: true, .. } => quote!(BTreeBaseAddress).to_token_stream(),
-
-            _ => quote!(Bad),
+            BaseComponent::PGM { epsilon: _ } => quote!(PGMAddress).to_token_stream(),
         }
     }
 }

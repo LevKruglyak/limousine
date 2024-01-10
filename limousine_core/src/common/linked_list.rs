@@ -1,7 +1,7 @@
 use std::ops::Bound;
 
 use crate::common::bounded::KeyBounded;
-use crate::{Address, Model, NodeLayer};
+use crate::{Address, Key, Model, NodeLayer};
 use generational_arena::Arena;
 
 pub use generational_arena::Index;
@@ -169,15 +169,22 @@ impl<N, PA: Address> LinkedList<N, PA> {
         }
     }
 
-    pub fn replace(&mut self, poison_head: Index, poison_tail: Index, mut new_data: impl Iterator<Item = N>) {
+    pub fn replace(
+        &mut self,
+        poison_head: Index,
+        poison_tail: Index,
+        mut new_data: impl Iterator<Item = N>,
+    ) -> (Index, Index) {
         // Add in the first new node
         let mut new_ptr = self.insert_before(new_data.next().unwrap(), poison_head);
+        let new_head = new_ptr;
         // Now we delete everything that was poisoned
         self.delete_subchain(Bound::Included(poison_head), Bound::Included(poison_tail));
         // Add in the rest
         for node in new_data {
             new_ptr = self.insert_after(node, new_ptr);
         }
+        (new_head, new_ptr)
     }
 
     pub fn clear(&mut self, inner: N) -> Index {
@@ -250,7 +257,7 @@ impl<N, PA> std::ops::IndexMut<Index> for LinkedList<N, PA> {
     }
 }
 
-impl<K, N, PA> NodeLayer<K, Index, PA> for LinkedList<N, PA>
+impl<K: Key, N, PA> NodeLayer<K, Index, PA> for LinkedList<N, PA>
 where
     K: Copy,
     N: KeyBounded<K> + 'static,

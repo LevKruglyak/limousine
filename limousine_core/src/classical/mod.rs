@@ -23,7 +23,7 @@ pub struct BTreeTopComponent<K, X, A> {
 impl<K, X, Base, BA: Copy> TopComponent<K, Base, BA, ()> for BTreeTopComponent<K, X, BA>
 where
     Base: NodeLayer<K, BA, ()>,
-    K: Ord + Copy,
+    K: Key,
     BA: Address,
 {
     fn search(&self, _: &Base, key: &K) -> BA {
@@ -51,7 +51,7 @@ where
 impl<K, X, Base, BA> TopComponentInMemoryBuild<K, Base, BA, ()> for BTreeTopComponent<K, X, BA>
 where
     Base: NodeLayer<K, BA, ()>,
-    K: Ord + Copy,
+    K: Key,
     BA: Address + Copy,
 {
     fn build(base: &mut Base) -> Self {
