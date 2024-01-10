@@ -1,7 +1,7 @@
 #![feature(log_syntax)]
 #![feature(trace_macros)]
 
-trace_macros!(true);
+trace_macros!(false);
 
 mod expanded_code;
 
@@ -66,6 +66,8 @@ fn main() {
 mod main_macro_tests {
     use std::{fs, time::Instant};
 
+    use limousine_core::Entry;
+
     use super::*;
 
     #[test]
@@ -92,6 +94,7 @@ mod main_macro_tests {
             num_inserts,
             start_insert.elapsed().as_millis()
         );
+
         // Time searches
         let num_searches = num_inserts;
         let start_search = Instant::now();
@@ -102,7 +105,7 @@ mod main_macro_tests {
         println!(
             "Time to search {} things: {} ms",
             num_searches,
-            start_insert.elapsed().as_millis()
+            start_search.elapsed().as_millis()
         );
     }
 
@@ -117,5 +120,29 @@ mod main_macro_tests {
                 pgm(epsilon=64),
             ]
         }
+
+        // Time building
+        let num_built_from = 1_000_000;
+        let numbers: Vec<u32> = (0..=num_built_from).collect();
+        let entries = numbers.clone().into_iter().map(|num| Entry::new(num, num));
+        let start_build = Instant::now();
+        let mut index: BasicHybrid<u32, u32> = BasicHybrid::build(entries);
+        println!(
+            "Time to build {} things: {} ms",
+            num_built_from,
+            start_build.elapsed().as_millis()
+        );
+
+        // Time searching
+        let start_search = Instant::now();
+        for num in numbers.iter() {
+            let result = index.search(num);
+            assert!(result.unwrap() == num);
+        }
+        println!(
+            "Time to search {} things: {} ms",
+            num_built_from,
+            start_search.elapsed().as_millis()
+        );
     }
 }

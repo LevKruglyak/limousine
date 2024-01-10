@@ -30,7 +30,9 @@ where
     PA: Address,
 {
     fn search(&self, base: &B, ptr: PGMAddress, key: &K) -> BA {
-        panic!("Unimplemented!")
+        let node = self.inner.deref(ptr);
+
+        node.inner.search_lub(key).clone()
     }
 
     fn insert(
@@ -50,7 +52,12 @@ where
     PA: Address,
 {
     fn build(base: &mut B) -> Self {
-        panic!("Unimplemented");
+        let mut layer: MemoryPGMLayer<K, BA, EPSILON, PA> = MemoryPGMLayer::new();
+        layer.fill_from_beneath(base);
+        Self {
+            inner: layer,
+            _ph: std::marker::PhantomData,
+        }
     }
 }
 
@@ -78,7 +85,8 @@ where
     PA: Address,
 {
     fn search(&self, ptr: PGMAddress, key: &K) -> Option<&V> {
-        panic!("Unimplemented");
+        let node = self.deref(ptr);
+        node.inner.search_exact(key).clone()
     }
 
     fn insert(&mut self, ptr: PGMAddress, key: K, value: V) -> Option<crate::PropogateInsert<K, PGMAddress, PA>> {
@@ -86,17 +94,21 @@ where
     }
 }
 
-impl<K, V, const FANOUT: usize, PA> BaseComponentInMemoryBuild<K, V> for PGMBaseCopmonent<K, V, FANOUT, PA>
+impl<K, V, const EPSILON: usize, PA> BaseComponentInMemoryBuild<K, V> for PGMBaseCopmonent<K, V, EPSILON, PA>
 where
     K: Key,
     V: Value,
     PA: Address,
 {
     fn empty() -> Self {
-        panic!("Unimplemented");
+        Self {
+            inner: MemoryPGMLayer::new(),
+        }
     }
 
     fn build(iter: impl Iterator<Item = crate::Entry<K, V>>) -> Self {
-        panic!("Unimplemented");
+        let mut layer: MemoryPGMLayer<K, V, EPSILON, PA> = MemoryPGMLayer::new();
+        layer.fill(iter);
+        Self { inner: layer }
     }
 }

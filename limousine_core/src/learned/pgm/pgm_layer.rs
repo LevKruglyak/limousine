@@ -41,7 +41,7 @@ impl<K: Key, V: Value, const EPSILON: usize, PA: Address> MemoryPGMLayer<K, V, E
     }
 
     /// Wipe this layer and rebuild it with the data in iter
-    pub fn fill(&mut self, iter: impl Iterator<Item = Entry<K, V>> + Clone) {
+    pub fn fill(&mut self, iter: impl Iterator<Item = Entry<K, V>>) {
         self.inner.clear(PGMInner::sentinel());
         let blueprint = LinearModel::<K, EPSILON>::make_segmentation(iter);
         for (model, entries) in blueprint {

@@ -69,12 +69,24 @@ impl<K: Key, V: Value, const EPSILON: usize> PGMInner<K, V, EPSILON> {
 
     /// Search for the lower bound of the key in the data
     pub fn search_lub(&self, key: &K) -> &V {
-        unimplemented!("PGMNode::search_lub")
+        let guess = self.approximate(key);
+        for ix in guess.lo..guess.hi {
+            if ix + 1 == guess.hi || key < &self.data[ix + 1].key {
+                return &self.data[ix].value;
+            }
+        }
+        panic!("Bad range")
     }
 
     /// Get the exact key in the data
     pub fn search_exact(&self, key: &K) -> Option<&V> {
-        unimplemented!("PGMNode::search_lub")
+        let guess = self.approximate(key);
+        for ix in guess.lo..guess.hi {
+            if key == &self.data[ix].key {
+                return Some(&self.data[ix].value);
+            }
+        }
+        None
     }
 }
 
