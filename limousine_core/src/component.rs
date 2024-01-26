@@ -1,7 +1,7 @@
 use crate::common::bounded::*;
 use crate::iter::{Iter, MutIter};
 use crate::Entry;
-use num::PrimInt;
+use num::{Bounded, PrimInt};
 use std::fmt::Debug;
 use std::ops::{Bound, RangeBounds};
 use std::path::Path;

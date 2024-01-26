@@ -5,7 +5,7 @@ use crate::{
 
 pub type PGMAddress = generational_arena::Index;
 
-// TOP COMPONENT
+// INTERNAL COMPONENT
 pub struct PGMInternalComponent<K: Key, X: 'static, const EPSILON: usize, BA: Value, PA> {
     inner: MemoryPGMLayer<K, BA, EPSILON, PA>,
     _ph: std::marker::PhantomData<X>,
