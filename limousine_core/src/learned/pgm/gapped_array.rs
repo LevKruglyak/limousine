@@ -8,7 +8,6 @@ where
 {
     pub bitmap: Box<[bool]>,
     pub data: Box<[T]>,
-    pub num_els: usize,
 }
 
 impl<T: Default + Copy + Clone + PartialEq + PartialOrd> GappedArray<T> {
@@ -19,8 +18,12 @@ impl<T: Default + Copy + Clone + PartialEq + PartialOrd> GappedArray<T> {
         Self {
             bitmap: bitmap_vec.into_boxed_slice(),
             data: data_vec.into_boxed_slice(),
-            num_els: 0,
         }
+    }
+
+    /// The length of the gapped array (including gaps)
+    pub const fn len(&self) -> usize {
+        self.bitmap.len()
     }
 
     /// Helper function to implement next occupied and next free
@@ -37,12 +40,12 @@ impl<T: Default + Copy + Clone + PartialEq + PartialOrd> GappedArray<T> {
     }
 
     /// Returns the next occupied slot in the range [ix, end]
-    fn next_occupied_ix(&self, mut ix: usize) -> Option<usize> {
+    pub fn next_occupied_ix(&self, mut ix: usize) -> Option<usize> {
         self.next_ix_helper(ix, true)
     }
 
     /// Returns the next free slot in the range [ix, end]
-    fn next_free_ix(&self, mut ix: usize) -> Option<usize> {
+    pub fn next_free_ix(&self, mut ix: usize) -> Option<usize> {
         self.next_ix_helper(ix, false)
     }
 
@@ -194,13 +197,52 @@ impl<T: Default + Copy + Clone + PartialEq + PartialOrd> GappedArray<T> {
         return Ok(());
     }
 
-    pub const fn len(&self) -> usize {
-        self.bitmap.len()
+    /// Called for the initial inserts. NOTE: This makes two assumptions:
+    /// - The values themselves are monotonically increasing
+    /// - The hints are monotonically non-decreasing
+    /// If either of these assumptions break, bad stuff may happen (use regular insert)
+    pub fn initial_model_based_insert(&mut self, value: T, hint: usize) -> Result<(), ()> {
+        if !self.bitmap[hint] {
+            self.bitmap[hint] = true;
+            self.data[hint] = value;
+            return Ok(());
+        }
+        match self.next_free_ix(hint + 1) {
+            Some(free_ix) => {
+                self.bitmap[free_ix] = true;
+                self.data[free_ix] = value;
+                return Ok(());
+            }
+            None => match self.prev_free_ix(self.len().saturating_sub(1)) {
+                Some(free_ix) => {
+                    self.bitmap.copy_within(free_ix + 1..self.len(), free_ix);
+                    self.data.copy_within(free_ix + 1..self.len(), free_ix);
+                    self.bitmap[self.len().saturating_sub(1)] = true;
+                    self.data[self.len().saturating_sub(1)] = value;
+                    return Ok(());
+                }
+                None => {
+                    return Err(());
+                }
+            },
+        }
     }
 }
 
+// pub struct ModelBasedGappedArrayBuilder<T>
+// where
+//     T: Default + Copy + Clone + PartialEq + PartialOrd,
+// {
+//     pub ga: GappedArray<T>,
+
+//     pub bitmap: Box<[bool]>,
+//     pub data: Box<[T]>,
+// }
+
 #[cfg(test)]
 mod gapped_array_tests {
+    use std::ops::Range;
+
     use super::*;
     use itertools::Itertools;
     use kdam::{tqdm, Bar, BarExt};
@@ -314,6 +356,55 @@ mod gapped_array_tests {
         print_gapped_array(&ga);
         for (value, hint) in perm.iter().zip(hints.iter()) {
             assert!(ga.insert_with_hint(value.clone(), hint.clone()).is_ok());
+            println!("");
+            print_gapped_array(&ga);
+        }
+    }
+
+    fn test_nondec_seq(items: &Vec<i32>, hints: &Vec<usize>) {
+        let mut ga = GappedArray::<i32>::new(items.len());
+        for (value, hint) in items.iter().zip(hints.iter()) {
+            assert!(ga.initial_model_based_insert(value.clone(), hint.clone()).is_ok());
+        }
+        for ix in 0..ga.len() {
+            let good = ga.bitmap[ix] && ga.data[ix] == ix as i32;
+            if !good {
+                println!("Items: {:?}", items);
+                println!("Hints: {:?}", hints);
+                print_gapped_array(&ga);
+            }
+            assert!(good);
+        }
+    }
+
+    #[test]
+    fn initial_inserts() {
+        const SIZE: usize = 6;
+        let items: Vec<i32> = (0..SIZE).into_iter().map(|val| val as i32).collect();
+        let mut sequences = get_all_possible_hints(SIZE, SIZE);
+        sequences.retain(|seq| {
+            let mut last: Option<usize> = None;
+            for thing in seq.iter() {
+                if last.is_some() && *thing < last.unwrap() {
+                    return false;
+                }
+                last = Some(*thing);
+            }
+            return true;
+        });
+        for seq in sequences {
+            test_nondec_seq(&items, &seq);
+        }
+    }
+
+    #[test]
+    fn debug_initial_gapped() {
+        let perm = vec![0, 1, 2, 3, 4, 5];
+        let hints = vec![0, 0, 0, 4, 4, 4];
+        let mut ga = GappedArray::<i32>::new(perm.len());
+        print_gapped_array(&ga);
+        for (value, hint) in perm.iter().zip(hints.iter()) {
+            assert!(ga.initial_model_based_insert(value.clone(), hint.clone()).is_ok());
             println!("");
             print_gapped_array(&ga);
         }

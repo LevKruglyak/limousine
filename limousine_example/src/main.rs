@@ -1,7 +1,6 @@
-#![feature(log_syntax)]
-#![feature(trace_macros)]
-
-trace_macros!(false);
+// #![feature(log_syntax)]
+// #![feature(trace_macros)]
+// trace_macros!(false);
 
 mod expanded_code;
 
