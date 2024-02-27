@@ -208,8 +208,15 @@ impl<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<V
         self.height == 0
     }
 
-    pub fn is_branch(&self) -> bool {
+    pub const fn is_branch(&self) -> bool {
         self.height == 1
+    }
+
+    pub fn to_entry(&self) -> Option<Entry<GappedKey, V>> {
+        match self.ga.next_occupied_ix(0) {
+            Some(ix) => Some(Entry::new(self.ga.keys[ix], self.ga.vals[ix])),
+            None => None,
+        }
     }
 }
 
@@ -357,11 +364,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
             }
             Some(node) => {
                 let guess = node.model.approximate(needle, Some(0..node.ga.len()));
-                println!("Node is: {:?}", node);
-                println!("Looking for: {:?}", needle);
-                println!("Guess is: {:?}", guess);
                 let got = node.ga.search_exact(&needle, Some(guess));
-                println!("Got: {:?}", got);
                 got
             }
         }
@@ -373,13 +376,16 @@ mod gapped_pgm_tests {
     use std::time::Instant;
 
     use kdam::{tqdm, BarExt};
-    use rand::{distributions::Uniform, Rng};
+    use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 
     use super::*;
 
-    fn generate_random_entries(size: usize) -> Vec<Entry<i32, i32>> {
+    fn generate_random_entries(size: usize, seed: Option<u64>) -> Vec<Entry<i32, i32>> {
         let range = Uniform::from((GappedKey::MIN)..(GappedKey::MAX));
-        let mut random_values: Vec<i32> = rand::thread_rng().sample_iter(&range).take(size).collect();
+        let mut random_values: Vec<i32> = match seed {
+            Some(val) => StdRng::seed_from_u64(val).sample_iter(&range).take(size).collect(),
+            None => rand::thread_rng().sample_iter(&range).take(size).collect(),
+        };
         random_values.sort();
         random_values.dedup();
         let entries: Vec<Entry<GappedKey, i32>> = random_values
@@ -400,12 +406,12 @@ mod gapped_pgm_tests {
     }
     impl<const EPSILON: usize, const BUFSIZE: usize> PGMSegTestCase<EPSILON, BUFSIZE> {
         /// Generates a test key, meaning make the entries, sort + dedup them
-        fn generate(size: usize, verbose: Option<bool>) -> Self {
+        fn generate(size: usize, verbose: Option<bool>, seed: Option<u64>) -> Self {
             let verbose = verbose.unwrap_or(true);
             if verbose {
                 println!("Generating {} entries with eps={}", size, EPSILON);
             }
-            let entries = generate_random_entries(size);
+            let entries = generate_random_entries(size, seed);
             Self {
                 entries,
                 verbose,
@@ -444,20 +450,23 @@ mod gapped_pgm_tests {
 
     #[test]
     fn test_seg_eps64() {
-        let mut test_case: PGMSegTestCase<64, 0> = PGMSegTestCase::generate(1_000_000, None);
+        let mut test_case: PGMSegTestCase<64, 0> = PGMSegTestCase::generate(1_000_000, None, None);
         test_case.train();
         test_case.test();
     }
 
     #[test]
     fn test_gapped_pgm_build() {
-        let entries = generate_random_entries(100);
-        let gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
-        let mut pb = tqdm!(total = entries.len());
-        for entry in entries {
-            let val = gapped_pgm.search(entry.key);
-            assert!(*val.unwrap() == entry.value);
-            pb.update(1);
+        for seed in 0..100000 {
+            println!("seed: {:?}", seed);
+            let entries = generate_random_entries(120, Some(seed));
+            let gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+            let mut pb = tqdm!(total = entries.len());
+            for entry in entries {
+                let val = gapped_pgm.search(entry.key);
+                assert!(*val.unwrap() == entry.value);
+                pb.update(1);
+            }
         }
     }
 }

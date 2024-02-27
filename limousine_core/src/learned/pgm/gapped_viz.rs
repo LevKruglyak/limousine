@@ -3,13 +3,14 @@
 use egui::plot::*;
 use kdam::{tqdm, BarExt};
 use limousine_core::{
-    learned::pgm::gapped_pgm::{GappedKey, GappedPGM, GappedValue},
+    learned::pgm::gapped_pgm::{GappedIndex, GappedKey, GappedPGM, GappedValue},
     Entry,
 };
-use rand::{distributions::Uniform, Rng};
+use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 
 struct AppState<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize> {
     model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>,
+    lol: Option<Vec<Vec<Vec<(GappedIndex, Entry<GappedKey, V>)>>>>,
 }
 
 impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize>
@@ -17,7 +18,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
 {
     /// Create an empty app state
     fn new(ctx: &eframe::CreationContext<'_>, model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>) -> Self {
-        Self { model }
+        Self { model, lol: None }
     }
 }
 
@@ -36,19 +37,64 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const BUFSIZE:
                 .allow_drag(false)
                 .allow_zoom(false)
                 .show(ui, |plot_ui| {
-                    let mut cur_ptr = self.model.root_ptr;
-                    let mut height = self.model.height;
-                    while let Some(ptr) = cur_ptr {
-                        if height > 0 {
-                            let node = self.model.get_internal_node(ptr).unwrap();
-                            let ix = node.ga.next_occupied_ix(0).unwrap();
-                            cur_ptr = Some(node.ga.vals[ix]);
-                            height -= 1;
-                        } else {
-                            let node = self.model.get_leaf_node(ptr);
-                            cur_ptr = None;
+                    let lol = match &self.lol {
+                        Some(lol) => lol.clone(),
+                        None => {
+                            let cur_ptr = self.model.root_ptr.unwrap();
+                            if self.model.height < 1 {
+                                panic!("Can't plot degen trees");
+                            }
+                            // Initialize lol
+                            let mut lol = vec![];
+                            let root = self.model.get_internal_node(cur_ptr).unwrap();
+                            lol.push(vec![vec![(
+                                cur_ptr,
+                                Entry::new(root.to_entry().unwrap().key, V::default()),
+                            )]]);
+                            loop {
+                                let last_layer = lol.last().unwrap();
+                                let mut this_layer: Vec<Vec<(GappedIndex, Entry<GappedKey, V>)>> = vec![];
+                                let mut is_branch = false;
+                                for seq in last_layer {
+                                    for (ptr, _) in seq {
+                                        let node = self.model.get_internal_node(*ptr).unwrap();
+                                        if node.is_branch() {
+                                            // Add the leafs properly
+                                            let mut ix: Option<usize> = Some(0);
+                                            let mut this_vec = vec![];
+                                            while ix.is_some() {
+                                                let ptr = node.ga.vals[ix.unwrap()];
+                                                let leaf_node = self.model.get_leaf_node(ptr).unwrap();
+                                                this_vec.push((ptr, leaf_node.to_entry().unwrap()));
+                                                ix = node.ga.next_occupied_ix(ix.unwrap() + 1);
+                                            }
+                                            this_layer.push(this_vec);
+                                        } else {
+                                            // Add the internals properly
+                                            let mut ix: Option<usize> = Some(0);
+                                            let mut this_vec = vec![];
+                                            while ix.is_some() {
+                                                let ptr = node.ga.vals[ix.unwrap()];
+                                                let leaf_node = self.model.get_leaf_node(ptr).unwrap();
+                                                this_vec.push((ptr, leaf_node.to_entry().unwrap()));
+                                                ix = node.ga.next_occupied_ix(ix.unwrap() + 1);
+                                            }
+                                            this_layer.push(this_vec);
+                                        }
+                                        is_branch = is_branch || node.is_branch();
+                                    }
+                                }
+                                lol.push(this_layer);
+                                if is_branch {
+                                    break;
+                                }
+                            }
+                            lol
                         }
-                    }
+                    };
+                    // TODO: wow this is bad
+                    self.lol = Some(lol.clone());
+
                     // let points = PlotPoints::new(
                     //     self.keys
                     //         .iter()
@@ -124,9 +170,12 @@ pub fn viz_model<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, co
     .ok();
 }
 
-fn generate_random_entries(size: usize) -> Vec<Entry<i32, i32>> {
+fn generate_random_entries(size: usize, seed: Option<u64>) -> Vec<Entry<i32, i32>> {
     let range = Uniform::from((GappedKey::MIN)..(GappedKey::MAX));
-    let mut random_values: Vec<i32> = rand::thread_rng().sample_iter(&range).take(size).collect();
+    let mut random_values: Vec<i32> = match seed {
+        Some(val) => StdRng::seed_from_u64(val).sample_iter(&range).take(size).collect(),
+        None => rand::thread_rng().sample_iter(&range).take(size).collect(),
+    };
     random_values.sort();
     random_values.dedup();
     let entries: Vec<Entry<GappedKey, i32>> = random_values
@@ -138,13 +187,8 @@ fn generate_random_entries(size: usize) -> Vec<Entry<i32, i32>> {
 }
 
 fn main() {
-    let entries = generate_random_entries(100);
+    let entries = generate_random_entries(120, Some(3123));
     let gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+    println!("height: {}", gapped_pgm.height);
     viz_model(gapped_pgm);
-    // let mut pb = tqdm!(total = entries.len());
-    // for entry in entries {
-    //     let val = gapped_pgm.search(entry.key);
-    //     assert!(*val.unwrap() == entry.value);
-    //     pb.update(1).ok();
-    // }
 }
