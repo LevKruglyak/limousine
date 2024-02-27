@@ -3,21 +3,25 @@
 //! For the sake of being able to be understood on it's own,
 //! it contains some duplicated code.
 
-use std::ops::Range;
-
-use num::Float;
-
-use super::gapped_array::GappedArray;
+use super::gapped_array::GappedKVArray;
 use crate::Entry;
+use generational_arena::{Arena, Index};
+use num::Float;
+use std::ops::Range;
+use trait_set::trait_set;
 
-// TODO: Use traits from lazy_static instead, they were being annoying tho
-type GappedKey = i32;
-type GappedValue = i32;
+pub type GappedKey = i32;
+#[derive(Copy, Debug)]
+pub struct GappedIndex(Index);
+trait_set! {
+    /// General value type, thread-safe
+    pub trait GappedValue = Copy + Default + PartialOrd + std::fmt::Debug + 'static;
+}
 
 #[derive(PartialEq, PartialOrd, Default)]
-struct GappedEntry {
+struct GappedEntry<V: GappedValue> {
     key: GappedKey,
-    value: GappedValue,
+    value: V,
 }
 
 /// Helper struct to deal with points
@@ -149,48 +153,88 @@ impl<const EPSILON: usize> SimplePGMSegmentator<EPSILON> {
     }
 }
 
-impl Default for Entry<GappedKey, GappedValue> {
+impl Default for GappedIndex {
+    fn default() -> Self {
+        Self(Index::from_raw_parts(0, 0))
+    }
+}
+
+impl Clone for GappedIndex {
+    fn clone(&self) -> Self {
+        let raw_parts = self.0.into_raw_parts();
+        Self(Index::from_raw_parts(raw_parts.0, raw_parts.1))
+    }
+}
+
+impl PartialEq for GappedIndex {
+    fn eq(&self, other: &Self) -> bool {
+        // Should be irrelevant
+        false
+    }
+}
+
+impl PartialOrd for GappedIndex {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // Should be irrelevant
+        Some(std::cmp::Ordering::Equal)
+    }
+}
+
+impl<V: GappedValue> Default for Entry<GappedKey, V> {
     fn default() -> Self {
         Self {
             key: GappedKey::default(),
-            value: GappedValue::default(),
+            value: V::default(),
         }
     }
 }
 
-impl PartialOrd for Entry<GappedKey, GappedValue> {
+impl<V: GappedValue> PartialOrd for Entry<GappedKey, V> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.key.partial_cmp(&other.key)
     }
 }
 
-pub struct GappedPGM<const EPSILON: usize, const BUFSIZE: usize> {
-    pub ga: GappedArray<Entry<GappedKey, GappedValue>>,
-    pub buffer: [Option<Entry<GappedKey, GappedValue>>; BUFSIZE],
+#[derive(Debug)]
+pub struct GappedPGMNode<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> {
+    pub height: u32,
+    pub ga: GappedKVArray<GappedKey, V>,
+    pub buffer: [Option<Entry<GappedKey, V>>; BUFSIZE],
     pub model: LinearModel,
     pub density: f32,
 }
+impl<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<V, EPSILON, BUFSIZE> {
+    pub const fn is_leaf(&self) -> bool {
+        self.height == 0
+    }
 
-pub fn build_from_slice<const EPSILON: usize, const BUFSIZE: usize>(
-    entries: &[Entry<GappedKey, GappedValue>],
+    pub fn is_branch(&self) -> bool {
+        self.height == 1
+    }
+}
+
+pub fn build_layer_from_slice<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize>(
+    entries: &[Entry<GappedKey, V>],
     density: f32,
-) -> Vec<GappedPGM<EPSILON, BUFSIZE>> {
+    height: u32,
+) -> Vec<GappedPGMNode<V, EPSILON, BUFSIZE>> {
     // Helper function
     let mut ship_new_node = |segmentor: &SimplePGMSegmentator<EPSILON>,
                              next_ix: usize,
                              built_ix: &mut usize,
-                             result: &mut Vec<GappedPGM<EPSILON, BUFSIZE>>| {
+                             result: &mut Vec<GappedPGMNode<V, EPSILON, BUFSIZE>>| {
         let mut model = segmentor.to_linear_model();
         model.scale(1.0 / density);
         let num_initial = next_ix - *built_ix;
         let bloated_size = ((num_initial as f32) / density).ceil() as usize;
-        let mut ga = GappedArray::<Entry<GappedKey, GappedValue>>::new(bloated_size);
+        let mut ga = GappedKVArray::<GappedKey, V>::new(bloated_size);
         for add_ix in *built_ix..next_ix {
             let add_entry = entries[add_ix];
             let guess = model.approximate(add_entry.key, Some(0..bloated_size));
-            ga.initial_model_based_insert(add_entry, guess);
+            ga.initial_model_based_insert((add_entry.key, add_entry.value), guess);
         }
-        let new_node = GappedPGM {
+        let new_node = GappedPGMNode {
+            height,
             ga,
             buffer: [None; BUFSIZE],
             model,
@@ -200,7 +244,7 @@ pub fn build_from_slice<const EPSILON: usize, const BUFSIZE: usize>(
         *built_ix = next_ix;
     };
     // Initialize
-    let mut result: Vec<GappedPGM<EPSILON, BUFSIZE>> = vec![];
+    let mut result: Vec<GappedPGMNode<V, EPSILON, BUFSIZE>> = vec![];
     let mut segmentor = SimplePGMSegmentator::<EPSILON>::new();
     let mut built_ix = 0;
     let mut next_ix = 0;
@@ -222,6 +266,7 @@ pub fn build_from_slice<const EPSILON: usize, const BUFSIZE: usize>(
                 // All set, keep going
             }
             Err(_) => {
+                // The segmentor needs to break off a new model
                 ship_new_node(&segmentor, next_ix, &mut built_ix, &mut result);
                 segmentor = SimplePGMSegmentator::<EPSILON>::new();
                 segmentor.try_add_key(&entry.key).unwrap();
@@ -231,18 +276,125 @@ pub fn build_from_slice<const EPSILON: usize, const BUFSIZE: usize>(
     }
 }
 
+pub struct GappedPGM<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize> {
+    pub height: u32,
+    pub internal_arena: Arena<GappedPGMNode<GappedIndex, INT_EPS, 0>>,
+    pub leaf_arena: Arena<GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>>,
+    pub root_ptr: Option<GappedIndex>,
+}
+impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize>
+    GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>
+{
+    pub fn build_from_slice(entries: &[Entry<GappedKey, V>]) -> Self {
+        let mut gapped_pgm = Self {
+            height: 0,
+            internal_arena: Arena::new(),
+            leaf_arena: Arena::new(),
+            root_ptr: None,
+        };
+        // Build the leaf layer
+        let mut height = 0;
+        let leaf_nodes: Vec<GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>> = build_layer_from_slice(entries, 0.5, height);
+        let mut next_entries: Vec<Entry<GappedKey, GappedIndex>> = vec![];
+        for node in leaf_nodes {
+            let key = node.model.key;
+            let ptr = gapped_pgm.leaf_arena.insert(node);
+            next_entries.push(Entry::new(key, GappedIndex(ptr)));
+        }
+        // Recursively build the internal layers
+        while next_entries.len() > 1 {
+            height += 1;
+            let internal_nodes: Vec<GappedPGMNode<GappedIndex, INT_EPS, 0>> =
+                build_layer_from_slice(&next_entries, 0.9, height);
+            next_entries.clear();
+            for node in internal_nodes {
+                let key = node.model.key;
+                let ptr = gapped_pgm.internal_arena.insert(node);
+                next_entries.push(Entry::new(key, GappedIndex(ptr)));
+            }
+        }
+        gapped_pgm.root_ptr = Some(next_entries[0].value);
+        gapped_pgm.height = height;
+        gapped_pgm
+    }
+
+    pub fn get_internal_node(&self, ptr: GappedIndex) -> Option<&GappedPGMNode<GappedIndex, INT_EPS, 0>> {
+        self.internal_arena.get(ptr.0)
+    }
+
+    pub fn get_leaf_node(&self, ptr: GappedIndex) -> Option<&GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>> {
+        self.leaf_arena.get(ptr.0)
+    }
+
+    pub fn search(&self, needle: GappedKey) -> Option<&V> {
+        let mut ptr = self.root_ptr.unwrap();
+        let mut height = self.height;
+        // Recurse down to the leaf node
+        while height > 0 {
+            match self.get_internal_node(ptr) {
+                None => {
+                    panic!("Bad internal nodes");
+                }
+                Some(node) => {
+                    let guess = node.model.approximate(needle, Some(0..node.ga.len()));
+                    let next_ptr_option = node.ga.search_pir(&needle, Some(guess));
+                    match next_ptr_option {
+                        None => return None,
+                        Some(next_ptr) => ptr = *next_ptr,
+                    }
+                }
+            }
+            height -= 1;
+            // let ten_millis = std::time::Duration::from_millis(500);
+            // let now = std::time::Instant::now();
+            // std::thread::sleep(ten_millis);
+        }
+        assert!(height == 0);
+        // We're at the leaf node
+        match self.get_leaf_node(ptr) {
+            None => {
+                panic!("Bad leaf nodes");
+            }
+            Some(node) => {
+                let guess = node.model.approximate(needle, Some(0..node.ga.len()));
+                println!("Node is: {:?}", node);
+                println!("Looking for: {:?}", needle);
+                println!("Guess is: {:?}", guess);
+                let got = node.ga.search_exact(&needle, Some(guess));
+                println!("Got: {:?}", got);
+                got
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod gapped_pgm_tests {
+    use std::time::Instant;
+
     use kdam::{tqdm, BarExt};
     use rand::{distributions::Uniform, Rng};
 
     use super::*;
 
+    fn generate_random_entries(size: usize) -> Vec<Entry<i32, i32>> {
+        let range = Uniform::from((GappedKey::MIN)..(GappedKey::MAX));
+        let mut random_values: Vec<i32> = rand::thread_rng().sample_iter(&range).take(size).collect();
+        random_values.sort();
+        random_values.dedup();
+        let entries: Vec<Entry<GappedKey, i32>> = random_values
+            .into_iter()
+            .enumerate()
+            .map(|(ix, key)| Entry::new(key, ix as i32))
+            .collect();
+        entries
+    }
+
     /// To test with different epsilon we need a struct that can handle that generic
     struct PGMSegTestCase<const EPSILON: usize, const BUFSIZE: usize> {
         verbose: bool,
-        entries: Vec<Entry<GappedKey, GappedValue>>,
-        nodes: Vec<GappedPGM<EPSILON, BUFSIZE>>,
+        entries: Vec<Entry<GappedKey, i32>>,
+        nodes: Vec<GappedPGMNode<i32, EPSILON, BUFSIZE>>,
         last_model_ix: usize,
         last_base_rank: usize,
     }
@@ -253,15 +405,7 @@ mod gapped_pgm_tests {
             if verbose {
                 println!("Generating {} entries with eps={}", size, EPSILON);
             }
-            let range = Uniform::from((GappedKey::MIN)..(GappedKey::MAX));
-            let mut random_values: Vec<i32> = rand::thread_rng().sample_iter(&range).take(size).collect();
-            random_values.sort();
-            random_values.dedup();
-            let entries: Vec<Entry<GappedKey, GappedValue>> = random_values
-                .into_iter()
-                .enumerate()
-                .map(|(ix, key)| Entry::new(key, ix as GappedValue))
-                .collect();
+            let entries = generate_random_entries(size);
             Self {
                 entries,
                 verbose,
@@ -276,41 +420,21 @@ mod gapped_pgm_tests {
             if self.verbose {
                 println!("Training on {} entries with eps={}", self.entries.len(), EPSILON);
             }
-            self.nodes = build_from_slice::<EPSILON, BUFSIZE>(&self.entries, 0.5);
+            let start_time = Instant::now();
+            self.nodes = build_layer_from_slice::<i32, EPSILON, BUFSIZE>(&self.entries, 0.5, 0);
+            let elapsed_time = start_time.elapsed();
+            if self.verbose {
+                println!("Training completed in {} ms.", elapsed_time.as_millis());
+            }
         }
-
-        // /// Helper function for determining if a single entry is approximated within bounds
-        // fn is_entry_well_approximated(&mut self, entry: Entry<Key, Value>) -> bool {
-        //     let mut model_ix = self.last_model_ix;
-        //     let mut base_rank = self.last_base_rank;
-        //     while model_ix < self.models.len().saturating_sub(1) {
-        //         if self.models[model_ix + 1].key > entry.key {
-        //             break;
-        //         }
-        //         base_rank += self.models[model_ix].size;
-        //         model_ix += 1;
-        //     }
-        //     let range = self.models[model_ix].approximate(&entry.key);
-        //     self.last_base_rank = base_rank;
-        //     self.last_model_ix = model_ix;
-        //     return base_rank + range.lo <= entry.value && entry.value < base_rank + range.hi;
-        // }
 
         /// Assuming data has already been generated and trained on, tests that every key is correctly approximated
         fn test(&mut self) {
             let mut cumulative_value = 0;
             for node in self.nodes.iter() {
-                println!("NEW NODE!");
                 let mut ix = node.ga.next_occupied_ix(0);
                 while ix.is_some() {
-                    println!("{}, {}", cumulative_value, node.ga.data[ix.unwrap()].value);
-                    assert!(node.ga.data[ix.unwrap()].value == cumulative_value);
-                    if node.ga.data[ix.unwrap()].value != cumulative_value {
-                        println!("BAD BAD BAD");
-                        println!("BAD BAD BAD");
-                        println!("BAD BAD BAD");
-                        println!("BAD BAD BAD");
-                    }
+                    assert!(node.ga.vals[ix.unwrap()] == cumulative_value);
                     cumulative_value += 1;
                     ix = node.ga.next_occupied_ix(ix.unwrap() + 1);
                 }
@@ -319,43 +443,21 @@ mod gapped_pgm_tests {
     }
 
     #[test]
-    fn test_eps4() {
-        let mut test_case: PGMSegTestCase<64, 4> = PGMSegTestCase::generate(1_000_000, None);
+    fn test_seg_eps64() {
+        let mut test_case: PGMSegTestCase<64, 0> = PGMSegTestCase::generate(1_000_000, None);
         test_case.train();
         test_case.test();
     }
+
+    #[test]
+    fn test_gapped_pgm_build() {
+        let entries = generate_random_entries(100);
+        let gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+        let mut pb = tqdm!(total = entries.len());
+        for entry in entries {
+            let val = gapped_pgm.search(entry.key);
+            assert!(*val.unwrap() == entry.value);
+            pb.update(1);
+        }
+    }
 }
-
-/*
-What are the possibiliies here?
-
-Alex-inspired data nodes
-- Gapped array
-- Use simple linear regression + scaling to size
-- How to determine size? (List of options)
-    - Fixed size and density, i.e. take 20 nodes, linearly fit them, then scale to say 30 nodes
-    - Fixed error and density, i.e. train like PGM, then scale (FEELS GOOD)
-    - ^GOING WITH THE SECOND ONE
-
-So let's enumerate the parameters:
-
-density: (0, 1]
-- 1 is just a PGM
-- 0.5 means a PGM with a GAP of 2
-
-buffer size (BYTES): [0, \inf)
-- In practice 1KB or something would be highest number remotely reasonable
-- 0 is just standard alex
-- Non-zero is crammed
-
-merge granularity: [0, \inf)
-- 0 is standard alex
-- ~2 is crammed PGM
-- In practice 16 or something would be highest number remotely reasonable
-
-when to use buffer?
-- density based, i.e. when density is above some number
-- distance based, i.e. when nearest gap is above some number
-    - ^could be done efficiently with bithacks
-
-*/

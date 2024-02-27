@@ -22,3 +22,7 @@ itertools = "0.12.1"
 [features]
 default = []
 standard = []
+
+[[bin]]
+name = "gapped-viz"
+path = "src/learned/pgm/gapped_viz.rs"

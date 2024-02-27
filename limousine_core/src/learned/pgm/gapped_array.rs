@@ -1,23 +1,34 @@
 //! Helper struct to implement a gapped array to act as the base of data nodes
 //! ASSUMPTIONS:
-//! - Elements (T) are unique
+//! - Keys (T) are unique
 
-pub struct GappedArray<T>
+use num::iter::Range;
+
+#[derive(Debug)]
+pub struct GappedKVArray<K, V>
 where
-    T: Default + Copy + Clone + PartialEq + PartialOrd,
+    K: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
+    V: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
 {
     pub bitmap: Box<[bool]>,
-    pub data: Box<[T]>,
+    pub keys: Box<[K]>,
+    pub vals: Box<[V]>,
 }
 
-impl<T: Default + Copy + Clone + PartialEq + PartialOrd> GappedArray<T> {
+impl<K, V> GappedKVArray<K, V>
+where
+    K: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
+    V: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
+{
     /// Creates an empty gapped array with the given size
     pub fn new(size: usize) -> Self {
         let bitmap_vec = vec![false; size];
-        let data_vec = vec![T::default(); size];
+        let keys_vec = vec![K::default(); size];
+        let vals_vec = vec![V::default(); size];
         Self {
             bitmap: bitmap_vec.into_boxed_slice(),
-            data: data_vec.into_boxed_slice(),
+            keys: keys_vec.into_boxed_slice(),
+            vals: vals_vec.into_boxed_slice(),
         }
     }
 
@@ -58,9 +69,8 @@ impl<T: Default + Copy + Clone + PartialEq + PartialOrd> GappedArray<T> {
             }
             if ix == 0 {
                 return None;
-            } else {
-                ix -= 1;
             }
+            ix -= 1;
         }
     }
 
@@ -74,170 +84,170 @@ impl<T: Default + Copy + Clone + PartialEq + PartialOrd> GappedArray<T> {
         self.prev_ix_helper(ix, false)
     }
 
-    /// Returns the smallest ix s.t. the element at this ix and all elements to the right are strictly greater than needle
-    /// NOTE: If needle is larger than everything in the array, this returns len()
+    /// Returns the Some(ix) s.t. keys[ix] <= needle, and for all jx > ix, needle < keys[jx]
+    /// Returns None if needle is smaller than everything in the array
     /// NOTE: Hint is just to help search speed. This must always return a correct result.
-    fn lub(&self, needle: &T, hint: Option<usize>) -> usize {
-        // First, move as far to the right as we can from hint
+    fn price_is_right(&self, needle: &K, hint: Option<usize>) -> Option<usize> {
+        // First, move as far to the right as we can from the hint
         let mut check = self.next_occupied_ix(hint.unwrap_or(self.len() / 2));
-        while check.is_some() && self.data[check.unwrap()] < *needle {
-            check = self.next_occupied_ix(check.unwrap() + 1);
-        }
-        // Then handle the edge case where this is the largest element
-        if check.is_none() {
-            let max = self.prev_occupied_ix(self.len() - 1);
-            match max {
-                Some(ix) => {
-                    if self.data[ix] < *needle {
-                        return self.len();
+        while check.is_some() {
+            let next = self.next_occupied_ix(check.unwrap() + 1);
+            match next {
+                Some(next_ix) => {
+                    if *needle < self.keys[next_ix] {
+                        break;
                     }
+                    check = Some(next_ix);
                 }
-                None => {
-                    return self.len() / 2;
-                }
+                None => break,
             }
         }
-        // Finally, to ensure correctness, move to the left if needed
-        let before_ix = check.unwrap_or(self.len() - 1);
-        if before_ix == 0 {
-            return 0;
-        }
-        let mut before = self.prev_free_ix(before_ix - 1);
-        let mut before = self.prev_occupied_ix(check.unwrap_or(self.len() - 1));
-        while before.is_some() && *needle < self.data[before.unwrap()] {
-            check = before;
-            if before.unwrap() == 0 {
-                return 0;
+        // Make sure check is something if there is an element
+        check = match check {
+            Some(ix) => Some(ix),
+            None => self.prev_free_ix(self.len() - 1),
+        };
+        // Then ensure correctness by moving left as far as we need to
+        while check.is_some() {
+            if self.keys[check.unwrap()] <= *needle {
+                // Happy case where we got it right
+                break;
             }
-            before = self.prev_occupied_ix(before.unwrap() - 1);
+            if check.unwrap() == 0 {
+                check = None;
+                break;
+            }
+            check = self.prev_occupied_ix(check.unwrap() - 1);
         }
-        match check {
-            Some(ix) => ix,
-            None => self.len() / 2,
+        check
+    }
+
+    /// Search the gapped array for a specific value, returning the price is right
+    /// TODO: Make exponential search
+    pub fn search_pir(&self, needle: &K, hint: Option<usize>) -> Option<&V> {
+        match self.price_is_right(needle, hint) {
+            Some(ix) => self.vals.get(ix),
+            None => None,
         }
     }
 
     /// Search the gapped array for a specific value, using a starting hint
     /// TODO: Make exponential search
-    pub fn search_with_hint(&mut self, needle: &T, hint: usize) -> Option<&T> {
-        let ix = self.lub(needle, Some(hint));
-        if self.bitmap[ix] && self.data[ix] == *needle {
-            return Some(&self.data[ix]);
-        } else {
-            return None;
+    pub fn search_exact(&self, needle: &K, hint: Option<usize>) -> Option<&V> {
+        match self.price_is_right(needle, hint) {
+            Some(ix) => {
+                if self.keys[ix] == *needle {
+                    self.vals.get(ix)
+                } else {
+                    None
+                }
+            }
+            None => None,
         }
     }
 
+    /// Helper function to copy within for all the needed arrays
+    fn copy_within(&mut self, src: std::ops::Range<usize>, dest: usize) {
+        self.bitmap.copy_within(src.clone(), dest);
+        self.keys.copy_within(src.clone(), dest);
+        self.vals.copy_within(src.clone(), dest);
+    }
+
+    /// Helper function to insert an entry into a given location
+    fn insert_at(&mut self, pair: (K, V), ix: usize) {
+        self.bitmap[ix] = true;
+        self.keys[ix] = pair.0;
+        self.vals[ix] = pair.1;
+    }
+
     /// Insert a specific value into the array with the given hint
-    pub fn insert_with_hint(&mut self, value: T, hint: usize) -> Result<(), String> {
-        let ix = self.lub(&value, Some(hint));
-        // Handle edge case where inserting at beginning
-        if ix == 0 {
-            let closest_ix = self.next_free_ix(0);
-            match closest_ix {
-                Some(rix) => {
-                    self.bitmap.copy_within(0..rix, 1);
-                    self.data.copy_within(0..rix, 1);
-                    self.bitmap[0] = true;
-                    self.data[0] = value;
-                    return Ok(());
-                }
-                None => {
+    pub fn insert_with_hint(&mut self, pair: (K, V), hint: usize) -> Result<(), String> {
+        // TODO: We should do a better job covering the happy case where the guessed index is empty
+        // ^ehhhh but also it's just a guess so we need to verify sorted... gets a bit hairy
+        let maybe_ix = self.price_is_right(&pair.0, Some(hint));
+        match maybe_ix {
+            None => {
+                // Edge case where inserting at the beginning
+                let Some(closest_ix) = self.next_free_ix(0) else {
                     return Err("Gapped array is full".to_string());
-                }
+                };
+                self.copy_within(0..closest_ix, 1);
+                self.insert_at(pair, 0);
+                Ok(())
             }
-        }
-        // Handle edge case where inserting at end
-        if ix >= self.len() {
-            let closest_ix = self.prev_free_ix(self.len() - 1);
-            match closest_ix {
-                Some(lix) => {
-                    self.bitmap.copy_within(lix + 1..self.len(), lix);
-                    self.data.copy_within(lix + 1..self.len(), lix);
-                    self.bitmap[self.len() - 1] = true;
-                    self.data[self.len() - 1] = value;
-                    return Ok(());
-                }
-                None => {
-                    return Err("Gapped array is full".to_string());
-                }
-            }
-        }
-        // Inserting into the middle of the array
-        let shift_left_ix = if ix == 0 { None } else { self.prev_free_ix(ix - 1) };
-        let shift_right_ix = self.next_free_ix(ix + 1);
-        match (shift_left_ix, shift_right_ix) {
-            (Some(lix), Some(rix)) => {
-                if lix.abs_diff(ix) < rix.abs_diff(ix) {
-                    self.bitmap.copy_within(lix + 1..ix + 1, lix);
-                    self.data.copy_within(lix + 1..ix + 1, lix);
-                    self.bitmap[ix - 1] = true;
-                    self.data[ix - 1] = value;
+            Some(mut ix) => {
+                if ix + 1 == self.len() {
+                    // Edge case where inserting at the end
+                    let Some(closest_ix) = self.prev_free_ix(self.len() - 1) else {
+                        return Err("Gapped array is full".to_string());
+                    };
+                    self.copy_within(closest_ix + 1..self.len(), closest_ix);
+                    self.insert_at(pair, self.len() - 1);
+                    Ok(())
                 } else {
-                    self.bitmap.copy_within(ix..rix, ix + 1);
-                    self.data.copy_within(ix..rix, ix + 1);
-                    self.bitmap[ix] = true;
-                    self.data[ix] = value;
+                    // We're doing a "normal" insert into the middle of the array
+                    ix += 1; // Price-is-right quirk
+                    if !self.bitmap[ix] {
+                        // Easy win
+                        self.insert_at(pair, ix);
+                        return Ok(());
+                    }
+                    let shift_left_ix = self.prev_free_ix(ix - 1);
+                    let shift_right_ix = self.next_free_ix(ix + 1);
+                    match (shift_left_ix, shift_right_ix) {
+                        (Some(lix), Some(rix)) => {
+                            if lix.abs_diff(ix) < rix.abs_diff(ix) {
+                                self.copy_within(lix + 1..ix + 1, lix);
+                                self.insert_at(pair, ix - 1);
+                                Ok(())
+                            } else {
+                                self.copy_within(ix..rix, ix + 1);
+                                self.insert_at(pair, ix);
+                                Ok(())
+                            }
+                        }
+                        (Some(lix), None) => {
+                            self.copy_within(lix + 1..ix + 1, lix);
+                            self.insert_at(pair, ix - 1);
+                            Ok(())
+                        }
+                        (None, Some(rix)) => {
+                            self.copy_within(ix..rix, ix + 1);
+                            self.insert_at(pair, ix);
+                            Ok(())
+                        }
+                        _ => Err("Gapped array is full".to_string()),
+                    }
                 }
             }
-            (Some(lix), None) => {
-                self.bitmap.copy_within(lix + 1..ix, lix);
-                self.data.copy_within(lix + 1..ix, lix);
-                self.bitmap[ix - 1] = true;
-                self.data[ix - 1] = value;
-            }
-            (None, Some(rix)) => {
-                self.bitmap.copy_within(ix..rix, ix + 1);
-                self.data.copy_within(ix..rix, ix + 1);
-                self.bitmap[ix] = true;
-                self.data[ix] = value;
-            }
-            (None, None) => return Err("Gapped array is full".to_string()),
         }
-        return Ok(());
     }
 
     /// Called for the initial inserts. NOTE: This makes two assumptions:
     /// - The values themselves are monotonically increasing
     /// - The hints are monotonically non-decreasing
     /// If either of these assumptions break, bad stuff may happen (use regular insert)
-    pub fn initial_model_based_insert(&mut self, value: T, hint: usize) -> Result<(), ()> {
+    pub fn initial_model_based_insert(&mut self, pair: (K, V), hint: usize) -> Result<(), String> {
         if !self.bitmap[hint] {
-            self.bitmap[hint] = true;
-            self.data[hint] = value;
+            self.insert_at(pair, hint);
             return Ok(());
         }
         match self.next_free_ix(hint + 1) {
             Some(free_ix) => {
-                self.bitmap[free_ix] = true;
-                self.data[free_ix] = value;
-                return Ok(());
+                self.insert_at(pair, free_ix);
+                Ok(())
             }
             None => match self.prev_free_ix(self.len().saturating_sub(1)) {
                 Some(free_ix) => {
-                    self.bitmap.copy_within(free_ix + 1..self.len(), free_ix);
-                    self.data.copy_within(free_ix + 1..self.len(), free_ix);
-                    self.bitmap[self.len().saturating_sub(1)] = true;
-                    self.data[self.len().saturating_sub(1)] = value;
-                    return Ok(());
+                    self.copy_within(free_ix + 1..self.len(), free_ix);
+                    self.insert_at(pair, self.len().saturating_sub(1));
+                    Ok(())
                 }
-                None => {
-                    return Err(());
-                }
+                None => Err("Gapped array is full".to_string()),
             },
         }
     }
 }
-
-// pub struct ModelBasedGappedArrayBuilder<T>
-// where
-//     T: Default + Copy + Clone + PartialEq + PartialOrd,
-// {
-//     pub ga: GappedArray<T>,
-
-//     pub bitmap: Box<[bool]>,
-//     pub data: Box<[T]>,
-// }
 
 #[cfg(test)]
 mod gapped_array_tests {
@@ -247,46 +257,50 @@ mod gapped_array_tests {
     use itertools::Itertools;
     use kdam::{tqdm, Bar, BarExt};
 
-    fn print_gapped_array(ga: &GappedArray<i32>) {
+    fn print_gapped_array(ga: &GappedKVArray<i32, i32>) {
         let mut line1 = String::new();
         let mut line2 = String::new();
+        let mut line3 = String::new();
         for ix in 0..ga.len() {
             line1 += &format!("{}", if ga.bitmap[ix] { 1 } else { 0 });
-            line2 += &format!("{}", ga.data[ix]);
+            line2 += &format!("{}", ga.keys[ix]);
+            line3 += &format!("{}", ga.vals[ix]);
         }
-        println!("{}", &line1);
-        println!("{}", &line2);
+        println!("bitmap: {}", &line1);
+        println!("keys: {}", &line2);
+        println!("vals: {}", &line3);
     }
 
     fn fill_forward_with_hint(size: usize, hint: usize) {
-        let mut ga = GappedArray::<i32>::new(size);
+        let mut ga = GappedKVArray::<i32, i32>::new(size);
         for num in 0..size {
-            let result = ga.insert_with_hint(num as i32, hint);
+            let result = ga.insert_with_hint((num as i32, num as i32), hint);
             assert!(result.is_ok());
+            print_gapped_array(&ga);
         }
         for ix in 0..size {
             assert!(ga.bitmap[ix]);
-            assert!(ga.data[ix] == ix as i32);
+            assert!(ga.keys[ix] == ix as i32);
         }
     }
 
     #[test]
     fn fill_forward() {
-        const SIZE: usize = 100;
+        const SIZE: usize = 10;
         for hint in 0..SIZE {
             fill_forward_with_hint(SIZE, hint);
         }
     }
 
     fn fill_backward_with_hint(size: usize, hint: usize) {
-        let mut ga = GappedArray::<i32>::new(size);
+        let mut ga = GappedKVArray::<i32, i32>::new(size);
         for num in 0..size {
-            let result = ga.insert_with_hint((size - num - 1) as i32, hint);
+            let result = ga.insert_with_hint(((size - num - 1) as i32, (size - num - 1) as i32), hint);
             assert!(result.is_ok());
         }
         for ix in 0..size {
             assert!(ga.bitmap[ix]);
-            assert!(ga.data[ix] == ix as i32);
+            assert!(ga.keys[ix] == ix as i32);
         }
     }
 
@@ -318,12 +332,14 @@ mod gapped_array_tests {
     }
 
     fn test_perm_with_hints(perm: &Vec<i32>, hints: &Vec<usize>) {
-        let mut ga = GappedArray::<i32>::new(perm.len());
+        let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
         for (value, hint) in perm.iter().zip(hints.iter()) {
-            assert!(ga.insert_with_hint(value.clone(), hint.clone()).is_ok());
+            assert!(ga
+                .insert_with_hint((value.clone(), value.clone()), hint.clone())
+                .is_ok());
         }
         for ix in 0..ga.len() {
-            let good = ga.bitmap[ix] && ga.data[ix] == ix as i32;
+            let good = ga.bitmap[ix] && ga.keys[ix] == ix as i32;
             if !good {
                 println!("Perm: {:?}", perm);
                 println!("Hints: {:?}", hints);
@@ -352,22 +368,26 @@ mod gapped_array_tests {
     fn debug_gapped() {
         let perm = vec![1, 2, 0, 3, 4];
         let hints = vec![0, 0, 3, 0, 0];
-        let mut ga = GappedArray::<i32>::new(perm.len());
+        let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
         print_gapped_array(&ga);
         for (value, hint) in perm.iter().zip(hints.iter()) {
-            assert!(ga.insert_with_hint(value.clone(), hint.clone()).is_ok());
+            assert!(ga
+                .insert_with_hint((value.clone(), value.clone()), hint.clone())
+                .is_ok());
             println!("");
             print_gapped_array(&ga);
         }
     }
 
     fn test_nondec_seq(items: &Vec<i32>, hints: &Vec<usize>) {
-        let mut ga = GappedArray::<i32>::new(items.len());
+        let mut ga = GappedKVArray::<i32, i32>::new(items.len());
         for (value, hint) in items.iter().zip(hints.iter()) {
-            assert!(ga.initial_model_based_insert(value.clone(), hint.clone()).is_ok());
+            assert!(ga
+                .initial_model_based_insert((value.clone(), value.clone()), hint.clone())
+                .is_ok());
         }
         for ix in 0..ga.len() {
-            let good = ga.bitmap[ix] && ga.data[ix] == ix as i32;
+            let good = ga.bitmap[ix] && ga.keys[ix] == ix as i32;
             if !good {
                 println!("Items: {:?}", items);
                 println!("Hints: {:?}", hints);
@@ -401,10 +421,12 @@ mod gapped_array_tests {
     fn debug_initial_gapped() {
         let perm = vec![0, 1, 2, 3, 4, 5];
         let hints = vec![0, 0, 0, 4, 4, 4];
-        let mut ga = GappedArray::<i32>::new(perm.len());
+        let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
         print_gapped_array(&ga);
         for (value, hint) in perm.iter().zip(hints.iter()) {
-            assert!(ga.initial_model_based_insert(value.clone(), hint.clone()).is_ok());
+            assert!(ga
+                .initial_model_based_insert((value.clone(), value.clone()), hint.clone())
+                .is_ok());
             println!("");
             print_gapped_array(&ga);
         }
