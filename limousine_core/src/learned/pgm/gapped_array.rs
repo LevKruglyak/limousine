@@ -105,7 +105,7 @@ where
         // Make sure check is something if there is an element
         check = match check {
             Some(ix) => Some(ix),
-            None => self.prev_free_ix(self.len() - 1),
+            None => self.prev_occupied_ix(self.len() - 1),
         };
         // Then ensure correctness by moving left as far as we need to
         while check.is_some() {

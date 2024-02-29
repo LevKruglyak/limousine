@@ -60,7 +60,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const BUFSIZE:
                                         let node = self.model.get_internal_node(*ptr).unwrap();
                                         if node.is_branch() {
                                             // Add the leafs properly
-                                            let mut ix: Option<usize> = Some(0);
+                                            let mut ix: Option<usize> = node.ga.next_occupied_ix(0);
                                             let mut this_vec = vec![];
                                             while ix.is_some() {
                                                 let ptr = node.ga.vals[ix.unwrap()];
@@ -71,12 +71,12 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const BUFSIZE:
                                             this_layer.push(this_vec);
                                         } else {
                                             // Add the internals properly
-                                            let mut ix: Option<usize> = Some(0);
+                                            let mut ix: Option<usize> = node.ga.next_occupied_ix(0);
                                             let mut this_vec = vec![];
                                             while ix.is_some() {
                                                 let ptr = node.ga.vals[ix.unwrap()];
-                                                let leaf_node = self.model.get_leaf_node(ptr).unwrap();
-                                                this_vec.push((ptr, leaf_node.to_entry().unwrap()));
+                                                let int_node = self.model.get_leaf_node(ptr).unwrap();
+                                                this_vec.push((ptr, int_node.to_entry().unwrap()));
                                                 ix = node.ga.next_occupied_ix(ix.unwrap() + 1);
                                             }
                                             this_layer.push(this_vec);
@@ -94,65 +94,26 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const BUFSIZE:
                     };
                     // TODO: wow this is bad
                     self.lol = Some(lol.clone());
+                    // println!("self.lol: {:?}", self.lol);
 
-                    // let points = PlotPoints::new(
-                    //     self.keys
-                    //         .iter()
-                    //         .copied()
-                    //         .enumerate()
-                    //         .map(|(rank, key)| [key as f64, rank as f64])
-                    //         .collect(),
-                    // );
-                    // plot_ui.points(Points::new(points).radius(5.0).name("key-ranks"));
-
-                    // // Plot the models
-                    // assert!(self.models.len() == self.model_ranks.len());
-                    // let mut model_lines: Vec<Line> = vec![];
-                    // for ix in 0..(self.models.len()) {
-                    //     let model = self.models[ix];
-                    //     let model_rank = self.model_ranks[ix];
-                    //     let first_key = model.key;
-                    //     let end_key = self.keys[(self.keys.len() - 1).min(model_rank + model.size)];
-                    //     let end_rank = model_rank as f64 + ((end_key.saturating_sub(first_key)) as f64 * model.slope);
-                    //     let line = Line::new(PlotPoints::new(vec![
-                    //         [first_key as f64, model_rank as f64],
-                    //         [end_key as f64, end_rank],
-                    //     ]))
-                    //     .width(8.0);
-                    //     model_lines.push(line);
-                    // }
-                    // for line in model_lines {
-                    //     plot_ui.line(line);
-                    // }
-
-                    // // Plot the current segment once it has enough entries to be a little stable (not huge slopes)
-                    // if self.cur_segment.num_entries > 3 {
-                    //     let first_key = self.cur_segment.first_k.unwrap() as f64;
-                    //     let cur_key = self.keys[self.adding_ix] as f64;
-                    //     let first_rank = (self.adding_ix - self.cur_segment.num_entries) as f64;
-                    //     let max_rank = first_rank + (cur_key - first_key) * self.cur_segment.max_slope;
-                    //     let min_rank = first_rank + (cur_key - first_key) * self.cur_segment.min_slope;
-                    //     let segment_max_line =
-                    //         Line::new(PlotPoints::new(vec![[first_key, first_rank], [cur_key, max_rank]])).width(2.0);
-                    //     plot_ui.line(segment_max_line);
-                    //     let segment_min_line =
-                    //         Line::new(PlotPoints::new(vec![[first_key, first_rank], [cur_key, min_rank]])).width(2.0);
-                    //     plot_ui.line(segment_min_line);
-                    // }
-
-                    // // Plot the point we're querying and the bounds
-                    // if self.query_point.is_some() && self.get_query_bounds().is_some() {
-                    //     let approx = self.get_query_bounds().unwrap();
-                    //     let points = PlotPoints::new(vec![
-                    //         [self.query_point.unwrap().key as f64, approx.lo as f64],
-                    //         [
-                    //             self.query_point.unwrap().key as f64,
-                    //             self.query_point.unwrap().value as f64,
-                    //         ],
-                    //         [self.query_point.unwrap().key as f64, approx.hi as f64],
-                    //     ]);
-                    //     plot_ui.points(Points::new(points).radius(9.0).name("query"));
-                    // }
+                    for (height, layer) in lol.iter().enumerate() {
+                        let mut num_points = 0;
+                        for group in layer {
+                            num_points += group.len() as i32;
+                        }
+                        let mut point_ix = 0 - num_points / 2;
+                        let mut points: Vec<[f64; 2]> = vec![];
+                        for group in layer {
+                            for (_, entry) in group {
+                                let plot_point = PlotPoint::new(point_ix as f64, (0 - height as i32) as f64);
+                                plot_ui.text(Text::new(
+                                    plot_point.clone(),
+                                    format!("{} - {:?}", entry.key, entry.value),
+                                ));
+                                point_ix += 1;
+                            }
+                        }
+                    }
                 });
         });
     }
@@ -190,5 +151,7 @@ fn main() {
     let entries = generate_random_entries(120, Some(3123));
     let gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
     println!("height: {}", gapped_pgm.height);
+    let missing_key = 1805739375;
+    gapped_pgm.search(missing_key);
     viz_model(gapped_pgm);
 }

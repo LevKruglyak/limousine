@@ -457,10 +457,10 @@ mod gapped_pgm_tests {
 
     #[test]
     fn test_gapped_pgm_build() {
-        for seed in 0..100000 {
+        for seed in 0..10 {
             println!("seed: {:?}", seed);
-            let entries = generate_random_entries(120, Some(seed));
-            let gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+            let entries = generate_random_entries(10_000_000, Some(seed));
+            let gapped_pgm: GappedPGM<i32, 4, 64, 4> = GappedPGM::build_from_slice(&entries);
             let mut pb = tqdm!(total = entries.len());
             for entry in entries {
                 let val = gapped_pgm.search(entry.key);
