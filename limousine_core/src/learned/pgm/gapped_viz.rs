@@ -1,7 +1,6 @@
 //! Visualize the PGM segmentation algorithm for sanity bug catching
 
 use egui::plot::*;
-use kdam::{tqdm, BarExt};
 use limousine_core::{
     learned::pgm::gapped_pgm::{GappedIndex, GappedKey, GappedPGM, GappedValue},
     Entry,
@@ -17,7 +16,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
     AppState<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>
 {
     /// Create an empty app state
-    fn new(ctx: &eframe::CreationContext<'_>, model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>) -> Self {
+    fn new(_ctx: &eframe::CreationContext<'_>, model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>) -> Self {
         Self { model, lol: None }
     }
 }
@@ -25,7 +24,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
 impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const BUFSIZE: usize> eframe::App
     for AppState<V, INT_EPS, LEAF_EPS, BUFSIZE>
 {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::plot::Plot::new("pgm_plot")
                 .view_aspect(2.0)
@@ -102,7 +101,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const BUFSIZE:
                             num_points += group.len() as i32;
                         }
                         let mut point_ix = 0 - num_points / 2;
-                        let mut points: Vec<[f64; 2]> = vec![];
+                        let mut _points: Vec<[f64; 2]> = vec![];
                         for group in layer {
                             for (_, entry) in group {
                                 let plot_point = PlotPoint::new(point_ix as f64, (0 - height as i32) as f64);

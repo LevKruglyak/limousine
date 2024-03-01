@@ -4,7 +4,7 @@
 
 mod expanded_code;
 
-use limousine_core::learned::pgm::viz::play_pgm;
+// use limousine_core::learned::pgm::viz::play_pgm;
 use limousine_engine::prelude::*;
 
 // create_hybrid_index! {
@@ -19,7 +19,7 @@ use limousine_engine::prelude::*;
 // }
 
 fn main() {
-    let num = 600_000;
+    // let num = 600_000;
 
     create_hybrid_index! {
         name: BasicHybrid,

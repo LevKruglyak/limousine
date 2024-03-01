@@ -13,6 +13,7 @@ where
     pub bitmap: Box<[bool]>,
     pub keys: Box<[K]>,
     pub vals: Box<[V]>,
+    size: u32,
 }
 
 impl<K, V> GappedKVArray<K, V>
@@ -29,12 +30,28 @@ where
             bitmap: bitmap_vec.into_boxed_slice(),
             keys: keys_vec.into_boxed_slice(),
             vals: vals_vec.into_boxed_slice(),
+            size: 0,
         }
     }
 
     /// The length of the gapped array (including gaps)
     pub const fn len(&self) -> usize {
         self.bitmap.len()
+    }
+
+    /// The length of the gapped array (including gaps)
+    pub fn size(&self) -> u32 {
+        self.size
+    }
+
+    /// Is the gapped array full?
+    pub fn is_full(&self) -> bool {
+        self.len() <= self.size() as usize
+    }
+
+    /// The density of the gapped array
+    pub fn density(&self) -> f32 {
+        (self.size as usize) as f32 / self.len() as f32
     }
 
     /// Helper function to implement next occupied and next free
@@ -153,43 +170,68 @@ where
         self.vals.copy_within(src.clone(), dest);
     }
 
-    /// Helper function to insert an entry into a given location
-    fn insert_at(&mut self, pair: (K, V), ix: usize) {
+    /// Helper function to upsert an entry into a given location
+    fn upsert_at(&mut self, pair: (K, V), ix: usize) {
+        if !self.bitmap[ix] {
+            // Inserting a new element
+            self.size += 1;
+        }
         self.bitmap[ix] = true;
         self.keys[ix] = pair.0;
         self.vals[ix] = pair.1;
     }
 
-    /// Insert a specific value into the array with the given hint
-    pub fn insert_with_hint(&mut self, pair: (K, V), hint: usize) -> Result<(), String> {
+    /// Helper function to remove an entry in a given location
+    fn remove_at(&mut self, ix: usize) -> Result<(K, V), String> {
+        if !self.bitmap[ix] {
+            Err("No such element exists for remove_at".to_string())
+        } else {
+            let key = self.keys[ix];
+            let val = self.vals[ix];
+            self.keys[ix] = Default::default();
+            self.vals[ix] = Default::default();
+            self.bitmap[ix] = false;
+            self.size -= 1;
+            Ok((key, val))
+        }
+    }
+
+    /// Upsert a specific value into the array with the given hint
+    pub fn upsert_with_hint(&mut self, pair: (K, V), hint: usize) -> Result<(), String> {
         // TODO: We should do a better job covering the happy case where the guessed index is empty
         // ^ehhhh but also it's just a guess so we need to verify sorted... gets a bit hairy
         let maybe_ix = self.price_is_right(&pair.0, Some(hint));
         match maybe_ix {
             None => {
-                // Edge case where inserting at the beginning
+                // Edge case where upserting at the beginning
                 let Some(closest_ix) = self.next_free_ix(0) else {
-                    return Err("Gapped array is full".to_string());
+                    return Err("Gapped array is full (beginning)".to_string());
                 };
                 self.copy_within(0..closest_ix, 1);
-                self.insert_at(pair, 0);
+                self.upsert_at(pair, 0);
                 Ok(())
             }
             Some(mut ix) => {
+                if self.keys[ix] == pair.0 {
+                    // If this is an update handle it quickly and return
+                    self.upsert_at(pair, ix);
+                    return Ok(());
+                }
                 if ix + 1 == self.len() {
-                    // Edge case where inserting at the end
+                    // Edge case where upserting at the end
                     let Some(closest_ix) = self.prev_free_ix(self.len() - 1) else {
-                        return Err("Gapped array is full".to_string());
+                        return Err("Gapped array is full (end)".to_string());
                     };
                     self.copy_within(closest_ix + 1..self.len(), closest_ix);
-                    self.insert_at(pair, self.len() - 1);
+                    self.bitmap[self.len() - 1] = false; // So size is updated correctly
+                    self.upsert_at(pair, self.len() - 1);
                     Ok(())
                 } else {
-                    // We're doing a "normal" insert into the middle of the array
+                    // We're doing a "normal" upsert into the middle of the array
                     ix += 1; // Price-is-right quirk
                     if !self.bitmap[ix] {
                         // Easy win
-                        self.insert_at(pair, ix);
+                        self.upsert_at(pair, ix);
                         return Ok(());
                     }
                     let shift_left_ix = self.prev_free_ix(ix - 1);
@@ -198,54 +240,143 @@ where
                         (Some(lix), Some(rix)) => {
                             if lix.abs_diff(ix) < rix.abs_diff(ix) {
                                 self.copy_within(lix + 1..ix + 1, lix);
-                                self.insert_at(pair, ix - 1);
+                                self.bitmap[ix - 1] = false; // So size is updated correctly
+                                self.upsert_at(pair, ix - 1);
                                 Ok(())
                             } else {
                                 self.copy_within(ix..rix, ix + 1);
-                                self.insert_at(pair, ix);
+                                self.bitmap[ix] = false; // So size is updated correctly
+                                self.upsert_at(pair, ix);
                                 Ok(())
                             }
                         }
                         (Some(lix), None) => {
                             self.copy_within(lix + 1..ix + 1, lix);
-                            self.insert_at(pair, ix - 1);
+                            self.bitmap[ix - 1] = false; // So size is updated correctly
+                            self.upsert_at(pair, ix - 1);
                             Ok(())
                         }
                         (None, Some(rix)) => {
                             self.copy_within(ix..rix, ix + 1);
-                            self.insert_at(pair, ix);
+                            self.bitmap[ix] = false; // So size is updated correctly
+                            self.upsert_at(pair, ix);
                             Ok(())
                         }
-                        _ => Err("Gapped array is full".to_string()),
+                        _ => Err("Gapped array is full (_)".to_string()),
                     }
                 }
             }
         }
     }
 
-    /// Called for the initial inserts. NOTE: This makes two assumptions:
+    /// Called for the initial upserts. NOTE: This makes two assumptions:
     /// - The values themselves are monotonically increasing
     /// - The hints are monotonically non-decreasing
-    /// If either of these assumptions break, bad stuff may happen (use regular insert)
+    /// If either of these assumptions break, bad stuff may happen (use regular upsert)
     pub fn initial_model_based_insert(&mut self, pair: (K, V), hint: usize) -> Result<(), String> {
         if !self.bitmap[hint] {
-            self.insert_at(pair, hint);
+            self.upsert_at(pair, hint);
             return Ok(());
         }
         match self.next_free_ix(hint + 1) {
             Some(free_ix) => {
-                self.insert_at(pair, free_ix);
+                self.upsert_at(pair, free_ix);
                 Ok(())
             }
             None => match self.prev_free_ix(self.len().saturating_sub(1)) {
                 Some(free_ix) => {
                     self.copy_within(free_ix + 1..self.len(), free_ix);
-                    self.insert_at(pair, self.len().saturating_sub(1));
+                    self.upsert_at(pair, self.len().saturating_sub(1));
                     Ok(())
                 }
                 None => Err("Gapped array is full".to_string()),
             },
         }
+    }
+
+    /// Finds an element with key `needle` and removes that element and up to `window_radius`
+    /// elements on each side.
+    pub fn trim_window(&mut self, needle: K, window_radius: u32, hint: usize) -> Result<Vec<V>, String> {
+        match self.price_is_right(&needle, Some(hint)) {
+            Some(ix) => {
+                if self.keys[ix] != needle {
+                    return Err("Can't trim window: supposed key doesn't exist".to_string());
+                }
+                let mut in_order: Vec<V> = vec![];
+                // First add the actual element
+                let (_, v) = self.remove_at(ix).unwrap();
+                in_order.push(v);
+                // Then get the elements to the left
+                if ix > 0 {
+                    let mut num_left = 0;
+                    let mut kx = self.prev_occupied_ix(ix - 1);
+                    while let Some(jx) = kx {
+                        let (_, v) = self.remove_at(jx).unwrap();
+                        in_order.insert(0, v);
+                        if jx == 0 {
+                            break;
+                        }
+                        kx = self.prev_occupied_ix(jx - 1);
+                        num_left += 1;
+                        if window_radius <= num_left {
+                            break;
+                        }
+                    }
+                }
+                // Then get the elements to the right
+                let mut num_right = 0;
+                let mut kx = self.next_occupied_ix(ix + 1);
+                while let Some(jx) = kx {
+                    let (_, v) = self.remove_at(jx).unwrap();
+                    in_order.push(v);
+                    num_right += 1;
+                    if window_radius <= num_right {
+                        break;
+                    }
+                    kx = self.next_occupied_ix(jx + 1);
+                }
+                Ok(in_order)
+            }
+            None => Err("Can't trim window: supposed key doesn't exist".to_string()),
+        }
+    }
+
+    /// Keep the same elements and relative spacing but create more array space and replace as needed
+    pub fn scale_up(&mut self, c: f32) -> Result<(), String> {
+        if c <= 1.0 {
+            return Err("Must scale by a constant c > 1.0".to_string());
+        }
+        let new_size = (self.len() as f32 * c) as usize;
+        let mut temp = Self::new(new_size);
+        for ix in 0..self.len() {
+            if !self.bitmap[ix] {
+                continue;
+            }
+            temp.initial_model_based_insert((self.keys[ix], self.vals[ix]), (ix as f32 * c) as usize);
+        }
+        self.bitmap = temp.bitmap;
+        self.vals = temp.vals;
+        self.keys = temp.keys;
+        Ok(())
+    }
+
+    pub fn to_string(&self) -> String {
+        let mut res = String::new();
+        res += &format!(
+            "[len: {}, size: {}, density: {}\n",
+            self.len(),
+            self.size(),
+            self.density()
+        );
+        for ix in 0..self.len() {
+            if !self.bitmap[ix] {
+                res += "    None,\n";
+            } else {
+                res += &format!("    ({:?}, {:?}),\n", self.keys[ix], self.vals[ix]);
+            }
+        }
+        res += "  ]";
+        res
     }
 }
 
@@ -274,7 +405,7 @@ mod gapped_array_tests {
     fn fill_forward_with_hint(size: usize, hint: usize) {
         let mut ga = GappedKVArray::<i32, i32>::new(size);
         for num in 0..size {
-            let result = ga.insert_with_hint((num as i32, num as i32), hint);
+            let result = ga.upsert_with_hint((num as i32, num as i32), hint);
             assert!(result.is_ok());
             print_gapped_array(&ga);
         }
@@ -295,7 +426,7 @@ mod gapped_array_tests {
     fn fill_backward_with_hint(size: usize, hint: usize) {
         let mut ga = GappedKVArray::<i32, i32>::new(size);
         for num in 0..size {
-            let result = ga.insert_with_hint(((size - num - 1) as i32, (size - num - 1) as i32), hint);
+            let result = ga.upsert_with_hint(((size - num - 1) as i32, (size - num - 1) as i32), hint);
             assert!(result.is_ok());
         }
         for ix in 0..size {
@@ -335,7 +466,7 @@ mod gapped_array_tests {
         let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
         for (value, hint) in perm.iter().zip(hints.iter()) {
             assert!(ga
-                .insert_with_hint((value.clone(), value.clone()), hint.clone())
+                .upsert_with_hint((value.clone(), value.clone()), hint.clone())
                 .is_ok());
         }
         for ix in 0..ga.len() {
@@ -372,7 +503,7 @@ mod gapped_array_tests {
         print_gapped_array(&ga);
         for (value, hint) in perm.iter().zip(hints.iter()) {
             assert!(ga
-                .insert_with_hint((value.clone(), value.clone()), hint.clone())
+                .upsert_with_hint((value.clone(), value.clone()), hint.clone())
                 .is_ok());
             println!("");
             print_gapped_array(&ga);
@@ -410,10 +541,97 @@ mod gapped_array_tests {
                 }
                 last = Some(*thing);
             }
-            return true;
+            true
         });
         for seq in sequences {
             test_nondec_seq(&items, &seq);
+        }
+    }
+
+    #[test]
+    fn update_gapped_array() {
+        const SIZE: usize = 6;
+        let keys = vec![0, 1, 2, 3, 2, 3];
+        let vals = vec![10, 11, 22, 33, 42, 53];
+        let all_hints = get_all_possible_hints(SIZE, SIZE);
+        let mut ga = GappedKVArray::<i32, i32>::new(SIZE + 1);
+        let final_keys = vec![0, 1, 2, 3];
+        let final_vals = vec![10, 11, 42, 53];
+        for hints in all_hints {
+            for ((key, val), hint) in (keys.iter().zip(vals.iter())).zip(hints.iter()) {
+                assert!(ga.upsert_with_hint((key.clone(), val.clone()), hint.clone()).is_ok());
+            }
+            for (ix, (key, val)) in ga.keys.iter().zip(ga.vals.iter()).enumerate().take(final_keys.len()) {
+                assert!(*key == final_keys[ix]);
+                assert!(*val == final_vals[ix]);
+            }
+        }
+    }
+
+    #[test]
+    fn trim_gapped_array() {
+        const SIZE: usize = 6;
+        let get_fresh_ga = || {
+            let keys = vec![0, 1, 2, 3, 4, 5];
+            let vals = vec![0, 1, 2, 3, 4, 5];
+            let all_hints = get_all_possible_hints(SIZE, SIZE);
+            let mut ga = GappedKVArray::<i32, i32>::new(SIZE);
+            for (key, val) in keys.iter().zip(vals.iter()) {
+                ga.upsert_with_hint((*key, *val), 3);
+            }
+            ga
+        };
+        for hint in 0..SIZE {
+            // Trim in the middle
+            let mut mid_ga = get_fresh_ga();
+            mid_ga.trim_window(2, 1, hint);
+            let expected_keys = vec![0, 0, 0, 0, 4, 5];
+            let expected_vals = vec![0, 0, 0, 0, 4, 5];
+            let expected_bitmap = vec![true, false, false, false, true, true];
+            for ix in 0..SIZE {
+                assert!(mid_ga.keys[ix] == expected_keys[ix]);
+                assert!(mid_ga.vals[ix] == expected_vals[ix]);
+                assert!(mid_ga.bitmap[ix] == expected_bitmap[ix]);
+            }
+        }
+        for hint in 0..SIZE {
+            // Trim with clipping at both sides
+            let mut mid_ga = get_fresh_ga();
+            mid_ga.trim_window(2, u32::MAX, hint);
+            let expected_keys = vec![0, 0, 0, 0, 0, 0];
+            let expected_vals = vec![0, 0, 0, 0, 0, 0];
+            let expected_bitmap = vec![false, false, false, false, false, false];
+            for ix in 0..SIZE {
+                assert!(mid_ga.keys[ix] == expected_keys[ix]);
+                assert!(mid_ga.vals[ix] == expected_vals[ix]);
+                assert!(mid_ga.bitmap[ix] == expected_bitmap[ix]);
+            }
+        }
+        for hint in 0..SIZE {
+            // Trim from beginning
+            let mut front_ga = get_fresh_ga();
+            front_ga.trim_window(0, 1, hint);
+            let expected_keys = vec![0, 0, 2, 3, 4, 5];
+            let expected_vals = vec![0, 0, 2, 3, 4, 5];
+            let expected_bitmap = vec![false, false, true, true, true, true];
+            for ix in 0..SIZE {
+                assert!(front_ga.keys[ix] == expected_keys[ix]);
+                assert!(front_ga.vals[ix] == expected_vals[ix]);
+                assert!(front_ga.bitmap[ix] == expected_bitmap[ix]);
+            }
+        }
+        for hint in 0..SIZE {
+            // Trim from end
+            let mut end_ga = get_fresh_ga();
+            end_ga.trim_window((end_ga.len() - 1) as i32, 1, hint);
+            let expected_keys = vec![0, 1, 2, 3, 0, 0];
+            let expected_vals = vec![0, 1, 2, 3, 0, 0];
+            let expected_bitmap = vec![true, true, true, true, false, false];
+            for ix in 0..SIZE {
+                assert!(end_ga.keys[ix] == expected_keys[ix]);
+                assert!(end_ga.vals[ix] == expected_vals[ix]);
+                assert!(end_ga.bitmap[ix] == expected_bitmap[ix]);
+            }
         }
     }
 

@@ -7,7 +7,7 @@ use super::gapped_array::GappedKVArray;
 use crate::Entry;
 use generational_arena::{Arena, Index};
 use num::Float;
-use std::ops::Range;
+use std::{fs, ops::Range};
 use trait_set::trait_set;
 
 pub type GappedKey = i32;
@@ -201,11 +201,16 @@ pub struct GappedPGMNode<V: GappedValue, const EPSILON: usize, const BUFSIZE: us
     pub ga: GappedKVArray<GappedKey, V>,
     pub buffer: [Option<Entry<GappedKey, V>>; BUFSIZE],
     pub model: LinearModel,
-    pub density: f32,
+    pub split_density: f32,
+    pub parent: Option<GappedIndex>,
 }
 impl<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<V, EPSILON, BUFSIZE> {
     pub const fn is_leaf(&self) -> bool {
         self.height == 0
+    }
+
+    pub const fn is_internal(&self) -> bool {
+        !self.is_leaf()
     }
 
     pub const fn is_branch(&self) -> bool {
@@ -218,11 +223,57 @@ impl<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<V
             None => None,
         }
     }
+
+    /// TODO: Make this an iterator!!!
+    pub fn to_entries(&self) -> Vec<Entry<GappedKey, V>> {
+        let mut result = vec![];
+        let mut ix = self.ga.next_occupied_ix(0);
+        while let Some(jx) = ix {
+            result.push(Entry::new(self.ga.keys[jx], self.ga.vals[jx]));
+            ix = self.ga.next_occupied_ix(jx + 1);
+        }
+        result
+    }
+
+    pub fn scale_up(&mut self, c: f32) -> Result<(), String> {
+        if c <= 1.0 {
+            return Err("Must scale by a constant c > 1.0".to_string());
+        }
+        self.model.scale(1.0 / c);
+        self.ga.scale_up(c)
+    }
+
+    pub fn upsert(&mut self, entry: Entry<GappedKey, V>) -> Result<(), String> {
+        if self.is_internal() && self.ga.is_full() {
+            self.scale_up(2.0);
+        }
+        let guess = self.model.approximate(entry.key, Some(0..self.ga.len()));
+        self.ga.upsert_with_hint((entry.key, entry.value), guess)?;
+        Ok(())
+    }
+
+    pub fn trim_window(&mut self, key: GappedKey, window_radius: u32) -> Result<Vec<V>, String> {
+        let guess = self.model.approximate(key, Some(0..self.ga.len()));
+        self.ga.trim_window(key, window_radius, guess)
+    }
+}
+impl<const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<GappedIndex, EPSILON, BUFSIZE> {
+    /// TODO: Make this an iterator!!!
+    pub fn to_children(&self) -> Vec<GappedIndex> {
+        let mut result = vec![];
+        let mut ix = self.ga.next_occupied_ix(0);
+        while let Some(jx) = ix {
+            result.push(self.ga.vals[jx]);
+            ix = self.ga.next_occupied_ix(jx + 1);
+        }
+        result
+    }
 }
 
 pub fn build_layer_from_slice<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize>(
     entries: &[Entry<GappedKey, V>],
-    density: f32,
+    fill_density: f32,
+    split_density: f32,
     height: u32,
 ) -> Vec<GappedPGMNode<V, EPSILON, BUFSIZE>> {
     // Helper function
@@ -231,9 +282,9 @@ pub fn build_layer_from_slice<V: GappedValue, const EPSILON: usize, const BUFSIZ
                              built_ix: &mut usize,
                              result: &mut Vec<GappedPGMNode<V, EPSILON, BUFSIZE>>| {
         let mut model = segmentor.to_linear_model();
-        model.scale(1.0 / density);
+        model.scale(1.0 / fill_density);
         let num_initial = next_ix - *built_ix;
-        let bloated_size = ((num_initial as f32) / density).ceil() as usize;
+        let bloated_size = ((num_initial as f32) / fill_density).ceil() as usize;
         let mut ga = GappedKVArray::<GappedKey, V>::new(bloated_size);
         for add_ix in *built_ix..next_ix {
             let add_entry = entries[add_ix];
@@ -245,7 +296,8 @@ pub fn build_layer_from_slice<V: GappedValue, const EPSILON: usize, const BUFSIZ
             ga,
             buffer: [None; BUFSIZE],
             model,
-            density,
+            split_density,
+            parent: None,
         };
         result.push(new_node);
         *built_ix = next_ix;
@@ -288,20 +340,120 @@ pub struct GappedPGM<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize
     pub internal_arena: Arena<GappedPGMNode<GappedIndex, INT_EPS, 0>>,
     pub leaf_arena: Arena<GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>>,
     pub root_ptr: Option<GappedIndex>,
+    pub leaf_fill_density: f32,
+    pub leaf_split_density: f32,
+    pub internal_fill_density: f32,
+    pub internal_split_density: f32,
+    pub leaf_window_radius: u32, // TODO: Make this a generic constant, just lazy
+}
+struct ConnLink {
+    pub node_ptr: GappedIndex,
+    pub parent_ptr: Option<GappedIndex>,
+    pub height: u32,
 }
 impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize>
     GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>
 {
+    pub fn to_string(&self) -> String {
+        let cur_ptr = self.root_ptr.unwrap();
+        if self.height < 1 {
+            panic!("Can't plot degen trees");
+        }
+        // Initialize lol
+        let mut lol = vec![];
+        let root = self.get_internal_node(cur_ptr).unwrap();
+        lol.push(vec![vec![(
+            cur_ptr,
+            Entry::new(root.to_entry().unwrap().key, V::default()),
+            root.ga.to_string(),
+        )]]);
+        loop {
+            let last_layer = lol.last().unwrap();
+            let mut this_layer: Vec<Vec<(GappedIndex, Entry<GappedKey, V>, String)>> = vec![];
+            let mut is_branch = false;
+            for seq in last_layer {
+                for (ptr, _, _) in seq {
+                    let node = self.get_internal_node(*ptr).unwrap();
+                    if node.is_branch() {
+                        // Add the leafs properly
+                        let mut ix: Option<usize> = node.ga.next_occupied_ix(0);
+                        let mut this_vec = vec![];
+                        while ix.is_some() {
+                            let ptr = node.ga.vals[ix.unwrap()];
+                            let leaf_node = self.get_leaf_node(ptr).unwrap();
+                            this_vec.push((
+                                ptr,
+                                leaf_node.to_entry().unwrap(),
+                                format!("{:?} - {}", leaf_node.parent, leaf_node.ga.to_string()),
+                            ));
+                            ix = node.ga.next_occupied_ix(ix.unwrap() + 1);
+                        }
+                        this_layer.push(this_vec);
+                    } else {
+                        // Add the internals properly
+                        let mut ix: Option<usize> = node.ga.next_occupied_ix(0);
+                        let mut this_vec = vec![];
+                        while ix.is_some() {
+                            let ptr = node.ga.vals[ix.unwrap()];
+                            let int_node = self.get_internal_node(ptr).unwrap();
+                            this_vec.push((
+                                ptr,
+                                Entry::new(int_node.to_entry().unwrap().key, V::default()),
+                                int_node.ga.to_string(),
+                            ));
+                            ix = node.ga.next_occupied_ix(ix.unwrap() + 1);
+                        }
+                        this_layer.push(this_vec);
+                    }
+                    is_branch = is_branch || node.is_branch();
+                }
+            }
+            lol.push(this_layer);
+            if is_branch {
+                break;
+            }
+        }
+        let mut height = self.height as i32;
+        let mut res = String::new();
+        for layer in lol {
+            res += &format!("HEIGHT: {}\n", height);
+            for group in layer {
+                res += &format!("[\n");
+                for (_, _, s) in group {
+                    res += &format!("  {}\n", s);
+                }
+                res += &format!("]\n");
+            }
+            res += &format!("\n");
+            height -= 1;
+        }
+        res
+    }
+
+    pub fn to_file(&self, filename: &str) {
+        fs::write(filename, self.to_string()).unwrap();
+    }
+
     pub fn build_from_slice(entries: &[Entry<GappedKey, V>]) -> Self {
         let mut gapped_pgm = Self {
             height: 0,
             internal_arena: Arena::new(),
             leaf_arena: Arena::new(),
             root_ptr: None,
+            leaf_fill_density: 0.5,
+            leaf_split_density: 0.8,
+            internal_fill_density: 0.8,
+            internal_split_density: 0.9,
+            leaf_window_radius: 2,
         };
         // Build the leaf layer
         let mut height = 0;
-        let leaf_nodes: Vec<GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>> = build_layer_from_slice(entries, 0.5, height);
+        let leaf_nodes: Vec<GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>> = build_layer_from_slice(
+            entries,
+            gapped_pgm.leaf_fill_density,
+            gapped_pgm.leaf_split_density,
+            height,
+        );
         let mut next_entries: Vec<Entry<GappedKey, GappedIndex>> = vec![];
         for node in leaf_nodes {
             let key = node.model.key;
@@ -311,8 +463,12 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
         // Recursively build the internal layers
         while next_entries.len() > 1 {
             height += 1;
-            let internal_nodes: Vec<GappedPGMNode<GappedIndex, INT_EPS, 0>> =
-                build_layer_from_slice(&next_entries, 0.9, height);
+            let internal_nodes: Vec<GappedPGMNode<GappedIndex, INT_EPS, 0>> = build_layer_from_slice(
+                &next_entries,
+                gapped_pgm.internal_fill_density,
+                gapped_pgm.internal_split_density,
+                height,
+            );
             next_entries.clear();
             for node in internal_nodes {
                 let key = node.model.key;
@@ -322,6 +478,31 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
         }
         gapped_pgm.root_ptr = Some(next_entries[0].value);
         gapped_pgm.height = height;
+        // Connect parent pointers
+        let mut stack: Vec<ConnLink> = vec![ConnLink {
+            node_ptr: gapped_pgm.root_ptr.unwrap(),
+            parent_ptr: None,
+            height: gapped_pgm.height,
+        }];
+        while let Some(link) = stack.pop() {
+            if link.height == 0 {
+                // Leaf node
+                let node = gapped_pgm.get_mut_leaf_node(link.node_ptr).unwrap();
+                node.parent = link.parent_ptr;
+            } else {
+                // Internal node
+                let node = gapped_pgm.get_mut_internal_node(link.node_ptr).unwrap();
+                node.parent = link.parent_ptr;
+                let children = node.to_children();
+                for child in children {
+                    stack.push(ConnLink {
+                        node_ptr: child,
+                        parent_ptr: Some(link.node_ptr),
+                        height: link.height - 1,
+                    })
+                }
+            }
+        }
         gapped_pgm
     }
 
@@ -329,8 +510,16 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
         self.internal_arena.get(ptr.0)
     }
 
+    pub fn get_mut_internal_node(&mut self, ptr: GappedIndex) -> Option<&mut GappedPGMNode<GappedIndex, INT_EPS, 0>> {
+        self.internal_arena.get_mut(ptr.0)
+    }
+
     pub fn get_leaf_node(&self, ptr: GappedIndex) -> Option<&GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>> {
         self.leaf_arena.get(ptr.0)
+    }
+
+    pub fn get_mut_leaf_node(&mut self, ptr: GappedIndex) -> Option<&mut GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>> {
+        self.leaf_arena.get_mut(ptr.0)
     }
 
     pub fn search(&self, needle: GappedKey) -> Option<&V> {
@@ -352,11 +541,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
                 }
             }
             height -= 1;
-            // let ten_millis = std::time::Duration::from_millis(500);
-            // let now = std::time::Instant::now();
-            // std::thread::sleep(ten_millis);
         }
-        assert!(height == 0);
         // We're at the leaf node
         match self.get_leaf_node(ptr) {
             None => {
@@ -369,17 +554,100 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
             }
         }
     }
+
+    pub fn upsert(&mut self, entry: Entry<GappedKey, V>) -> Result<(), String> {
+        let mut ptr = self.root_ptr.unwrap();
+        let mut height = self.height;
+        // Recurse down to the leaf node
+        while height > 0 {
+            match self.get_internal_node(ptr) {
+                None => {
+                    panic!("Bad internal nodes");
+                }
+                Some(node) => {
+                    let guess = node.model.approximate(entry.key, Some(0..node.ga.len()));
+                    let next_ptr_option = node.ga.search_pir(&entry.key, Some(guess));
+                    match next_ptr_option {
+                        None => {
+                            // If price-is-right returns None, it means this is smaller than everythign
+                            let Some(ix) = node.ga.next_occupied_ix(0) else {
+                                return Err("Layer looks empty during insert".to_string());
+                            };
+                            ptr = node.ga.vals[ix];
+                        }
+                        Some(next_ptr) => ptr = *next_ptr,
+                    }
+                }
+            }
+            height -= 1;
+        }
+        // We're at the leaf node
+        let leaf_split_density = self.leaf_split_density;
+        match self.get_mut_leaf_node(ptr) {
+            None => Err("Bad leaf nodes".to_string()),
+            Some(node) => {
+                // Can do a gapped insert
+                node.upsert(entry)?;
+                if node.ga.density() >= leaf_split_density {
+                    self.split_leaf(ptr)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    fn split_leaf(&mut self, ptr: GappedIndex) -> Result<(), String> {
+        let Some(leaf_node) = self.get_leaf_node(ptr) else {
+            return Err("Leaf ptr doesn't exist for splitting".to_string());
+        };
+        let leaf_key = leaf_node.to_entry().unwrap().key;
+        let Some(parent_ptr) = leaf_node.parent else {
+            return Err("TODO: Single leaf splitting not yet supported".to_string());
+        };
+        let leaf_window_radius = self.leaf_window_radius;
+        let Some(parent_node) = self.get_mut_internal_node(parent_ptr) else {
+            return Err("Bad parent when splitting leaf".to_string());
+        };
+        // NOTE: Includes self
+        let fell_ptrs = parent_node.trim_window(leaf_key, leaf_window_radius).unwrap();
+        let mut entries: Vec<Entry<GappedKey, V>> = vec![];
+        for ptr in fell_ptrs {
+            let killed_node = self.leaf_arena.remove(ptr.0).unwrap();
+            let phoenix_entries = killed_node.to_entries();
+            entries.extend(phoenix_entries.into_iter());
+        }
+        let mut new_nodes = build_layer_from_slice(&entries, self.leaf_fill_density, self.leaf_split_density, 0);
+        for node in new_nodes.iter_mut() {
+            node.parent = Some(parent_ptr);
+        }
+        let mut keys_n_ptrs = vec![];
+        for node in new_nodes {
+            let key = node.to_entry().unwrap().key;
+            let ptr = GappedIndex(self.leaf_arena.insert(node));
+            keys_n_ptrs.push((key, ptr));
+        }
+        // Structure is a bit weird but the borrow checker likes it
+        let Some(parent_node) = self.get_mut_internal_node(parent_ptr) else {
+            return Err("Bad parent when splitting leaf".to_string());
+        };
+        for (key, ptr) in keys_n_ptrs {
+            parent_node.upsert(Entry::new(key, ptr))?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod gapped_pgm_tests {
-    use std::time::Instant;
+    use std::{collections::HashSet, time::Instant};
 
     use kdam::{tqdm, BarExt};
     use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 
     use super::*;
 
+    /// Helper function to generate uniformly random inserts
     fn generate_random_entries(size: usize, seed: Option<u64>) -> Vec<Entry<i32, i32>> {
         let range = Uniform::from((GappedKey::MIN)..(GappedKey::MAX));
         let mut random_values: Vec<i32> = match seed {
@@ -388,11 +656,13 @@ mod gapped_pgm_tests {
         };
         random_values.sort();
         random_values.dedup();
-        let entries: Vec<Entry<GappedKey, i32>> = random_values
+        let mut entries: Vec<Entry<GappedKey, i32>> = random_values
             .into_iter()
             .enumerate()
             .map(|(ix, key)| Entry::new(key, ix as i32))
             .collect();
+        // TODO: Get rid of this quirk where we alwas need the key min
+        entries.insert(0, Entry::new(i32::MIN, i32::MIN));
         entries
     }
 
@@ -427,7 +697,7 @@ mod gapped_pgm_tests {
                 println!("Training on {} entries with eps={}", self.entries.len(), EPSILON);
             }
             let start_time = Instant::now();
-            self.nodes = build_layer_from_slice::<i32, EPSILON, BUFSIZE>(&self.entries, 0.5, 0);
+            self.nodes = build_layer_from_slice::<i32, EPSILON, BUFSIZE>(&self.entries, 0.5, 0.8, 0);
             let elapsed_time = start_time.elapsed();
             if self.verbose {
                 println!("Training completed in {} ms.", elapsed_time.as_millis());
@@ -467,6 +737,101 @@ mod gapped_pgm_tests {
                 assert!(*val.unwrap() == entry.value);
                 pb.update(1);
             }
+        }
+    }
+
+    #[test]
+    fn test_gapped_pgm_parents() {
+        let gen_seed = 1;
+        let entries = generate_random_entries(100_000, Some(gen_seed));
+        let mut gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+        for entry in entries {
+            let mut ptr = gapped_pgm.root_ptr.unwrap();
+            let mut height = gapped_pgm.height;
+            // Recurse down to the leaf node
+            while height > 0 {
+                match gapped_pgm.get_internal_node(ptr) {
+                    None => {
+                        panic!("Nope test bad parents");
+                    }
+                    Some(node) => {
+                        let guess = node.model.approximate(entry.key, Some(0..node.ga.len()));
+                        let child_ptr = node.ga.search_pir(&entry.key, Some(guess)).unwrap();
+                        if node.is_branch() {
+                            let child = gapped_pgm.get_leaf_node(*child_ptr).unwrap();
+                            let (x1, y1) = ptr.0.into_raw_parts();
+                            let (x2, y2) = child.parent.unwrap().0.into_raw_parts();
+                            assert!(x1 == x2);
+                            assert!(y1 == y2);
+                        } else {
+                            let child = gapped_pgm.get_internal_node(*child_ptr).unwrap();
+                            let (x1, y1) = ptr.0.into_raw_parts();
+                            let (x2, y2) = child.parent.unwrap().0.into_raw_parts();
+                            assert!(x1 == x2);
+                            assert!(y1 == y2);
+                        }
+                        ptr = *child_ptr;
+                    }
+                }
+                height -= 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_gapped_pgm_update() {
+        let gen_seed = 1;
+        let entries = generate_random_entries(100_000, Some(gen_seed));
+        let mut gapped_pgm: GappedPGM<i32, 4, 64, 4> = GappedPGM::build_from_slice(&entries);
+        for entry in entries.iter() {
+            gapped_pgm.upsert(Entry::new(entry.key, entry.value + 1));
+        }
+        for entry in entries.iter() {
+            let val = gapped_pgm.search(entry.key);
+            assert!(*val.unwrap() == entry.value + 1);
+        }
+    }
+
+    #[test]
+    fn test_basic_gapped_pgm_insert() {
+        let gen_seed = 1;
+        let entries = generate_random_entries(1_000, Some(gen_seed));
+        let mut gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+        let ins_seed = 2;
+        let additional = generate_random_entries(100_000, Some(ins_seed));
+        let mut pb = tqdm!(total = additional.len());
+        for entry in additional.iter() {
+            gapped_pgm.upsert(entry.clone()).unwrap();
+            pb.update(1);
+        }
+        let mut additional_set = HashSet::new();
+        for entry in additional.iter() {
+            additional_set.insert(entry.key);
+            let val = gapped_pgm.search(entry.key);
+            assert!(*val.unwrap() == entry.value);
+        }
+        for entry in entries.iter() {
+            if additional_set.contains(&entry.key) {
+                continue;
+            }
+            let val = gapped_pgm.search(entry.key);
+            assert!(*val.unwrap() == entry.value);
+        }
+    }
+
+    #[test]
+    fn debug_gapped_pgm_insert() {
+        let gen_seed = 1;
+        let add_seed = 2;
+        let mut entries = generate_random_entries(32, Some(gen_seed));
+        entries.insert(0, Entry::new(i32::MIN, i32::MIN));
+        let additional = generate_random_entries(100, Some(add_seed));
+        let mut gapped_pgm: GappedPGM<i32, 3, 3, 0> = GappedPGM::build_from_slice(&entries);
+        gapped_pgm.to_file("zDebug/_initial.out");
+        for i in 0..100 {
+            gapped_pgm.upsert(additional[i]);
+            let file_name = format!("{}{}.out", "zDebug/", i);
+            gapped_pgm.to_file(&file_name);
         }
     }
 }
