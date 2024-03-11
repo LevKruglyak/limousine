@@ -73,8 +73,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "limousine_core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "285b4a1ce52ffcb48ba3df754d705072412686017f20f6238e453624cd4ab955"
+dependencies = [
+ "bytemuck",
+ "mmap_buffer",
+ "num",
+ "trait-set",
+]
+
+[[package]]
 name = "limousine_derive"
 version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
+]
+
+[[package]]
+name = "limousine_derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "599ae56e38a040ea1179ef833b1e1a32d30e1da4b10d4595b5775b3d92d08247"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -85,8 +108,8 @@ dependencies = [
 name = "limousine_engine"
 version = "0.1.0"
 dependencies = [
- "limousine_core",
- "limousine_derive",
+ "limousine_core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "limousine_derive 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
