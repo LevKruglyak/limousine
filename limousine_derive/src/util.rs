@@ -1,4 +1,3 @@
-use proc_macro2::Span;
 use std::borrow::Borrow;
 use std::hash::Hash;
 use syn::parse::{Parse, ParseStream};
@@ -44,7 +43,6 @@ impl Attribute {
 
 impl Parse for Attribute {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let key_span = input.span();
         let key: Ident = input.parse()?;
 
         let equal: Option<Token![=]> = input.parse()?;

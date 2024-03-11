@@ -61,6 +61,7 @@ pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenS
 
     let (alias_body, alias) = create_type_aliases(&layout);
     let (index_body, index_fields) = create_index_struct(&layout, &alias);
+    let index_impl = create_index_impl(&layout, &alias, &index_fields);
 
     let mut implementation = proc_macro2::TokenStream::new();
     implementation.extend(quote! {
@@ -70,6 +71,8 @@ pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenS
             #(#alias_body)*
 
             #index_body
+
+            #index_impl
         }
 
         use #mod_name::#name;
@@ -79,12 +82,13 @@ pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenS
 }
 
 fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
-    let mut type_alias = Vec::new();
+    let type_alias: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .map(|i| Ident::new(format!("C{}", i).as_str(), Span::call_site()))
+        .collect();
+
     let mut type_alias_body = Vec::new();
 
     // Add body as the first component
-    type_alias.push(Ident::new("Component0", Span::call_site()));
-
     let alias = type_alias[0].clone();
     let body = layout.base.to_tokens();
     type_alias_body.push(quote::quote! {
@@ -94,11 +98,6 @@ fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
     // Add internal components
     for (mut index, component) in layout.internal.iter().rev().enumerate() {
         index += 1;
-
-        type_alias.push(Ident::new(
-            format!("Component{}", index).as_str(),
-            Span::call_site(),
-        ));
 
         let previous_alias = type_alias[index - 1].clone();
         let body = component.to_tokens(quote! { #previous_alias<K, V> });
@@ -111,10 +110,6 @@ fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
 
     // Add top component
     let index = layout.internal.len() + 1;
-    type_alias.push(Ident::new(
-        format!("Component{}", index).as_str(),
-        Span::call_site(),
-    ));
 
     let previous_alias = type_alias[index - 1].clone();
     let body = layout.top.to_tokens(quote! { #previous_alias<K, V> });
@@ -155,4 +150,151 @@ fn create_index_struct(layout: &IndexLayout, alias: &Vec<Ident>) -> (TokenStream
     };
 
     (body, fields)
+}
+
+fn create_index_impl(
+    layout: &IndexLayout,
+    aliases: &Vec<Ident>,
+    fields: &Vec<Ident>,
+) -> TokenStream {
+    let name = layout.name();
+
+    let search_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .rev()
+        .map(|i| Ident::new(format!("search{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    let component_vars: Vec<Ident> = fields.iter().cloned().rev().collect();
+
+    let mut search_body: Vec<TokenStream> = Vec::new();
+
+    // Top component
+    let search = search_vars[0].clone();
+    let field = component_vars[0].clone();
+    let next = component_vars[1].clone();
+
+    search_body.push(quote! { let #search = self.#field.search(&self.#next, &key);});
+
+    // Internal components
+    for index in 1..=layout.internal.len() {
+        let search = search_vars[index].clone();
+        let prev_search = search_vars[index - 1].clone();
+        let field = component_vars[index].clone();
+        let next = component_vars[index + 1].clone();
+
+        search_body
+            .push(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+    }
+
+    // Base component
+    let index = layout.internal.len() + 1;
+    let search = search_vars[index].clone();
+    let prev_search = search_vars[index - 1].clone();
+    let field = component_vars[index].clone();
+
+    search_body.push(quote! { let #search = self.#field.search(#prev_search, &key);});
+    search_body.push(quote! { #search });
+
+    // Put all together
+    let search_body: TokenStream = quote! {
+        #(#search_body)*
+    };
+
+    let mut empty_body = TokenStream::new();
+
+    let empty_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .map(|i| Ident::new(format!("c{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    // Add body as the first component
+    let alias = aliases[0].clone();
+    let var = empty_vars[0].clone();
+
+    empty_body.extend(quote! {
+        let #var = #alias::empty();
+    });
+
+    // Add internal components
+    for index in 1..=layout.internal.len() {
+        let alias = aliases[index].clone();
+        let var = empty_vars[index].clone();
+        let prev_var = empty_vars[index - 1].clone();
+
+        empty_body.extend(quote! {
+            let #var = #alias::build(&#prev_var);
+        });
+    }
+
+    let index = layout.internal.len() + 1;
+    let alias = aliases[index].clone();
+    let var = empty_vars[index].clone();
+    let prev_var = empty_vars[index - 1].clone();
+
+    empty_body.extend(quote! {
+        let #var = #alias::build(&#prev_var);
+    });
+
+    empty_body.extend(quote! {
+        Self {
+            #(#empty_vars,)*
+        }
+    });
+
+    let mut build_body = TokenStream::new();
+
+    let build_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .map(|i| Ident::new(format!("c{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    // Add body as the first component
+    let alias = aliases[0].clone();
+    let var = build_vars[0].clone();
+
+    build_body.extend(quote! {
+        let #var = #alias::build(iter);
+    });
+
+    // Add internal components
+    for index in 1..=layout.internal.len() {
+        let alias = aliases[index].clone();
+        let var = build_vars[index].clone();
+        let prev_var = build_vars[index - 1].clone();
+
+        build_body.extend(quote! {
+            let #var = #alias::build(&#prev_var);
+        });
+    }
+
+    let index = layout.internal.len() + 1;
+    let alias = aliases[index].clone();
+    let var = build_vars[index].clone();
+    let prev_var = build_vars[index - 1].clone();
+
+    build_body.extend(quote! {
+        let #var = #alias::build(&#prev_var);
+    });
+
+    build_body.extend(quote! {
+        Self {
+            #(#empty_vars,)*
+        }
+    });
+
+    let body = quote! {
+        impl<K: Key, V: Value> #name<K, V> {
+            pub fn search(&self, key: &K) -> Option<&V> {
+                #search_body
+            }
+
+            pub fn empty() -> Self {
+                #empty_body
+            }
+
+            pub fn build(iter: impl Iterator<Item = (K, V)>) -> Self {
+                #build_body
+            }
+        }
+    };
+
+    body
 }

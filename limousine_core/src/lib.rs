@@ -13,4 +13,5 @@ pub use classical::BTreeBaseComponent;
 pub use classical::BTreeInternalComponent;
 pub use classical::BTreeTopComponent;
 
+pub use component::*;
 pub use kv::{Key, Value};
