@@ -102,10 +102,7 @@ struct HybridBenchmark {
     index: TestIndex,
     num_trials: usize,
     num_inserts: usize,
-    size0: Vec<usize>,
-    size1: Vec<usize>,
-    size2: Vec<usize>,
-    size3: Vec<usize>,
+    size: Vec<usize>,
 }
 
 impl HybridBenchmark {
@@ -114,10 +111,7 @@ impl HybridBenchmark {
             index: TestIndex::empty(),
             num_trials: 1000,
             num_inserts: 1000,
-            size0: Vec::new(),
-            size1: Vec::new(),
-            size2: Vec::new(),
-            size3: Vec::new(),
+            size: Vec::new(),
         }
     }
 }
@@ -128,10 +122,7 @@ impl eframe::App for HybridBenchmark {
             if ui.button("Empty").clicked() {
                 self.index = TestIndex::empty();
 
-                self.size0.clear();
-                self.size1.clear();
-                self.size2.clear();
-                self.size3.clear();
+                self.size.clear();
             }
 
             ui.horizontal(|ui| {
@@ -146,10 +137,7 @@ impl eframe::App for HybridBenchmark {
                             .map(|x| (x, Default::default())),
                     );
 
-                    self.size0.clear();
-                    self.size1.clear();
-                    self.size2.clear();
-                    self.size3.clear();
+                    self.size.clear();
                 }
             });
 
@@ -158,66 +146,41 @@ impl eframe::App for HybridBenchmark {
                 if ui.button("Insert Random").clicked() {
                     for (key, value) in StdRng::from_entropy()
                         .sample_iter(Uniform::new(0, 1_000_000_000))
-                        .take(self.num_trials)
+                        .take(self.num_inserts)
                         .sorted()
                         .unique()
                         .map(|x| (x, Default::default()))
                     {
                         self.index.insert(key, value);
-                        self.size0.push(self.index.component0.size());
-                        self.size1.push(self.index.component1.size());
-                        self.size2.push(self.index.component2.size());
-                        self.size3.push(self.index.component3.size());
+
+                        let total_size = self.index.component2.memory_size()
+                            + self.index.component1.memory_size()
+                            + self.index.component0.memory_size();
+
+                        self.size.push(total_size);
                     }
                 }
             });
 
-            ui.label("Index description:");
-            ui.label(format!("top layer: {}", self.index.component3.size()));
-            ui.label(format!("internal layer: {}", self.index.component2.size()));
-            ui.label(format!("internal layer: {}", self.index.component1.size()));
-            ui.label(format!("base layer: {}", self.index.component0.size()));
+            ui.label("Index Component Lengths:");
+            ui.label(format!("top layer: {}", self.index.component3.len()));
+            ui.label(format!("internal layer: {}", self.index.component2.len()));
+            ui.label(format!("internal layer: {}", self.index.component1.len()));
+            ui.label(format!("base layer: {}", self.index.component0.len()));
 
-            let size0: egui::plot::PlotPoints = self
-                .size0
+            let size: egui::plot::PlotPoints = self
+                .size
                 .iter()
                 .enumerate()
-                .map(|(i, x)| [*x as f64, i as f64])
+                .map(|(i, x)| [i as f64, *x as f64])
                 .collect();
 
-            let size1: egui::plot::PlotPoints = self
-                .size1
-                .iter()
-                .enumerate()
-                .map(|(i, x)| [*x as f64, i as f64])
-                .collect();
-
-            let size2: egui::plot::PlotPoints = self
-                .size2
-                .iter()
-                .enumerate()
-                .map(|(i, x)| [*x as f64, i as f64])
-                .collect();
-
-            let size3: egui::plot::PlotPoints = self
-                .size2
-                .iter()
-                .enumerate()
-                .map(|(i, x)| [*x as f64, i as f64])
-                .collect();
-
-            let line0 = egui::plot::Line::new(size0);
-            let line1 = egui::plot::Line::new(size1);
-            let line2 = egui::plot::Line::new(size2);
-            let line3 = egui::plot::Line::new(size3);
+            let line = egui::plot::Line::new(size);
 
             egui::plot::Plot::new("my_plot")
                 .view_aspect(2.0)
                 .show(ui, |plot_ui| {
-                    plot_ui.line(line0);
-                    plot_ui.line(line1);
-                    plot_ui.line(line2);
-                    plot_ui.line(line3);
+                    plot_ui.line(line);
                 });
         });
     }

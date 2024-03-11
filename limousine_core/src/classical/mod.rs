@@ -42,7 +42,7 @@ where
         }
     }
 
-    fn size(&self) -> usize {
+    fn len(&self) -> usize {
         self.inner.len()
     }
 }

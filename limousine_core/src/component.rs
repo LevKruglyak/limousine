@@ -54,7 +54,7 @@ where
 
     fn insert(&mut self, prop: PropogateInsert<'_, K, Base>);
 
-    fn size(&self) -> usize;
+    fn len(&self) -> usize;
 }
 
 pub trait TopComponentInMemoryBuild<K, Base>
@@ -77,7 +77,9 @@ where
         prop: PropogateInsert<'_, K, Base>,
     ) -> Option<PropogateInsert<'n, K, Self>>;
 
-    fn size(&self) -> usize;
+    fn len(&self) -> usize;
+
+    fn memory_size(&self) -> usize;
 }
 
 pub trait InternalComponentInMemoryBuild<K, Base>
@@ -101,7 +103,9 @@ where
 
     fn get(&self, ptr: Self::Address, key: &K) -> Option<&V>;
 
-    fn size(&self) -> usize;
+    fn len(&self) -> usize;
+
+    fn memory_size(&self) -> usize;
 
     // type EntryIter<'n>: Iterator<Item = (&'n K, &'n V)>
     // where
