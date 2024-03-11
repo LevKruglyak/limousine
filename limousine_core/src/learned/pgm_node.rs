@@ -1,30 +1,15 @@
+use crate::Key;
+
+use super::{pgm::PGMSegmentation, ApproxPos, Model, PiecewiseModel};
 use std::borrow::Borrow;
-
-use bytemuck::{Pod, Zeroable};
-
-use crate::{ApproxPos, Key};
-
-use super::{pgm::PGMSegmentation, Model, PiecewiseModel};
 
 /// A simple linear model for a key-rank segment of data.
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
 pub struct LinearModel<K, const EPSILON: usize> {
     key: K,
     slope: f64,
     intercept: i32,
 }
-
-// SAFETY: this is safe by the `Zeroable` rules, but we want to avoid
-// dependencies on unstable features
-unsafe impl<K, const EPSILON: usize> Zeroable for LinearModel<K, EPSILON> {}
-
-// SAFETY: this violates the padding rule of `Pod`, so transmuting this
-// into any other `Pod` type would lead to a UB violation: specifically
-// treating uninitialized data as initialized data. We only need this type
-// to be `Pod` to persist to a file, and it is used internally so this isn't
-// a big issue.
-unsafe impl<K: Copy + 'static, const EPSILON: usize> Pod for LinearModel<K, EPSILON> {}
 
 impl<K: Key, const EPSILON: usize> LinearModel<K, EPSILON> {
     pub fn new(key: K, slope: f64, intercept: i32) -> Self {
