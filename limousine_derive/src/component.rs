@@ -120,7 +120,7 @@ impl InternalComponent {
             InternalComponent::BTree {
                 fanout,
                 persist: true,
-            } => quote!(BTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>)
+            } => quote!(BTreeInternalComponentDisk<K, V, #fanout, #base_address, #parent_address>)
                 .to_token_stream(),
         }
     }
@@ -132,7 +132,7 @@ impl InternalComponent {
             }
 
             InternalComponent::BTree { persist: true, .. } => {
-                quote!(BTreeInternalAddress).to_token_stream()
+                quote!(BTreeInternalAddressDisk).to_token_stream()
             }
         }
     }
@@ -167,7 +167,7 @@ impl BaseComponent {
             BaseComponent::BTree {
                 fanout,
                 persist: true,
-            } => quote!(BTreeBaseComponent<K, V, #fanout, #base_address>).to_token_stream(),
+            } => quote!(BTreeBaseComponentDisk<K, V, #fanout, #base_address>).to_token_stream(),
         }
     }
 
@@ -178,7 +178,7 @@ impl BaseComponent {
             }
 
             BaseComponent::BTree { persist: true, .. } => {
-                quote!(BTreeBaseAddress).to_token_stream()
+                quote!(BTreeBaseAddressDisk).to_token_stream()
             }
         }
     }

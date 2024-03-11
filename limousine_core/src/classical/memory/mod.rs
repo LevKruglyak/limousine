@@ -6,7 +6,6 @@ use crate::common::memory_list::Index;
 use crate::component::*;
 use layer::*;
 
-
 // -------------------------------------------------------
 //                  Internal Component
 // -------------------------------------------------------
@@ -63,7 +62,7 @@ where
 }
 
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
-    InternalComponentInMemoryBuild<K, B, BA, BTreeInternalAddress, PA>
+    InternalComponentBuild<K, B, BA, BTreeInternalAddress, PA>
     for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
     K: StaticBounded,
@@ -130,7 +129,7 @@ where
     }
 }
 
-impl<K, V, const FANOUT: usize, PA> BaseComponentInMemoryBuild<K, V>
+impl<K, V, const FANOUT: usize, PA> BaseComponentBuild<K, V>
     for BTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: StaticBounded,

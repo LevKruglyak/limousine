@@ -33,7 +33,7 @@ where
     }
 }
 
-impl<K, X, Base, BA> TopComponentInMemoryBuild<K, Base, BA, ()> for BTreeTopComponent<K, X, BA>
+impl<K, X, Base, BA> TopComponentBuild<K, Base, BA, ()> for BTreeTopComponent<K, X, BA>
 where
     Base: NodeLayer<K, BA, ()>,
     K: Ord + Copy,

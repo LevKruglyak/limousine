@@ -3,6 +3,7 @@ use crate::component::{BaseComponent, InternalComponent, ParsedComponent, TopCom
 use syn::parse::Parse;
 use syn::Token;
 
+#[derive(Debug)]
 pub struct HybridLayout {
     pub top: TopComponent,
     pub internal: Vec<InternalComponent>,
@@ -47,7 +48,7 @@ impl Parse for HybridLayout {
         }
 
         let mut internal = Vec::new();
-        for parsed in &components[1..] {
+        for parsed in &components[1..components.len() - 1] {
             if !parsed.is_persisted() && in_persisted_region {
                 bail!(
                     parsed.ident(),

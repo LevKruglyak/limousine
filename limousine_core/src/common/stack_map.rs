@@ -2,24 +2,47 @@
 
 use crate::common::entry::Entry;
 use crate::common::search::*;
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::mem::MaybeUninit;
 
-use bytemuck::{Pod, Zeroable};
-
 /// `StackMap` is a constant-size, zero-allocation associative container
 /// backed by an array.
-#[derive(Copy)]
-#[repr(C)]
 pub struct StackMap<K, V, const FANOUT: usize> {
     inner: [MaybeUninit<Entry<K, V>>; FANOUT],
     len: usize,
 }
 
-/// SAFETY: should only cause uninitialized memory, eventually we should
-/// use a macro to add padding bytes or something.
-unsafe impl<K: Zeroable, V: Zeroable, const FANOUT: usize> Zeroable for StackMap<K, V, FANOUT> {}
-unsafe impl<K: Pod, V: Pod, const FANOUT: usize> Pod for StackMap<K, V, FANOUT> where Self: Copy {}
+impl<K, V, const FANOUT: usize> Serialize for StackMap<K, V, FANOUT>
+where
+    K: Serialize,
+    V: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.len))?;
+        for entry in self.entries() {
+            seq.serialize_element(entry)?;
+        }
+        seq.end()
+    }
+}
+
+impl<K, V, const FANOUT: usize> Deserialize for StackMap<K, V, FANOUT>
+where
+    K: Serialize,
+    V: Serialize,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut seq = deserializer.deserialize_seq()
+    }
+}
 
 impl<K: Debug, V: Debug, const FANOUT: usize> Debug for StackMap<K, V, FANOUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

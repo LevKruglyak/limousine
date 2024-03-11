@@ -1,8 +1,8 @@
 use crate::common::bounded::*;
 use crate::iter::{Iter, MutIter};
+use crate::{IndexStore, StoreId};
 use num::PrimInt;
-use std::ops::{Bound};
-use std::path::Path;
+use std::ops::Bound;
 use trait_set::trait_set;
 
 // Until `trait_alias` is stabilized, we have to use a macro
@@ -115,7 +115,7 @@ where
     fn insert(&mut self, base: &mut Base, prop: PropogateInsert<K, BA, SA>);
 }
 
-pub trait TopComponentInMemoryBuild<K, Base, BA, SA>
+pub trait TopComponentBuild<K, Base, BA, SA>
 where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
@@ -143,7 +143,7 @@ where
     ) -> Option<PropogateInsert<K, SA, PA>>;
 }
 
-pub trait InternalComponentInMemoryBuild<K, Base, BA, SA, PA>
+pub trait InternalComponentBuild<K, Base, BA, SA, PA>
 where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
@@ -154,7 +154,7 @@ where
     fn build(base: &mut Base) -> Self;
 }
 
-pub trait InternalComponentDiskBuild<K, Base, BA, SA, PA>
+pub trait InternalComponentBuildDisk<K, Base, BA, SA, PA>
 where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
@@ -162,7 +162,9 @@ where
     PA: Address,
     K: Copy,
 {
-    fn build(base: &Base, path: impl AsRef<Path>) -> Self;
+    fn load(base: &Base, store: IndexStore) -> Self;
+
+    fn build(base: &Base, store: IndexStore) -> Self;
 }
 
 pub trait BaseComponent<K, V, SA, PA>
@@ -177,8 +179,14 @@ where
     fn search(&self, ptr: SA, key: &K) -> Option<&V>;
 }
 
-pub trait BaseComponentInMemoryBuild<K, V> {
+pub trait BaseComponentBuild<K, V> {
     fn empty() -> Self;
 
     fn build(iter: impl Iterator<Item = (K, V)>) -> Self;
+}
+
+pub trait BaseComponentBuildDisk<K, V> {
+    fn load(store: IndexStore) -> Self;
+
+    fn build(iter: impl Iterator<Item = (K, V)>, store: IndexStore) -> Self;
 }

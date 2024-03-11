@@ -30,7 +30,7 @@ pub fn create_index_struct(
     let body = quote! {
         pub struct #name<K: Key, V: Value> {
             #(#field_bodies)*
-            store: marble::Marble
+            store: IndexStore,
         }
     };
 
@@ -45,7 +45,7 @@ pub fn create_index_impl(
 ) -> TokenStream {
     let search_body = create_search_body(layout, aliases, fields);
     let insert_body = create_insert_body(layout, aliases, fields);
-    let empty_body = create_empty_body(layout, aliases, fields);
+    let load_body = create_load_body(layout, aliases, fields);
     let build_body = create_build_body(layout, aliases, fields);
 
     let body = quote! {
@@ -60,11 +60,11 @@ pub fn create_index_impl(
         }
 
         impl<K: Key, V: Value> IndexBuildDisk<K, V> for #name<K, V> {
-            fn empty(path: impl AsRef<Path>) -> Self {
-                #empty_body
+            fn load(path: impl AsRef<Path>) -> std::io::Result<Self> {
+                #load_body
             }
 
-            fn build(iter: impl Iterator<Item = (K, V)>, path: impl AsRef<Path>) -> Self {
+            fn build(iter: impl Iterator<Item = (K, V)>, path: impl AsRef<Path>) -> std::io::Result<Self> {
                 #build_body
             }
         }
@@ -200,7 +200,9 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     search_body
 }
 
-fn create_empty_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
+fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
+    eprintln!("layout: {:#?}\n", layout);
+
     let mut empty_body = TokenStream::new();
 
     // Add body as the first component
@@ -208,7 +210,14 @@ fn create_empty_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident])
     let var = fields[0].clone();
 
     empty_body.extend(quote! {
-        let mut #var = #alias::empty();
+        // Load the store
+        let mut store = IndexStore::load(path)?;
+    });
+
+    // Base layer is guaranteed to be a disk component
+    empty_body.extend(quote! {
+        // Load the store
+        let mut #var = #alias::load(store.clone());
     });
 
     // Add internal components
@@ -217,9 +226,15 @@ fn create_empty_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident])
         let var = fields[index].clone();
         let prev_var = fields[index - 1].clone();
 
-        empty_body.extend(quote! {
-            let mut #var = #alias::build(&mut #prev_var);
-        });
+        if layout.internal[index - 1].is_persisted() {
+            empty_body.extend(quote! {
+                let mut #var = #alias::load(store.clone());
+            });
+        } else {
+            empty_body.extend(quote! {
+                let mut #var = #alias::build(&mut #prev_var);
+            });
+        }
     }
 
     let index = layout.internal.len() + 1;
@@ -232,10 +247,10 @@ fn create_empty_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident])
     });
 
     empty_body.extend(quote! {
-        Self {
+        Ok(Self {
             #(#fields,)*
-            store: load_store(path, true),
-        }
+            store,
+        })
     });
 
     empty_body
@@ -273,10 +288,10 @@ fn create_build_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident])
     });
 
     build_body.extend(quote! {
-        Self {
+        Ok(Self {
             #(#fields,)*
-            store: load_store(path, false),
-        }
+            store: IndexStore::load(path)?,
+        })
     });
 
     build_body
