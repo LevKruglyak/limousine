@@ -1,6 +1,6 @@
 use crate::{Address, Model, NodeLayer};
-use std::mem::MaybeUninit;
-use std::ops::{Bound, RangeBounds};
+
+use std::ops::{Bound};
 
 // ----------------------------------------
 // Iterator Type
@@ -185,7 +185,7 @@ where
 {
     type Item = MutNodeView<'n, K, N, SA, PA>;
 
-    fn next(&mut self) -> Option<(Self::Item)> {
+    fn next(&mut self) -> Option<Self::Item> {
         let current = self.current.clone()?;
 
         match self.end.clone() {
