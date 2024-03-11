@@ -1,4 +1,6 @@
 use crate::component::*;
+use crate::node_layer::NodeLayer;
+use crate::traits::Address;
 use std::collections::BTreeMap;
 use std::ops::Bound;
 
@@ -15,7 +17,7 @@ where
     K: Ord + Copy,
     BA: Address,
 {
-    fn search(&self, _: &Base, key: &K) -> BA {
+    fn search(&self, _: &Base, key: K) -> BA {
         *self.inner.range(..=key).next_back().unwrap().1
     }
 

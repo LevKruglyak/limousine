@@ -1,9 +1,9 @@
 mod layer;
 
-use crate::common::bounded::StaticBounded;
 use crate::common::list::memory::ArenaID;
-use crate::common::macros::impl_node_layer;
 use crate::component::*;
+use crate::node_layer::{impl_node_layer, NodeLayer};
+use crate::traits::{Address, StaticBounded};
 use layer::*;
 
 // -------------------------------------------------------
@@ -38,10 +38,9 @@ where
     BA: Address,
     PA: Address,
 {
-    fn search(&self, _: &B, ptr: BTreeInternalAddress, key: &K) -> BA {
-        let node = self.inner.deref(ptr);
-
-        node.inner.search_lub(key).clone()
+    fn search(&self, _: &B, ptr: BTreeInternalAddress, key: K) -> BA {
+        let node = self.inner.node_ref(ptr);
+        node.as_ref().inner.search_lub(&key).clone()
     }
 
     fn insert(
@@ -107,7 +106,7 @@ impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddres
     for BTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: StaticBounded,
-    V: 'static,
+    V: 'static + Clone,
     PA: Address,
 {
     fn insert(
@@ -123,9 +122,9 @@ where
         }
     }
 
-    fn search(&self, ptr: BTreeInternalAddress, key: &K) -> Option<&V> {
-        let node = self.inner.deref(ptr);
-        node.inner.search_exact(key)
+    fn search(&self, ptr: BTreeInternalAddress, key: K) -> Option<V> {
+        let node = self.inner.node_ref(ptr);
+        node.as_ref().inner.search_exact(&key).cloned()
     }
 }
 

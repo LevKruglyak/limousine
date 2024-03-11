@@ -1,6 +1,6 @@
-use crate::{Address, Node, NodeLayer};
-
 use std::ops::Bound;
+
+use crate::{node_layer::NodeLayer, traits::Address};
 
 // ----------------------------------------
 // Iterator Type
@@ -23,7 +23,7 @@ where
         match start {
             Bound::Excluded(start) => Self {
                 layer,
-                current: layer.deref(start).next(),
+                current: layer.next(start),
                 end,
                 _ph: std::marker::PhantomData,
             },
@@ -74,10 +74,10 @@ where
 
         // Advance pointer
         if let Some(current) = self.current.clone() {
-            self.current = self.layer.deref(current).next();
+            self.current = self.layer.next(current);
         }
 
-        return Some(((*self.layer.lower_bound(current.clone())), current.clone()));
+        return Some(((self.layer.lower_bound(current.clone())), current.clone()));
     }
 }
 

@@ -2,7 +2,7 @@ use std::io;
 use std::path::Path;
 
 pub trait Index<K, V> {
-    fn search(&self, key: &K) -> Option<&V>;
+    fn search(&self, key: K) -> Option<V>;
 
     fn insert(&mut self, key: K, value: V) -> Option<V>;
 }

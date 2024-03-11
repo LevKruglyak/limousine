@@ -1,13 +1,9 @@
 use crate::classical::node::BTreeNode;
-use crate::common::bounded::*;
 use crate::common::list::memory::*;
-use crate::common::macros::impl_node_layer;
-use crate::component::*;
-use generational_arena::{Index};
-
-
-use std::ops::{Bound};
-
+use crate::node_layer::{impl_node_layer, NodeLayer};
+use crate::traits::{Address, KeyBounded, StaticBounded};
+use generational_arena::Index;
+use std::ops::Bound;
 
 // ----------------------------------------
 // Layer Type

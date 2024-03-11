@@ -44,7 +44,7 @@ fn main() {
 
     let start = std::time::Instant::now();
     for i in 0..num {
-        assert_eq!(index.search(&i), Some(&(i * i)));
+        assert_eq!(index.search(i), Some(i * i));
     }
     println!("Index2 search took {:?} ms ", start.elapsed().as_millis());
 

@@ -1,10 +1,8 @@
-use crate::common::bounded::*;
-use crate::common::storage::*;
-use crate::Address;
-use crate::Node;
-use crate::NodeLayer;
+use crate::node_layer::NodeLayer;
+use crate::traits::KeyBounded;
+use crate::traits::*;
+use crate::{common::storage::*, node_layer::Node};
 
-use caches::DefaultHashBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -56,15 +54,10 @@ where
 {
     type Node = BoundaryDiskNode<N>;
 
-    fn deref(&self, ptr: StoreID) -> &Self::Node {
+    fn node_ref(&self, ptr: StoreID) -> &Self::Node {
         // self.cache.
         // self.parents.get(ptr)
         // &self.arena[ptr]
-        unimplemented!()
-    }
-
-    fn deref_mut(&mut self, ptr: StoreID) -> &mut Self::Node {
-        // &mut self.arena[ptr]
         unimplemented!()
     }
 
@@ -97,6 +90,12 @@ where
 {
     fn lower_bound(&self) -> &K {
         self.inner.lower_bound()
+    }
+}
+
+impl<N> AsRef<BoundaryDiskNode<N>> for &BoundaryDiskNode<N> {
+    fn as_ref(&self) -> &BoundaryDiskNode<N> {
+        self
     }
 }
 

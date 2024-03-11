@@ -1,7 +1,6 @@
-use crate::common::bounded::KeyBounded;
-use crate::common::bounded::StaticBounded;
-use crate::common::entry::Entry;
 use crate::common::stack_map::StackMap;
+use crate::traits::KeyBounded;
+use crate::{common::entry::Entry, traits::StaticBounded};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 

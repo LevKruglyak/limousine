@@ -1,6 +1,9 @@
-use crate::common::bounded::KeyBounded;
-use crate::{Address, Node, NodeLayer};
 use generational_arena::Arena;
+
+use crate::{
+    node_layer::{Node, NodeLayer},
+    traits::{Address, KeyBounded},
+};
 
 pub type ArenaID = generational_arena::Index;
 
@@ -103,6 +106,12 @@ where
     }
 }
 
+impl<N> AsRef<MemoryNode<N>> for &MemoryNode<N> {
+    fn as_ref(&self) -> &MemoryNode<N> {
+        self
+    }
+}
+
 impl<K, N> Node<K, ArenaID> for MemoryNode<N>
 where
     N: KeyBounded<K> + 'static,
@@ -138,12 +147,8 @@ where
 {
     type Node = MemoryNode<N>;
 
-    fn deref(&self, ptr: ArenaID) -> &Self::Node {
+    fn node_ref(&self, ptr: ArenaID) -> impl AsRef<Self::Node> {
         &self.arena[ptr].0
-    }
-
-    fn deref_mut(&mut self, ptr: ArenaID) -> &mut Self::Node {
-        &mut self.arena[ptr].0
     }
 
     unsafe fn set_parent_unsafe(&self, ptr: ArenaID, parent: PA) {

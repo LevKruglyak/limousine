@@ -49,7 +49,7 @@ pub fn create_index_impl(
 
     let body = quote! {
         impl<K: Key, V: Value> Index<K, V> for #name<K, V> {
-            fn search(&self, key: &K) -> Option<&V> {
+            fn search(&self, key: K) -> Option<V> {
                 #search_body
             }
 
@@ -86,7 +86,7 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = component_vars[0].clone();
     let next = component_vars[1].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(&self.#next, &key);});
+    search_body.extend(quote! { let #search = self.#field.search(&self.#next, key);});
 
     // Internal components
     for index in 1..=layout.internal.len() {
@@ -96,7 +96,7 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         let next = component_vars[index + 1].clone();
 
         search_body
-            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, key);});
     }
 
     // Base component
@@ -105,7 +105,7 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let prev_search = search_vars[index - 1].clone();
     let field = component_vars[index].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(#prev_search, &key);});
+    search_body.extend(quote! { let #search = self.#field.search(#prev_search, key);});
     search_body.extend(quote! { #search });
 
     search_body
@@ -125,7 +125,7 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = component_vars[0].clone();
     let next = component_vars[1].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(&self.#next, &key);});
+    search_body.extend(quote! { let #search = self.#field.search(&self.#next, key);});
 
     // Internal components
     for index in 1..=layout.internal.len() {
@@ -135,7 +135,7 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         let next = component_vars[index + 1].clone();
 
         search_body
-            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, key);});
     }
 
     // Base component
@@ -144,9 +144,9 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let prev_search = search_vars[index - 1].clone();
     let field = component_vars[index].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(#prev_search, &key);});
+    search_body.extend(quote! { let #search = self.#field.search(#prev_search, key);});
 
-    search_body.extend(quote! { let result = s0.copied(); });
+    search_body.extend(quote! { let result = s0; });
 
     // Insert stage
     let insert_vars: Vec<Ident> = (0..=layout.internal.len() + 1)

@@ -1,4 +1,4 @@
-use crate::common::bounded::KeyBounded;
+use crate::traits::KeyBounded;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::fmt::Debug;
