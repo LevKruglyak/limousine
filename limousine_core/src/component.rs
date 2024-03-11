@@ -1,5 +1,6 @@
 use crate::kv::KeyBounded;
 use std::ops::{Bound, RangeBounds};
+use std::path::Path;
 
 /// A `NodeLayer` is an ordered collection of key-bounded nodes which implement the `Keyed` trait.
 /// TODO: write more
@@ -92,6 +93,13 @@ where
     Base: NodeLayer<K>,
 {
     fn build(base: &Base) -> Self;
+}
+
+pub trait InternalComponentDiskBuild<K, Base>
+where
+    Base: NodeLayer<K>,
+{
+    fn build(base: &Base, path: impl AsRef<Path>) -> Self;
 }
 
 pub trait BaseComponent<K, V, Base>
