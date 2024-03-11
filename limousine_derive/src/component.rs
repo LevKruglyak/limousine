@@ -10,7 +10,7 @@ use syn::{
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Component {
-    StdBTree,
+    BTreeTop,
     BTree { fanout: usize, persist: bool },
 }
 
@@ -36,9 +36,9 @@ impl Parse for ParsedComponent {
         }
 
         match ident.to_string().as_str() {
-            "std_btree" => Ok(Self {
+            "btree_top" => Ok(Self {
                 span,
-                component: Component::StdBTree,
+                component: Component::BTreeTop,
             }),
             "btree" => {
                 let fanout = attrs
@@ -59,7 +59,7 @@ impl Parse for ParsedComponent {
             }
             _ => Err(syn::Error::new(
                 span,
-                input.error("Valid components: std_btree, btree"),
+                input.error("Valid components: btree_top, btree"),
             )),
         }
     }
@@ -67,20 +67,20 @@ impl Parse for ParsedComponent {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TopComponent {
-    StdBTree,
+    BTreeTop,
 }
 
 impl TopComponent {
     pub fn from_general(component: Component) -> Option<Self> {
         match component {
-            Component::StdBTree => Some(Self::StdBTree),
+            Component::BTreeTop => Some(Self::BTreeTop),
             _ => None,
         }
     }
 
     pub fn to_tokens(&self, base: impl ToTokens) -> TokenStream {
         match self {
-            &TopComponent::StdBTree => {
+            &TopComponent::BTreeTop => {
                 quote! { BTreeTopComponent<K, #base> }
             }
         }
