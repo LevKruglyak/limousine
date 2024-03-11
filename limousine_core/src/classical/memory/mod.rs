@@ -1,69 +1,97 @@
 mod layer;
 
-use crate::BaseComponent;
-use crate::InternalComponent;
-use crate::Key;
-use crate::NodeLayer;
-use crate::TopComponent;
-use crate::Value;
-use layer::BTreeLayer;
-use std::borrow::Borrow;
-use std::collections::BTreeMap;
+// use crate::BaseComponent;
+// use crate::InternalComponent;
+// use crate::Key;
+// use crate::NodeLayer;
+// use crate::TopComponent;
+// use crate::Value;
+// use layer::MemoryBTreeLayer;
+// use std::borrow::Borrow;
+// use std::collections::BTreeMap;
+use crate::component::*;
+use crate::kv::StaticBounded;
+use layer::*;
+use std::ops::RangeBounds;
 
 // -------------------------------------------------------
 //                  Internal Component
 // -------------------------------------------------------
 
-pub struct BTreeInternalComponent<K: Key, B: NodeLayer<K>, const FANOUT: usize> {
-    layer: BTreeLayer<K, B::NodeRef, FANOUT>,
+pub struct BTreeInternalComponent<K, B: NodeLayer<K>, const FANOUT: usize> {
+    inner: MemoryBTreeLayer<K, B::Address, FANOUT>,
 }
 
-impl<K: Key, B: NodeLayer<K>, const FANOUT: usize> NodeLayer<K>
-    for BTreeInternalComponent<K, B, FANOUT>
+impl<K, B: NodeLayer<K>, const FANOUT: usize> NodeLayer<K> for BTreeInternalComponent<K, B, FANOUT>
+where
+    K: StaticBounded,
 {
-    type Node = <BTreeLayer<K, B::NodeRef, FANOUT> as NodeLayer<K>>::Node;
-    type NodeRef = <BTreeLayer<K, B::NodeRef, FANOUT> as NodeLayer<K>>::NodeRef;
+    type Node = <MemoryBTreeLayer<K, B::Address, FANOUT> as NodeLayer<K>>::Node;
+    type Address = <MemoryBTreeLayer<K, B::Address, FANOUT> as NodeLayer<K>>::Address;
 
-    fn node_ref(&self, ptr: Self::NodeRef) -> &Self::Node {
-        self.layer.node_ref(ptr)
+    fn deref(&self, ptr: Self::Address) -> &Self::Node {
+        self.inner.deref(ptr)
     }
 
-    type NodeIter<'n> = <BTreeLayer<K, B::NodeRef, FANOUT> as NodeLayer<K>>::NodeIter<'n>;
+    fn deref_mut(&mut self, ptr: Self::Address) -> &mut Self::Node {
+        self.inner.deref_mut(ptr)
+    }
 
-    fn iter<'n>(&'n self) -> Self::NodeIter<'n> {
-        self.layer.iter()
+    type Iter<'n> = <MemoryBTreeLayer<K, B::Address, FANOUT> as NodeLayer<K>>::Iter<'n>;
+
+    fn range<'n>(&'n self, range: impl RangeBounds<Self::Address>) -> Self::Iter<'n> {
+        self.inner.range(range)
+    }
+
+    fn full_range<'n>(&'n self) -> Self::Iter<'n> {
+        self.inner.full_range()
     }
 }
 
-impl<K: Key, B: NodeLayer<K>, const FANOUT: usize> InternalComponent<K, B>
+impl<K, B: NodeLayer<K>, const FANOUT: usize> InternalComponent<K, B>
     for BTreeInternalComponent<K, B, FANOUT>
+where
+    K: StaticBounded,
 {
-    fn new_internal(base: &B) -> Self {
-        Self {
-            layer: BTreeLayer::new_internal(base),
+    fn search(&self, ptr: Self::Address, key: &K) -> B::Address {
+        let node = unsafe { ptr.as_ref() };
+
+        node.inner.search_lub(key).clone()
+    }
+
+    fn insert<'n>(
+        &'n mut self,
+        ptr: Self::Address,
+        prop: PropogateInsert<'_, K, B>,
+    ) -> Option<PropogateInsert<'n, K, Self>> {
+        match prop {
+            PropogateInsert::Single(key, address) => self
+                .inner
+                .insert(key, address, ptr)
+                .map(|(key, address)| PropogateInsert::Single(key, address)),
+            PropogateInsert::Rebuild(base) => {
+                self.inner.fill(base.full_range());
+
+                Some(PropogateInsert::Rebuild(self))
+            }
         }
     }
 
-    fn search_internal(&self, key: &K, ptr: Self::NodeRef) -> B::NodeRef {
-        <BTreeLayer<K, B::NodeRef, FANOUT> as InternalComponent<K, B>>::search_internal(
-            &self.layer,
-            key,
-            ptr,
-        )
+    fn size(&self) -> usize {
+        self.inner.nodes.len()
     }
+}
 
-    fn insert_internal(
-        &mut self,
-        key: K,
-        value: B::NodeRef,
-        ptr: Self::NodeRef,
-    ) -> Option<(K, Self::NodeRef)> {
-        <BTreeLayer<K, B::NodeRef, FANOUT> as InternalComponent<K, B>>::insert_internal(
-            &mut self.layer,
-            key,
-            value,
-            ptr,
-        )
+impl<K, B: NodeLayer<K>, const FANOUT: usize> InternalComponentInMemoryBuild<K, B>
+    for BTreeInternalComponent<K, B, FANOUT>
+where
+    K: StaticBounded,
+{
+    fn build(base: &B) -> Self {
+        let mut result = MemoryBTreeLayer::empty();
+        result.fill(base.full_range());
+
+        Self { inner: result }
     }
 }
 
@@ -71,44 +99,80 @@ impl<K: Key, B: NodeLayer<K>, const FANOUT: usize> InternalComponent<K, B>
 //                  Base Component
 // -------------------------------------------------------
 
-pub struct BTreeBaseComponent<K: Key, V: Value, const FANOUT: usize> {
-    layer: BTreeLayer<K, V, FANOUT>,
+pub struct BTreeBaseComponent<K, V, const FANOUT: usize> {
+    inner: MemoryBTreeLayer<K, V, FANOUT>,
 }
 
-impl<K: Key, V: Value, const FANOUT: usize> NodeLayer<K> for BTreeBaseComponent<K, V, FANOUT> {
-    type Node = <BTreeLayer<K, V, FANOUT> as NodeLayer<K>>::Node;
-    type NodeRef = <BTreeLayer<K, V, FANOUT> as NodeLayer<K>>::NodeRef;
-
-    fn node_ref(&self, ptr: Self::NodeRef) -> &Self::Node {
-        self.layer.node_ref(ptr)
-    }
-
-    type NodeIter<'n> = <BTreeLayer<K, V, FANOUT> as NodeLayer<K>>::NodeIter<'n>;
-
-    fn iter<'n>(&'n self) -> Self::NodeIter<'n> {
-        self.layer.iter()
-    }
-}
-
-impl<K: Key, V: Value, const FANOUT: usize> BaseComponent<K, V>
-    for BTreeBaseComponent<K, V, FANOUT>
+impl<K, V, const FANOUT: usize> NodeLayer<K> for BTreeBaseComponent<K, V, FANOUT>
+where
+    K: StaticBounded,
+    V: 'static,
 {
-    fn new_base() -> Self {
-        Self {
-            layer: BTreeLayer::new_base(),
+    type Node = <MemoryBTreeLayer<K, V, FANOUT> as NodeLayer<K>>::Node;
+    type Address = <MemoryBTreeLayer<K, V, FANOUT> as NodeLayer<K>>::Address;
+
+    fn deref(&self, ptr: Self::Address) -> &Self::Node {
+        self.inner.deref(ptr)
+    }
+
+    fn deref_mut(&mut self, ptr: Self::Address) -> &mut Self::Node {
+        self.inner.deref_mut(ptr)
+    }
+
+    type Iter<'n> = <MemoryBTreeLayer<K, V, FANOUT> as NodeLayer<K>>::Iter<'n>;
+
+    fn range<'n>(&'n self, range: impl RangeBounds<Self::Address>) -> Self::Iter<'n> {
+        self.inner.range(range)
+    }
+
+    fn full_range<'n>(&'n self) -> Self::Iter<'n> {
+        self.inner.full_range()
+    }
+}
+
+impl<K, V, const FANOUT: usize> BaseComponent<K, V, Self> for BTreeBaseComponent<K, V, FANOUT>
+where
+    K: StaticBounded,
+    V: 'static,
+{
+    fn insert<'n>(
+        &'n mut self,
+        ptr: Self::Address,
+        key: K,
+        value: V,
+    ) -> Option<PropogateInsert<'n, K, Self>> {
+        if let Some((key, address)) = self.inner.insert(key, value, ptr) {
+            Some(PropogateInsert::Single(key, address))
+        } else {
+            None
         }
     }
 
-    fn search_base(&self, key: &K, ptr: Self::NodeRef) -> Option<&V> {
-        <BTreeLayer<K, V, FANOUT> as BaseComponent<K, V>>::search_base(&self.layer, key, ptr)
+    fn get(&self, ptr: Self::Address, key: &K) -> Option<&V> {
+        let node = unsafe { ptr.as_ref() };
+        node.inner.search_exact(key)
     }
 
-    fn insert_base(&mut self, key: K, value: V, ptr: Self::NodeRef) -> Option<(K, Self::NodeRef)> {
-        <BTreeLayer<K, V, FANOUT> as BaseComponent<K, V>>::insert_base(
-            &mut self.layer,
-            key,
-            value,
-            ptr,
-        )
+    fn size(&self) -> usize {
+        self.inner.nodes.len()
+    }
+}
+
+impl<K, V, const FANOUT: usize> BaseComponentInMemoryBuild<K, V>
+    for BTreeBaseComponent<K, V, FANOUT>
+where
+    K: StaticBounded,
+{
+    fn empty() -> Self {
+        let mut result = MemoryBTreeLayer::empty();
+        result.add_node(MemoryBTreeNode::empty());
+
+        Self { inner: result }
+    }
+    fn build(iter: impl Iterator<Item = (K, V)>) -> Self {
+        let mut result = MemoryBTreeLayer::empty();
+        result.fill(iter);
+
+        Self { inner: result }
     }
 }

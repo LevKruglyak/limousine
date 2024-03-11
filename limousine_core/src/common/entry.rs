@@ -1,3 +1,4 @@
+use crate::kv::KeyBounded;
 use std::borrow::Borrow;
 use std::fmt::Debug;
 
@@ -15,6 +16,12 @@ impl<K, V> Entry<K, V> {
     /// Create an entry from a key and a value
     pub fn new(key: K, value: V) -> Self {
         Self { key, value }
+    }
+}
+
+impl<K, V> KeyBounded<K> for Entry<K, V> {
+    fn lower_bound(&self) -> &K {
+        &self.key
     }
 }
 

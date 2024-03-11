@@ -1,176 +1,246 @@
 use crate::classical::node::BTreeNode;
-use crate::BaseComponent;
-use crate::{InternalComponent, Key, NodeLayer, Value};
+use crate::component::*;
+use crate::kv::StaticBounded;
+use crate::kv::*;
 use bumpalo::boxed::Box;
 use bumpalo::Bump;
 use std::borrow::Borrow;
-use std::cell::Ref;
-use std::cell::RefCell;
 use std::fmt::Debug;
-use std::iter::Map;
-use std::marker::PhantomData;
+// use std::fmt::Debug;
+use std::ops::{Bound, RangeBounds};
 use std::ptr::NonNull;
-use std::rc::Rc;
-use std::slice::Iter;
 
-/// A `BTreeLayer` is an `InternalLayer` with a constant size ratio
-/// given by the `FANOUT` parameter. Each node can index a maximum of
-/// `FANOUT` lower nodes, and since this is part of an immutable index, this
-/// fill factor is always achieved.
-pub struct BTreeLayer<K, V, const FANOUT: usize> {
-    pub nodes: Vec<NonNull<BTreeNode<K, V, FANOUT>>>,
-    alloc: Bump,
+// ----------------------------------------
+// Helper Types
+// ----------------------------------------
+
+type Node<K, V, const FANOUT: usize> = MemoryBTreeNode<K, V, FANOUT>;
+type Address<K, V, const FANOUT: usize> = NonNull<Node<K, V, FANOUT>>;
+type OptAddress<K, V, const FANOUT: usize> = Option<Address<K, V, FANOUT>>;
+
+// ----------------------------------------
+// Node Type
+// ----------------------------------------
+
+pub struct MemoryBTreeNode<K, V, const FANOUT: usize> {
+    pub inner: BTreeNode<K, V, FANOUT>,
+    pub next: OptAddress<K, V, FANOUT>,
 }
 
-pub struct BTreeLayerNodeIterator<'n, N> {
-    nodes: &'n [N],
-    idx: usize,
-}
-
-impl<'n, K, V, const FANOUT: usize> BTreeLayerNodeIterator<'n, NonNull<BTreeNode<K, V, FANOUT>>> {
-    fn new(layer: &'n BTreeLayer<K, V, FANOUT>) -> Self {
+impl<K, V, const FANOUT: usize> MemoryBTreeNode<K, V, FANOUT> {
+    pub fn empty() -> Self {
         Self {
-            nodes: layer.nodes.as_slice(),
-            idx: 0,
+            inner: BTreeNode::empty(),
+            next: None,
         }
     }
 }
 
-impl<'n, N: Clone> Iterator for BTreeLayerNodeIterator<'n, N> {
-    type Item = N;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = self.nodes.get(self.idx).cloned();
-        self.idx += 1;
-        result
+impl<K: StaticBounded, V, const FANOUT: usize> KeyBounded<K> for MemoryBTreeNode<K, V, FANOUT> {
+    fn lower_bound(&self) -> &K {
+        self.inner.borrow()
     }
 }
 
-impl<K: Key, V: 'static, const FANOUT: usize> NodeLayer<K> for BTreeLayer<K, V, FANOUT> {
-    type Node = BTreeNode<K, V, FANOUT>;
-    type NodeRef = NonNull<Self::Node>;
+// ----------------------------------------
+// Layer Type
+// ----------------------------------------
 
-    fn node_ref(&self, ptr: Self::NodeRef) -> &Self::Node {
+pub struct MemoryBTreeLayer<K, V, const FANOUT: usize> {
+    pub nodes: Vec<Address<K, V, FANOUT>>,
+    alloc: Bump,
+}
+
+impl<K: Debug, V: Debug, const FANOUT: usize> Debug for MemoryBTreeLayer<K, V, FANOUT> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list()
+            .entries(self.nodes.iter().map(|node| {
+                (unsafe { &node.as_ref().inner }, unsafe {
+                    node.as_ref().next
+                })
+            }))
+            .finish()
+    }
+}
+
+impl<K, V, const FANOUT: usize> NodeLayer<K> for MemoryBTreeLayer<K, V, FANOUT>
+where
+    K: 'static + StaticBounded,
+    V: 'static,
+{
+    type Node = MemoryBTreeNode<K, V, FANOUT>;
+    type Address = NonNull<Self::Node>;
+    type Iter<'n> = Iter<'n, K, V, FANOUT>;
+
+    fn deref(&self, ptr: Self::Address) -> &Self::Node {
         // TODO: safety!
         unsafe { ptr.as_ref() }
     }
 
-    type NodeIter<'n> = BTreeLayerNodeIterator<'n, Self::NodeRef>;
+    fn deref_mut(&mut self, mut ptr: Self::Address) -> &mut Self::Node {
+        // TODO: safety!
+        unsafe { ptr.as_mut() }
+    }
 
-    fn iter<'n>(&'n self) -> Self::NodeIter<'n> {
-        Self::NodeIter::new(&self)
+    fn range<'n>(&'n self, range: impl RangeBounds<Self::Address>) -> Self::Iter<'n> {
+        Iter::range(&self, range)
+    }
+
+    fn full_range<'n>(&'n self) -> Self::Iter<'n> {
+        Iter::new(&self)
     }
 }
 
-impl<K: Key, V: 'static, const FANOUT: usize> BTreeLayer<K, V, FANOUT> {
-    fn add_node(&mut self, node: BTreeNode<K, V, FANOUT>) -> NonNull<BTreeNode<K, V, FANOUT>> {
+impl<K, V, const FANOUT: usize> MemoryBTreeLayer<K, V, FANOUT>
+where
+    K: StaticBounded,
+{
+    pub fn add_node(&mut self, node: Node<K, V, FANOUT>) -> Address<K, V, FANOUT> {
         let ptr = NonNull::new(Box::into_raw(Box::new_in(node, &self.alloc))).unwrap();
         self.nodes.push(ptr);
         ptr
     }
 
-    fn insert(
+    pub fn empty() -> Self {
+        Self {
+            nodes: Vec::new(),
+            alloc: Bump::new(),
+        }
+    }
+
+    pub fn fill(&mut self, iter: impl Iterator<Item = (K, V)>) {
+        self.nodes.clear();
+
+        let mut node = unsafe { self.add_node(MemoryBTreeNode::empty()).as_mut() };
+
+        for (key, address) in iter {
+            if node.inner.is_half_full() {
+                let mut new_address = self.add_node(MemoryBTreeNode::empty());
+                node.next = Some(new_address);
+
+                node = unsafe { new_address.as_mut() };
+            }
+
+            node.inner.insert(key, address);
+        }
+    }
+
+    pub fn insert(
         &mut self,
         key: K,
         value: V,
-        mut ptr: NonNull<BTreeNode<K, V, FANOUT>>,
-    ) -> Option<(K, NonNull<BTreeNode<K, V, FANOUT>>)> {
+        mut ptr: Address<K, V, FANOUT>,
+    ) -> Option<(K, Address<K, V, FANOUT>)> {
         let node = unsafe { ptr.as_mut() };
-        let node_key: K = *node.borrow();
 
-        if node.is_full() {
+        if node.inner.is_full() {
             // Split
-            let (split_point, new_node) = node.split();
+            let (split_point, new_node) = node.inner.split();
 
-            let mut new_node_ptr = self.add_node(new_node);
+            let mut new_node_ptr = self.add_node(MemoryBTreeNode {
+                inner: new_node,
+                next: None,
+            });
             let new_node = unsafe { new_node_ptr.as_mut() };
 
+            // Link to next node
+            let old_next = node.next.replace(new_node_ptr);
+            new_node.next = old_next;
+
             // Insert into the right node
-            if (key < split_point) {
-                node.insert(key, value);
+            if key < split_point {
+                node.inner.insert(key, value);
             } else {
-                new_node.insert(key, value);
+                new_node.inner.insert(key, value);
             }
 
-            return Some((*new_node.borrow(), new_node_ptr));
+            return Some((*new_node.inner.borrow(), new_node_ptr));
         } else {
-            node.insert(key, value);
+            node.inner.insert(key, value);
         }
 
         None
     }
 }
 
-impl<K: Key, const FANOUT: usize, B: NodeLayer<K>> InternalComponent<K, B>
-    for BTreeLayer<K, B::NodeRef, FANOUT>
-{
-    fn new_internal(base: &B) -> Self {
-        let mut layer = Self {
-            nodes: Vec::new(),
-            alloc: Bump::new(),
-        };
-        let mut node = unsafe { layer.add_node(BTreeNode::empty()).as_mut() };
+// ----------------------------------------
+// Iterator Type
+// ----------------------------------------
 
-        for base_ptr in base.iter() {
-            if node.is_full() {
-                node = unsafe { layer.add_node(BTreeNode::empty()).as_mut() };
+pub struct Iter<'n, K, V, const FANOUT: usize> {
+    layer: &'n MemoryBTreeLayer<K, V, FANOUT>,
+    current: OptAddress<K, V, FANOUT>,
+    end: Bound<Address<K, V, FANOUT>>,
+}
+
+impl<'n, K, V, const FANOUT: usize> Iter<'n, K, V, FANOUT> {
+    fn new(layer: &'n MemoryBTreeLayer<K, V, FANOUT>) -> Self {
+        Self {
+            layer,
+            current: Some(layer.nodes[0]),
+            end: Bound::Unbounded,
+        }
+    }
+
+    fn range(
+        layer: &'n MemoryBTreeLayer<K, V, FANOUT>,
+        range: impl RangeBounds<Address<K, V, FANOUT>>,
+    ) -> Self {
+        let end = range.end_bound().cloned();
+
+        match range.start_bound() {
+            Bound::Excluded(start) => Self {
+                layer,
+                current: unsafe { start.as_ref().next },
+                end,
+            },
+
+            Bound::Included(start) => Self {
+                layer,
+                current: Some(start.clone()),
+                end,
+            },
+
+            Bound::Unbounded => Self {
+                layer,
+                current: Some(layer.nodes[0]),
+                end,
+            },
+        }
+    }
+}
+
+impl<'n, K, V, const FANOUT: usize> Iterator for Iter<'n, K, V, FANOUT>
+where
+    K: StaticBounded,
+    V: 'static,
+{
+    type Item = (K, Address<K, V, FANOUT>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current.clone()?;
+
+        match self.end {
+            Bound::Excluded(end) => {
+                if current == end {
+                    return None;
+                }
             }
 
-            let base_node = base.node_ref(base_ptr.clone());
-            node.insert(*base_node.borrow(), base_ptr);
+            Bound::Included(end) => {
+                if current == end {
+                    self.current = None;
+                }
+            }
+
+            _ => (),
         }
 
-        layer
-    }
+        // Advance pointer
+        if let Some(current) = self.current {
+            self.current = self.layer.deref(current).next;
+        }
 
-    fn search_internal(&self, key: &K, ptr: Self::NodeRef) -> B::NodeRef {
-        let node = unsafe { ptr.as_ref() };
-
-        node.search_lub(key).clone()
-    }
-
-    fn insert_internal(
-        &mut self,
-        key: K,
-        value: B::NodeRef,
-        mut ptr: Self::NodeRef,
-    ) -> Option<(K, Self::NodeRef)> {
-        self.insert(key, value, ptr)
-    }
-}
-
-impl<K: Key, V: Value, const FANOUT: usize> BaseComponent<K, V> for BTreeLayer<K, V, FANOUT> {
-    fn new_base() -> Self {
-        let mut result = Self {
-            nodes: Vec::new(),
-            alloc: Bump::new(),
-        };
-
-        result.add_node(BTreeNode::empty());
-
-        result
-    }
-
-    fn search_base(&self, key: &K, ptr: Self::NodeRef) -> Option<&V> {
-        let node = unsafe { ptr.as_ref() };
-
-        node.search_exact(key)
-    }
-
-    fn insert_base(
-        &mut self,
-        key: K,
-        value: V,
-        mut ptr: Self::NodeRef,
-    ) -> Option<(K, Self::NodeRef)> {
-        self.insert(key, value, ptr)
-    }
-}
-
-impl<K: Key, V: Debug + Clone, const FANOUT: usize> Debug for BTreeLayer<K, V, FANOUT> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_list()
-            .entries(self.nodes.iter().map(|node| unsafe { node.as_ref() }))
-            .finish()
+        return Some((*self.layer.lower_bound(current), current));
     }
 }

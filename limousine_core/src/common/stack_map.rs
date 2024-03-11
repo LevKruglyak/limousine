@@ -1,20 +1,18 @@
 // Adapted from: [StackMap](https://github.com/komora-io/stack-map)
+
 use crate::common::entry::Entry;
 use crate::common::search::*;
-use num::Bounded;
-use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::mem::MaybeUninit;
 
 /// `StackMap` is a constant-size, zero-allocation associative container
-/// backed by an array. It can be used as a building block for various interesting
-/// higher-level data structures.
+/// backed by an array.
 pub struct StackMap<K, V, const FANOUT: usize> {
     inner: [MaybeUninit<Entry<K, V>>; FANOUT],
     len: usize,
 }
 
-impl<K: Debug + Clone, V: Debug + Clone, const FANOUT: usize> Debug for StackMap<K, V, FANOUT> {
+impl<K: Debug, V: Debug, const FANOUT: usize> Debug for StackMap<K, V, FANOUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.entries().iter()).finish()
     }
@@ -50,7 +48,7 @@ impl<K, V, const FANOUT: usize> Drop for StackMap<K, V, FANOUT> {
     }
 }
 
-impl<K: Clone + Ord, V: Clone, const FANOUT: usize> Clone for StackMap<K, V, FANOUT> {
+impl<K: Clone, V: Clone, const FANOUT: usize> Clone for StackMap<K, V, FANOUT> {
     fn clone(&self) -> Self {
         let mut inner: [MaybeUninit<Entry<K, V>>; FANOUT] =
             unsafe { MaybeUninit::<[MaybeUninit<Entry<K, V>>; FANOUT]>::uninit().assume_init() };
@@ -66,6 +64,12 @@ impl<K: Clone + Ord, V: Clone, const FANOUT: usize> Clone for StackMap<K, V, FAN
     }
 }
 
+impl<K, V, const FANOUT: usize> Default for StackMap<K, V, FANOUT> {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     pub fn empty() -> Self {
         StackMap {
@@ -75,10 +79,8 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
             len: 0,
         }
     }
-}
 
-impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
-    fn binary_search(&self, key: &K) -> Result<usize, usize>
+    fn search(&self, key: &K) -> Result<usize, usize>
     where
         K: Ord + Copy,
     {
@@ -94,7 +96,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     where
         K: Ord + Copy,
     {
-        if let Ok(index) = self.binary_search(key) {
+        if let Ok(index) = self.search(key) {
             Some(unsafe { &self.inner.get_unchecked(index).assume_init_ref().value })
         } else {
             None
@@ -115,7 +117,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     where
         K: Ord + Copy,
     {
-        match self.binary_search(&key) {
+        match self.search(&key) {
             Ok(index) => {
                 let slot =
                     unsafe { &mut self.inner.get_unchecked_mut(index).assume_init_mut().value };
@@ -148,7 +150,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
         K: Ord + Copy,
     {
         // TODO: fix undefined behavior here
-        if let Ok(index) = self.binary_search(key) {
+        if let Ok(index) = self.search(key) {
             unsafe {
                 let ret = std::ptr::read(self.inner.get_unchecked(index).as_ptr()).value;
 
@@ -172,7 +174,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     where
         K: Ord + Copy,
     {
-        self.binary_search(key).is_ok()
+        self.search(key).is_ok()
     }
 
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = &Entry<K, V>> {
@@ -228,7 +230,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
         K: Ord + Copy,
     {
         // binary search LUB
-        let index = match self.binary_search(key) {
+        let index = match self.search(key) {
             Ok(i) => i,
             Err(0) => return None,
             Err(i) => i - 1,
@@ -243,7 +245,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
         K: Ord + Copy,
     {
         // binary search LUB
-        let index = match self.binary_search(key) {
+        let index = match self.search(key) {
             Ok(0) | Err(0) => return None,
             Ok(i) => i - 1,
             Err(i) => i - 1,
@@ -257,7 +259,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
         K: Ord + Copy,
     {
         // binary search LUB
-        let index = match self.binary_search(key) {
+        let index = match self.search(key) {
             Ok(i) => i,
             Err(0) => 0,
             Err(i) => i - 1,

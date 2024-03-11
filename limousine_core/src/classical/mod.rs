@@ -1,46 +1,64 @@
-pub mod disk;
+// pub mod disk;
 pub mod memory;
 mod node;
 
-use crate::BaseComponent;
-use crate::InternalComponent;
-use crate::Key;
-use crate::NodeLayer;
-use crate::TopComponent;
-use crate::Value;
-use std::borrow::Borrow;
+use crate::component::*;
 use std::collections::BTreeMap;
 
-pub use disk::*;
+// pub use disk::*;
 pub use memory::*;
 
 // -------------------------------------------------------
 //                  Top Component
 // -------------------------------------------------------
 
-pub struct BTreeTopComponent<K: Key, B: NodeLayer<K>> {
-    map: BTreeMap<K, B::NodeRef>,
+/// A `TopComponent` implementation built around the BTreeMap implementation in the Rust standard
+/// library.
+pub struct BTreeTopComponent<K, Base: NodeLayer<K>> {
+    inner: BTreeMap<K, Base::Address>,
 }
 
-impl<K: Key, B: NodeLayer<K>> TopComponent<K, B> for BTreeTopComponent<K, B> {
-    fn new_top(base: &B) -> Self {
-        let mut component = Self {
-            map: BTreeMap::new(),
-        };
+impl<K, Base> TopComponent<K, Base> for BTreeTopComponent<K, Base>
+where
+    Base: NodeLayer<K>,
+    K: Ord,
+{
+    fn search(&self, key: &K) -> Base::Address {
+        self.inner.range(..=key).next_back().unwrap().1.clone()
+    }
 
-        for base_ptr in base.iter() {
-            let base_node = base.node_ref(base_ptr.clone());
-            component.map.insert(*base_node.borrow(), base_ptr);
+    fn insert(&mut self, prop: PropogateInsert<'_, K, Base>) {
+        match prop {
+            PropogateInsert::Single(key, address) => {
+                self.inner.insert(key, address);
+            }
+            PropogateInsert::Rebuild(base) => {
+                self.inner.clear();
+
+                for (key, address) in base.full_range() {
+                    self.inner.insert(key, address);
+                }
+            }
+        }
+    }
+
+    fn size(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<K, Base> TopComponentInMemoryBuild<K, Base> for BTreeTopComponent<K, Base>
+where
+    Base: NodeLayer<K>,
+    K: Ord,
+{
+    fn build(base: &Base) -> Self {
+        let mut inner = BTreeMap::new();
+
+        for (key, address) in base.full_range() {
+            inner.insert(key, address);
         }
 
-        component
-    }
-
-    fn search_top(&self, key: &K) -> B::NodeRef {
-        self.map.range(..=key).next_back().unwrap().1.clone()
-    }
-
-    fn insert_top(&mut self, key: K, value: B::NodeRef) {
-        self.map.insert(key, value);
+        Self { inner }
     }
 }
