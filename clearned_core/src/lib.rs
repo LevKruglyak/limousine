@@ -12,7 +12,7 @@ use trait_set::trait_set;
 mod classical;
 mod hybrid;
 mod learned;
-mod search;
+pub mod search;
 
 pub use classical::BTreeLayer;
 pub use hybrid::HybridIndex;
@@ -146,13 +146,13 @@ pub struct BaseLayer<K: Key, V: Value> {
 }
 
 impl<K: Key, V: Value> BaseLayer<K, V> {
-    fn build(base: impl ExactSizeIterator<Item = (K, V)>) -> Self {
+    pub fn build(base: impl ExactSizeIterator<Item = (K, V)>) -> Self {
         Self {
             data: Buffer::from_vec_in_memory(base.map(|(k, v)| Entry::new(k, v)).collect()),
         }
     }
 
-    fn build_disk(
+    pub fn build_disk(
         base: impl ExactSizeIterator<Item = (K, V)>,
         path: impl AsRef<Path>,
     ) -> Result<Self> {
@@ -163,7 +163,7 @@ impl<K: Key, V: Value> BaseLayer<K, V> {
         })
     }
 
-    fn load(path: impl AsRef<Path>) -> Result<Self> {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         Ok(Self {
             data: Buffer::load_from_disk(path)?,
         })

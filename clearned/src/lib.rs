@@ -171,8 +171,6 @@ pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 
     let index = quote! {
         #[allow(unused_import)]
-        use ::clearned_core::ImmutableIndex;
-
         pub struct #name<K: ::clearned_core::Key, V: ::clearned_core::Value>(::clearned_core::HybridIndex<K, V, #layer_name<K>>);
 
         impl<K: ::clearned_core::Key, V: ::clearned_core::Value> ::clearned_core::ImmutableIndex<K, V> for #name<K, V> {

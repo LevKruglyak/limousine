@@ -1,0 +1,18 @@
+[package]
+name = "clearned_bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+average = "0.13.1"
+clap = { version = "4.2.4", features = ["derive"] }
+colored = "2.0.0"
+itertools = "0.10.5"
+mmap_buffer = "0.1.2"
+rand = "0.8.5"
+rand_distr = "0.4.3"
+rayon = "1.7.0"
+seq-macro = "0.3.3"
+
+clearned = { path = "../clearned" }
+clearned_core = { path = "../clearned_core" }
