@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_new() {
-        let list: MemoryList<i32, ()> = MemoryList::new(1);
+        let list: MemoryList<i32, ()> = MemoryList::new(Default::default());
 
         assert_eq!(list.len(), 1);
         assert_eq!(list[list.first], Default::default());
