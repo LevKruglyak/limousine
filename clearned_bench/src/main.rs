@@ -1,7 +1,7 @@
 use average::{Estimate, MeanWithError};
 use clap::ValueEnum;
-use clearned::prelude::*;
 use itertools::Itertools;
+use limousine_engine::prelude::*;
 use mmap_buffer::Buffer;
 use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
 use rand_distr::Uniform;
@@ -12,14 +12,14 @@ use crate::baseline::{BTreeMapBaseline, SortedBaseline};
 
 pub mod baseline;
 
-create_hybrid_index! {
+limousine_macros::create_immutable_hybrid_index! {
     name: HybridIndex1,
     layout: {
         _ => btree(8),
     }
 }
 
-create_hybrid_index! {
+limousine_macros::create_immutable_hybrid_index! {
     name: HybridIndex2,
     layout: {
         0 => btree(8),
@@ -27,7 +27,7 @@ create_hybrid_index! {
     }
 }
 
-create_hybrid_index! {
+limousine_macros::create_immutable_hybrid_index! {
     name: HybridIndex3,
     layout: {
         0 => pgm(32),
@@ -35,7 +35,7 @@ create_hybrid_index! {
     }
 }
 
-create_hybrid_index! {
+limousine_macros::create_immutable_hybrid_index! {
     name: HybridIndex4,
     layout: {
         _ => pgm(32),
@@ -43,6 +43,8 @@ create_hybrid_index! {
 }
 
 fn main() {
+    println!("generating data... (will be cached for future runs)");
+
     if fs::metadata("data/main.dat").is_err() {
         gen_data(200_000_000, "data/main.dat", Distributions::Uniform);
     }

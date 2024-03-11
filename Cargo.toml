@@ -1,9 +1,9 @@
 [workspace]
 
 members = [
-  "clearned_example",
-  "clearned_core",
-  "clearned_bench",
-  "clearned_derive",
-  "clearned"
+  # "clearned_example",
+  "limousine_core",
+  # "clearned_bench",
+  "limousine_derive",
+  "limousine_engine"
 ]
