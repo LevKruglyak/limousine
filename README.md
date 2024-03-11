@@ -6,7 +6,7 @@
 
 This project experiments with hybrid indexes — a combination of traditional BTree layers and learned index layers. The goal is to harness the strengths of both indexing methods, in addition to improving the state of the art for learned index insertion. While developing mutable hybrid indexes that efficiently support insertions and deletions is an active area of research, this crate offers a fully-functioning prototype, capable of turning a layout specification into a working design.
 
-Most of our work with learned indexes was inspired by [![PGM Index](https://pgm.di.unipi.it/)].
+Most of our work with learned indexes was inspired by [PGM Index](https://pgm.di.unipi.it/).
 
 # Overview
 
