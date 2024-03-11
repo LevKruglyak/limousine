@@ -23,16 +23,16 @@ where
     Base: NodeLayer<K>,
     K: Ord,
 {
-    fn search(&self, key: &K) -> Base::Address {
+    fn search(&self, _: &Base, key: &K) -> Base::Address {
         self.inner.range(..=key).next_back().unwrap().1.clone()
     }
 
-    fn insert(&mut self, prop: PropogateInsert<'_, K, Base>) {
+    fn insert(&mut self, base: &Base, prop: PropogateInsert<K, Base>) {
         match prop {
             PropogateInsert::Single(key, address) => {
                 self.inner.insert(key, address);
             }
-            PropogateInsert::Rebuild(base) => {
+            PropogateInsert::Rebuild => {
                 self.inner.clear();
 
                 for (key, address) in base.full_range() {

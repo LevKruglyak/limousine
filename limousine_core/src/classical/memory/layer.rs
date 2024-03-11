@@ -82,8 +82,12 @@ where
         unsafe { ptr.as_mut() }
     }
 
-    fn range<'n>(&'n self, range: impl RangeBounds<Self::Address>) -> Self::Iter<'n> {
-        Iter::range(&self, range)
+    fn range<'n>(
+        &'n self,
+        start: Bound<Self::Address>,
+        end: Bound<Self::Address>,
+    ) -> Self::Iter<'n> {
+        Iter::range(&self, start, end)
     }
 
     fn full_range<'n>(&'n self) -> Self::Iter<'n> {
@@ -205,11 +209,10 @@ impl<'n, K, V, const FANOUT: usize> Iter<'n, K, V, FANOUT> {
 
     fn range(
         layer: &'n MemoryBTreeLayer<K, V, FANOUT>,
-        range: impl RangeBounds<Address<K, V, FANOUT>>,
+        start: Bound<Address<K, V, FANOUT>>,
+        end: Bound<Address<K, V, FANOUT>>,
     ) -> Self {
-        let end = range.end_bound().cloned();
-
-        match range.start_bound() {
+        match start {
             Bound::Excluded(start) => Self {
                 layer,
                 current: unsafe { start.as_ref().next },
