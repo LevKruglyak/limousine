@@ -35,7 +35,7 @@ impl<K: Key, const FANOUT: usize> InternalLayer<K> for BTreeLayer<K, FANOUT> {
         };
 
         let ptr = node.search(key);
-        println!("found node with entries {:?}", node.entries());
+        // println!("found node with entries {:?}", node.entries());
 
         ApproxPos {
             lo: ptr,

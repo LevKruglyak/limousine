@@ -42,7 +42,7 @@ impl<K: Key, M: Model<K>, S: Segmentation<K, M>> InternalLayer<K> for PiecewiseM
             range.lo,
         ))];
 
-        println!("found model {:?}", model);
+        // println!("found model {:?}", model);
 
         let pos = model.approximate(key);
         pos

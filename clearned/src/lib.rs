@@ -273,7 +273,6 @@ impl Parse for HybridIndexDescription {
         while !content.is_empty() {
             let arm: Arm = content.parse()?;
             let _: Option<Token![,]> = content.parse()?;
-            eprintln!("{:#?}", arm.body.to_token_stream().to_string());
             let body = arm.body.to_token_stream();
             let layer_type: LayerType = parse(body.into())?;
 
