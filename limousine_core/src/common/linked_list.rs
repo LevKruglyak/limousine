@@ -1,4 +1,4 @@
-use crate::kv::KeyBounded;
+use crate::common::bounded::KeyBounded;
 use crate::{Address, Model, NodeLayer};
 use generational_arena::Arena;
 

@@ -1,9 +1,8 @@
 use crate::classical::node::BTreeNode;
+use crate::common::bounded::*;
 use crate::common::linked_list::*;
 use crate::common::macros::impl_node_layer;
 use crate::component::*;
-use crate::kv::StaticBounded;
-use crate::kv::*;
 use generational_arena::{Arena, Index};
 use std::borrow::Borrow;
 use std::fmt::Debug;

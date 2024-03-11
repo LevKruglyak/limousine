@@ -1,5 +1,3 @@
-use num::PrimInt;
-use std::fmt::Debug;
 use trait_set::trait_set;
 
 pub trait KeyBounded<K> {
@@ -8,15 +6,6 @@ pub trait KeyBounded<K> {
 
 pub trait StaticBounded: 'static + Copy + Ord {
     fn min_ref() -> &'static Self;
-}
-
-// Until `trait_alias` is stabilized, we have to use a macro
-trait_set! {
-    /// General value type, thread-safe
-    pub trait Value = Send + Sync + Debug + Default + Copy + 'static;
-
-    /// General key type, thread safe, and primitive integer type
-    pub trait Key = Value + PrimInt + StaticBounded;
 }
 
 macro_rules! impl_integer {
