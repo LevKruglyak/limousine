@@ -2,13 +2,15 @@
 [![Rust](https://github.com/LevKruglyak/limousine/actions/workflows/rust.yml/badge.svg)](https://github.com/LevKruglyak/limousine/actions/workflows/rust.yml)
 [![Latest Version](https://img.shields.io/crates/v/limousine_engine.svg)](https://crates.io/crates/limousine_engine)
 
-Learned indexes, which use statistical models to approximate the location of keys in an index, have been proven to be highly effective, both in terms of memory usage and performance. Nevertheless, they suffer from some unavoidable trade-offs when compared to the well-developed BTree design. In this experimental project, we want to map out a design space of *hybrid indexes*, which contain some classical, BTree layers, and some learned index layers. 
+**Limousine** is an exploration into the world of hybrid indexes. Traditional indexes, like BTrees, have been optimized for decades, offering consistent performance for both inserts and reads. On the other hand, learned indexes, which leverage statistical models to approximate the locations of keys, bring massive benefits in memory usage and read performance. However, they come with their own set of trade-offs; most notably there isn't a canonical or efficient algorithm for performing inserts.
 
-Supporting mutable hybrid indexes of this form which support efficient insertion and deletion is still the subject of ongoing research which we are working on. This crate serves as a fully-functioning prototype which can materialize a working design from a layout specification.
+This project experiments with hybrid indexes — a combination of traditional BTree layers and learned index layers. The goal is to harness the strengths of both indexing methods, in addition to improving the state of the art for learned index insertion. While developing mutable hybrid indexes that efficiently support insertions and deletions is an active area of research, this crate offers a fully-functioning prototype, capable of turning a layout specification into a working design.
+
+Most of our work with learned indexes was inspired by [![PGM Index](https://pgm.di.unipi.it/)].
 
 # Overview
 
-***limousine_engine*** provides a procedural macro to automatically generate a hybrid index design:
+***limousine_engine*** offers a procedural macro that auto-generates a hybrid index design:
 
 ```rust
 use limousine_engine::prelude::*;
@@ -25,9 +27,9 @@ create_hybrid_index! {
 }
 ```
 
-To generate a design, we provide a name for the structure, and a layout description, which consists of a stack of components. These components can be either classical or learned. In this example, there is a large persisted BTree layer storing the base data, followed by two smaller BTree layers, a Piecewise Geometric Model layer, and everything above is an optimized in memory BTree.
+To create a hybrid index, specify a name and a layout. The layout is a stack of components that can be classical or learned. In this example, we use a large persisted BTree layer for base data storage, followed by two smaller BTree layers, a Piecewise Geometric Model (PGM) layer, and an optimized in-memory BTree at the top.
 
-We can then use these generated structs to perform queries:
+Once the index is generated, you can run queries:
 
 ```rust
 // Load the first two layer of the index from memory
