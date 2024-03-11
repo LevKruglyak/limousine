@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 
 /// Returns the `upper bound` index from a search result
+#[allow(unused)]
 pub fn upper_bound(search: Result<usize, usize>, cap: usize) -> usize {
     match search {
         Ok(index) => index,
@@ -9,6 +10,7 @@ pub fn upper_bound(search: Result<usize, usize>, cap: usize) -> usize {
 }
 
 /// Returns the `lower bound` index from a search result
+#[allow(unused)]
 pub fn lower_bound(search: Result<usize, usize>) -> usize {
     match search {
         Ok(index) => index,

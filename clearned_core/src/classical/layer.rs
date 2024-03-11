@@ -1,6 +1,7 @@
 use std::{ops::Deref, path::Path};
 
-use super::node::{BTreeNode, KeyPtr};
+use super::node::BTreeNode;
+use crate::Entry;
 use crate::{
     path_with_extension,
     search::{lower_bound, OptimalSearch, Search},
@@ -43,15 +44,13 @@ impl<K: Key, const FANOUT: usize> InternalLayer<K> for BTreeLayer<K, FANOUT> {
 }
 
 impl<K: Key, const FANOUT: usize> InternalLayerBuild<K> for BTreeLayer<K, FANOUT> {
-    fn build(base: Vec<K>) -> Self
+    fn build(base: impl ExactSizeIterator<Item = K>) -> Self
     where
         Self: Sized,
     {
-        let data: Vec<KeyPtr<K, usize>> = base
-            .iter()
-            .copied()
+        let data: Vec<Entry<K, usize>> = base
             .enumerate()
-            .map(|(ptr, min)| KeyPtr::new(min, ptr))
+            .map(|(ptr, min)| Entry::new(min, ptr))
             .collect();
 
         let capacity = data.len() / FANOUT + 2;
@@ -60,15 +59,13 @@ impl<K: Key, const FANOUT: usize> InternalLayerBuild<K> for BTreeLayer<K, FANOUT
         Self::build_internal(&data, nodes)
     }
 
-    fn build_on_disk(base: Vec<K>, path: impl AsRef<Path>) -> Result<Self>
+    fn build_on_disk(base: impl ExactSizeIterator<Item = K>, path: impl AsRef<Path>) -> Result<Self>
     where
         Self: Sized,
     {
-        let data: Vec<KeyPtr<K, usize>> = base
-            .iter()
-            .copied()
+        let data: Vec<Entry<K, usize>> = base
             .enumerate()
-            .map(|(ptr, min)| KeyPtr::new(min, ptr))
+            .map(|(ptr, min)| Entry::new(min, ptr))
             .collect();
 
         let capacity = data.len() / FANOUT + 2;
@@ -89,7 +86,7 @@ impl<K: Key, const FANOUT: usize> InternalLayerBuild<K> for BTreeLayer<K, FANOUT
 
 impl<K: Key, const FANOUT: usize> BTreeLayer<K, FANOUT> {
     fn build_internal(
-        data: &[KeyPtr<K, usize>],
+        data: &[Entry<K, usize>],
         mut nodes: Buffer<BTreeNode<K, usize, FANOUT>>,
     ) -> Self {
         // Always add extra padding node
