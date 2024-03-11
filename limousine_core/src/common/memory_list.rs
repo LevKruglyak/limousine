@@ -186,7 +186,7 @@ mod tests {
         let list: MemoryList<i32, ()> = MemoryList::new(1);
 
         assert_eq!(list.len(), 1);
-        assert_eq!(list[list.first], 1);
+        assert_eq!(list[list.first], Default::default());
         assert_eq!(list.first, list.last);
     }
 
