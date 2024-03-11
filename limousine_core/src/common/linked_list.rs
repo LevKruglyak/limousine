@@ -11,7 +11,7 @@ pub struct LinkedList<N, PA> {
 }
 
 pub struct LinkedNode<N, PA> {
-    inner: N,
+    pub inner: N,
     next: Option<Index>,
     previous: Option<Index>,
     parent: Option<PA>,
@@ -83,8 +83,11 @@ impl<N, PA> LinkedList<N, PA> {
         ptr
     }
 
-    pub fn parent(&self, ptr: Index) -> Option<PA> {
-        self.arena[ptr].parent
+    pub fn parent(&self, ptr: Index) -> Option<PA>
+    where
+        PA: Address,
+    {
+        self.arena[ptr].parent.clone()
     }
 }
 
