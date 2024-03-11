@@ -9,6 +9,8 @@ mod layer;
 // use layer::MemoryBTreeLayer;
 // use std::borrow::Borrow;
 // use std::collections::BTreeMap;
+use crate::common::linked_list::Index;
+use crate::common::macros::impl_node_layer;
 use crate::component::*;
 use crate::kv::StaticBounded;
 use layer::*;
@@ -35,21 +37,7 @@ where
     type Node =
         <MemoryBTreeLayer<K, BA, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
 
-    fn deref(&self, ptr: BTreeInternalAddress) -> &Self::Node {
-        self.inner.deref(ptr)
-    }
-
-    fn deref_mut(&mut self, ptr: BTreeInternalAddress) -> &mut Self::Node {
-        self.inner.deref_mut(ptr)
-    }
-
-    fn first(&self) -> BTreeInternalAddress {
-        self.inner.first()
-    }
-
-    unsafe fn deref_unsafe(&self, ptr: BTreeInternalAddress) -> *mut Self::Node {
-        self.inner.deref_unsafe(ptr)
-    }
+    impl_node_layer!(Index);
 }
 
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
@@ -126,21 +114,7 @@ where
     type Node =
         <MemoryBTreeLayer<K, V, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
 
-    fn deref(&self, ptr: BTreeInternalAddress) -> &Self::Node {
-        self.inner.deref(ptr)
-    }
-
-    fn deref_mut(&mut self, ptr: BTreeInternalAddress) -> &mut Self::Node {
-        self.inner.deref_mut(ptr)
-    }
-
-    fn first(&self) -> BTreeInternalAddress {
-        self.inner.first()
-    }
-
-    unsafe fn deref_unsafe(&self, ptr: BTreeBaseAddress) -> *mut Self::Node {
-        self.inner.deref_unsafe(ptr)
-    }
+    impl_node_layer!(Index);
 }
 
 impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>

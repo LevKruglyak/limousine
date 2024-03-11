@@ -1,4 +1,4 @@
-use crate::{Address, LinkedNode, NodeLayer};
+use crate::{Address, Model, NodeLayer};
 use std::mem::MaybeUninit;
 use std::ops::{Bound, RangeBounds};
 
