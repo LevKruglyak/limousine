@@ -6,6 +6,7 @@ edition = "2021"
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
 keywords = ["btree", "pgm", "database", "proc_macro", "limousine"]
 license = "Apache-2.0"
+repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
 num = "0.4.0"

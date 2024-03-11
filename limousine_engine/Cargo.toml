@@ -6,9 +6,7 @@ description = "limousine_engine can reason about a large design continuum of hyb
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
 keywords = ["btree", "pgm", "database", "proc_macro", "limousine"]
 license = "Apache-2.0"
-
-# repository = "https://github.com/LevKruglyak/limousine"
-# readme = "crates-io.md"
+repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
 limousine_derive = { path = "../limousine_derive" }
