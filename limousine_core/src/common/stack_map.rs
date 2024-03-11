@@ -5,12 +5,21 @@ use crate::common::search::*;
 use std::fmt::Debug;
 use std::mem::MaybeUninit;
 
+use bytemuck::{Pod, Zeroable};
+
 /// `StackMap` is a constant-size, zero-allocation associative container
 /// backed by an array.
+#[derive(Copy)]
+#[repr(C)]
 pub struct StackMap<K, V, const FANOUT: usize> {
     inner: [MaybeUninit<Entry<K, V>>; FANOUT],
     len: usize,
 }
+
+/// SAFETY: should only cause uninitialized memory, eventually we should
+/// use a macro to add padding bytes or something.
+unsafe impl<K: Zeroable, V: Zeroable, const FANOUT: usize> Zeroable for StackMap<K, V, FANOUT> {}
+unsafe impl<K: Pod, V: Pod, const FANOUT: usize> Pod for StackMap<K, V, FANOUT> where Self: Copy {}
 
 impl<K: Debug, V: Debug, const FANOUT: usize> Debug for StackMap<K, V, FANOUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -32,19 +41,6 @@ impl<K: Ord + PartialEq, V: PartialEq, const FANOUT: usize> PartialEq for StackM
 
             other_iter.next().is_none()
         }
-    }
-}
-
-impl<K, V, const FANOUT: usize> Drop for StackMap<K, V, FANOUT> {
-    fn drop(&mut self) {
-        for i in 0..self.len() {
-            let ptr = self.inner[i].as_mut_ptr();
-            unsafe {
-                std::ptr::drop_in_place(ptr);
-            }
-        }
-
-        self.len = 0;
     }
 }
 
