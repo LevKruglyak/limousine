@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::StoreID;
+use crate::common::storage::StoreID;
 
 pub struct DeepDiskNode<N, PA> {
     pub inner: N,

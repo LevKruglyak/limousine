@@ -2,18 +2,18 @@ use crate::common::bounded::KeyBounded;
 use crate::{Address, Node, NodeLayer};
 use generational_arena::Arena;
 
-pub use generational_arena::Index;
+pub type ArenaID = generational_arena::Index;
 
 pub struct MemoryList<N, PA> {
     arena: Arena<(MemoryNode<N>, Option<PA>)>,
-    first: Index,
-    last: Index,
+    first: ArenaID,
+    last: ArenaID,
 }
 
 pub struct MemoryNode<N> {
     pub inner: N,
-    next: Option<Index>,
-    previous: Option<Index>,
+    next: Option<ArenaID>,
+    previous: Option<ArenaID>,
 }
 
 impl<N> MemoryNode<N> {
@@ -38,7 +38,7 @@ impl<N, PA> MemoryList<N, PA> {
         }
     }
 
-    pub fn insert_after(&mut self, inner: N, ptr: Index) -> Index {
+    pub fn insert_after(&mut self, inner: N, ptr: ArenaID) -> ArenaID {
         let next_ptr = self.arena[ptr].0.next;
 
         let mut new_node = MemoryNode::new(inner);
@@ -57,7 +57,7 @@ impl<N, PA> MemoryList<N, PA> {
         new_node_ptr
     }
 
-    pub fn insert_before(&mut self, inner: N, ptr: Index) -> Index {
+    pub fn insert_before(&mut self, inner: N, ptr: ArenaID) -> ArenaID {
         let previous_ptr = self.arena[ptr].0.previous;
 
         let mut new_node = MemoryNode::new(inner);
@@ -76,7 +76,7 @@ impl<N, PA> MemoryList<N, PA> {
         new_node_ptr
     }
 
-    pub fn clear(&mut self, inner: N) -> Index {
+    pub fn clear(&mut self, inner: N) -> ArenaID {
         self.arena.clear();
         let ptr = self.arena.insert((MemoryNode::new(inner), None));
 
@@ -103,34 +103,34 @@ where
     }
 }
 
-impl<K, N> Node<K, Index> for MemoryNode<N>
+impl<K, N> Node<K, ArenaID> for MemoryNode<N>
 where
     N: KeyBounded<K> + 'static,
 {
-    fn next(&self) -> Option<Index> {
+    fn next(&self) -> Option<ArenaID> {
         self.next
     }
 
-    fn previous(&self) -> Option<Index> {
+    fn previous(&self) -> Option<ArenaID> {
         self.previous
     }
 }
 
-impl<N, PA> std::ops::Index<Index> for MemoryList<N, PA> {
+impl<N, PA> std::ops::Index<ArenaID> for MemoryList<N, PA> {
     type Output = N;
 
-    fn index(&self, index: Index) -> &Self::Output {
+    fn index(&self, index: ArenaID) -> &Self::Output {
         &self.arena[index].0.inner
     }
 }
 
-impl<N, PA> std::ops::IndexMut<Index> for MemoryList<N, PA> {
-    fn index_mut(&mut self, index: Index) -> &mut Self::Output {
+impl<N, PA> std::ops::IndexMut<ArenaID> for MemoryList<N, PA> {
+    fn index_mut(&mut self, index: ArenaID) -> &mut Self::Output {
         &mut self.arena[index].0.inner
     }
 }
 
-impl<K, N, PA> NodeLayer<K, Index, PA> for MemoryList<N, PA>
+impl<K, N, PA> NodeLayer<K, ArenaID, PA> for MemoryList<N, PA>
 where
     K: Copy,
     N: KeyBounded<K> + 'static,
@@ -138,15 +138,15 @@ where
 {
     type Node = MemoryNode<N>;
 
-    fn deref(&self, ptr: Index) -> &Self::Node {
+    fn deref(&self, ptr: ArenaID) -> &Self::Node {
         &self.arena[ptr].0
     }
 
-    fn deref_mut(&mut self, ptr: Index) -> &mut Self::Node {
+    fn deref_mut(&mut self, ptr: ArenaID) -> &mut Self::Node {
         &mut self.arena[ptr].0
     }
 
-    unsafe fn set_parent_unsafe(&self, ptr: Index, parent: PA) {
+    unsafe fn set_parent_unsafe(&self, ptr: ArenaID, parent: PA) {
         unsafe fn make_mut<T>(ptr: &T) -> *mut T {
             ptr as *const T as *mut T
         }
@@ -154,19 +154,19 @@ where
         *make_mut(&self.arena[ptr].1) = Some(parent);
     }
 
-    fn parent(&self, ptr: Index) -> Option<PA> {
+    fn parent(&self, ptr: ArenaID) -> Option<PA> {
         self.arena[ptr].1.clone()
     }
 
-    fn set_parent(&mut self, ptr: Index, parent: PA) {
+    fn set_parent(&mut self, ptr: ArenaID, parent: PA) {
         self.arena[ptr].1 = Some(parent);
     }
 
-    fn first(&self) -> Index {
+    fn first(&self) -> ArenaID {
         self.first
     }
 
-    fn last(&self) -> Index {
+    fn last(&self) -> ArenaID {
         self.last
     }
 }

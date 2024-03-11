@@ -1,7 +1,7 @@
 mod layer;
 
 use crate::common::bounded::StaticBounded;
-use crate::common::list::memory::Index;
+use crate::common::list::memory::ArenaID;
 use crate::common::macros::impl_node_layer;
 use crate::component::*;
 use layer::*;
@@ -10,7 +10,7 @@ use layer::*;
 //                  Internal Component
 // -------------------------------------------------------
 
-pub type BTreeInternalAddress = generational_arena::Index;
+pub type BTreeInternalAddress = ArenaID;
 
 pub struct BTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA> {
     inner: MemoryBTreeLayer<K, BA, FANOUT, PA>,
@@ -27,7 +27,7 @@ where
     type Node =
         <MemoryBTreeLayer<K, BA, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
 
-    impl_node_layer!(Index, PA);
+    impl_node_layer!(ArenaID, PA);
 }
 
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
@@ -100,7 +100,7 @@ where
     type Node =
         <MemoryBTreeLayer<K, V, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
 
-    impl_node_layer!(Index, PA);
+    impl_node_layer!(ArenaID, PA);
 }
 
 impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>

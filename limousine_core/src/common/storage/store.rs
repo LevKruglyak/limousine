@@ -1,4 +1,4 @@
-use super::id_alloc::IDAllocator;
+use super::{id_alloc::IDAllocator, ObjectStore, StoreID};
 use core::panic;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -8,11 +8,8 @@ use std::{
     rc::Rc,
 };
 
-pub type StoreID = u64;
-pub use super::id_alloc::ID;
-
 #[derive(Serialize, Deserialize, Clone)]
-pub struct GlobalStoreCatalog {
+struct GlobalStoreCatalog {
     ids: IDAllocator<StoreID>,
     registry: HashMap<String, StoreID>,
 }
@@ -159,20 +156,6 @@ where
     }
 }
 
-pub trait ObjectStore {
-    fn allocate_page(&mut self) -> StoreID;
-
-    fn free_page(&mut self, id: StoreID) -> bool;
-
-    fn write_page<P>(&mut self, page: &P, id: StoreID) -> crate::Result<()>
-    where
-        P: Serialize;
-
-    fn read_page<P>(&self, id: StoreID) -> crate::Result<Option<P>>
-    where
-        for<'de> P: Deserialize<'de>;
-}
-
 impl<T> ObjectStore for T
 where
     T: ObjectStoreInner,
@@ -185,7 +168,7 @@ where
         self.inner_ref_mut().catalog.ids.free(id)
     }
 
-    fn write_page<P>(&mut self, page: &P, id: StoreID) -> crate::Result<()>
+    fn write_page<P>(&self, page: &P, id: StoreID) -> crate::Result<()>
     where
         P: Serialize,
     {

@@ -1,13 +1,14 @@
-use crate::{
-    common::{
-        bounded::KeyBounded,
-        store::{StoreID, ID},
-    },
-    Address, GlobalStore, LocalStore, Node, NodeLayer,
-};
+use crate::common::bounded::*;
+use crate::common::storage::*;
+use crate::Address;
+use crate::Node;
+use crate::NodeLayer;
 
+use caches::DefaultHashBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+const NODE_CACHE_SIZE: usize = 20;
 
 pub struct BoundaryDiskNode<N> {
     pub inner: N,
@@ -19,90 +20,98 @@ pub struct BoundaryDiskNode<N> {
 pub struct BoundaryDiskListCatalogPage {}
 
 pub struct BoundaryDiskList<N, PA> {
-    store: LocalStore<BoundaryDiskListCatalogPage>,
+    store: CachedLocalStore<BoundaryDiskListCatalogPage, BoundaryDiskNode<N>>,
+
     // We should only persist parents when we are in a deep persisted layer, in a boundary layer we
     // keep them in transient memory
     parents: HashMap<StoreID, PA>,
-    _ph: std::marker::PhantomData<N>,
 }
 
 impl<N, PA> BoundaryDiskList<N, PA> {
     fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
-        let store = store.load_local_store(ident)?;
-        let parents = HashMap::new();
+        unimplemented!()
+        // let store = store.load_local_store(ident)?;
+        // let parents = HashMap::new();
+        // let cache = LRUCache::new(NODE_CACHE_SIZE).expect("Failed to construct read cache!");
+        // let write_buffer = Vec::new();
+        //
+        // Ok(Self {
+        //     store,
+        //     cache,
+        //     write_buffer,
+        //     parents,
+        // })
+    }
 
-        Ok(Self {
-            store,
-            parents,
-            _ph: std::marker::PhantomData,
-        })
+    fn flush(&mut self) {
+        // for entry in self.cache. {}
     }
 }
 
-// impl<K, N, PA> NodeLayer<K, StoreID, PA> for BoundaryDiskList<N, PA>
-// where
-//     K: Copy,
-//     N: KeyBounded<K> + 'static,
-//     PA: Address,
-// {
-//     type Node = BoundaryDiskNode<N>;
-//
-//     fn deref(&self, ptr: StoreID) -> &Self::Node {
-//         // &self.arena[ptr]
-//         unimplemented!()
-//     }
-//
-//     fn deref_mut(&mut self, ptr: StoreID) -> &mut Self::Node {
-//         // &mut self.arena[ptr]
-//         unimplemented!()
-//     }
-//
-//     unsafe fn deref_unsafe(&self, ptr: StoreID) -> *mut Self::Node {
-//         // self.arena.get(ptr).unwrap() as *const Self::Node as *mut Self::Node
-//         unimplemented!()
-//     }
-//
-//     fn first(&self) -> StoreID {
-//         // self.first
-//         unimplemented!()
-//     }
-//
-//     fn last(&self) -> StoreID {
-//         // self.last
-//         unimplemented!()
-//     }
-// }
-//
-// impl<K, N> KeyBounded<K> for BoundaryDiskNode<N>
-// where
-//     N: KeyBounded<K>,
-// {
-//     fn lower_bound(&self) -> &K {
-//         self.inner.lower_bound()
-//     }
-// }
-//
-// impl<K, N, PA> Model<K, StoreID, PA> for BoundaryDiskNode<PA>
-// where
-//     N: KeyBounded<K> + 'static,
-//     PA: Address,
-// {
-//     fn next(&self) -> Option<StoreID> {
-//         self.next
-//     }
-//
-//     fn previous(&self) -> Option<StoreID> {
-//         self.previous
-//     }
-//
-//     fn parent(&self) -> Option<PA> {
-//         self.parent.clone()
-//     }
-//
-//     fn set_parent(&mut self, parent: PA) {
-//         self.parent = Some(parent);
-//     }
-// }
+impl<K, N, PA> NodeLayer<K, StoreID, PA> for BoundaryDiskList<N, PA>
+where
+    K: Copy,
+    N: KeyBounded<K> + 'static,
+    PA: Address,
+{
+    type Node = BoundaryDiskNode<N>;
+
+    fn deref(&self, ptr: StoreID) -> &Self::Node {
+        // self.cache.
+        // self.parents.get(ptr)
+        // &self.arena[ptr]
+        unimplemented!()
+    }
+
+    fn deref_mut(&mut self, ptr: StoreID) -> &mut Self::Node {
+        // &mut self.arena[ptr]
+        unimplemented!()
+    }
+
+    fn first(&self) -> StoreID {
+        // self.first
+        unimplemented!()
+    }
+
+    fn last(&self) -> StoreID {
+        // self.last
+        unimplemented!()
+    }
+
+    fn parent(&self, ptr: StoreID) -> Option<PA> {
+        unimplemented!()
+    }
+
+    fn set_parent(&mut self, ptr: StoreID, parent: PA) {
+        unimplemented!()
+    }
+
+    unsafe fn set_parent_unsafe(&self, ptr: StoreID, parent: PA) {
+        unimplemented!()
+    }
+}
+
+impl<K, N> KeyBounded<K> for BoundaryDiskNode<N>
+where
+    N: KeyBounded<K>,
+{
+    fn lower_bound(&self) -> &K {
+        self.inner.lower_bound()
+    }
+}
+
+impl<K, N> Node<K, StoreID> for BoundaryDiskNode<N>
+where
+    N: KeyBounded<K> + 'static,
+{
+    fn next(&self) -> Option<StoreID> {
+        self.next.to_option()
+    }
+
+    fn previous(&self) -> Option<StoreID> {
+        self.previous.to_option()
+    }
+}
 
 impl<N> BoundaryDiskNode<N> {
     fn new(node: N) -> Self {

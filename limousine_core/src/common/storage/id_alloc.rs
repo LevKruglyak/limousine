@@ -1,9 +1,9 @@
-use core::fmt;
+// Adapted from: [idalloc](https://github.com/udoprog/idalloc)
 
 use serde::{Deserialize, Serialize};
 
 /// A type that can be used an allocator index.
-pub trait ID: Copy + fmt::Display + fmt::Debug {
+pub trait ID: Copy {
     /// Allocate the initial, unallocated value.
     fn initial() -> Self;
 
@@ -24,6 +24,14 @@ pub trait ID: Copy + fmt::Display + fmt::Debug {
 
     /// Test if the value is the none sentinel value.
     fn is_none(self) -> bool;
+
+    fn to_option(self) -> Option<Self> {
+        if self.is_none() {
+            None
+        } else {
+            Some(self)
+        }
+    }
 }
 
 macro_rules! impl_primitive_index {

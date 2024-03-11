@@ -37,7 +37,16 @@ fn main() {
     for i in 0..num {
         index.insert(i, i * i);
     }
-    println!("Index2 took {:?} ms", start.elapsed().as_millis());
+    println!(
+        "Index2 insertion took {:?} ms ",
+        start.elapsed().as_millis()
+    );
+
+    let start = std::time::Instant::now();
+    for i in 0..num {
+        assert_eq!(index.search(&i), Some(&(i * i)));
+    }
+    println!("Index2 search took {:?} ms ", start.elapsed().as_millis());
 
     use std::collections::BTreeMap;
     let mut index: BTreeMap<u128, u128> = BTreeMap::new();
@@ -47,4 +56,10 @@ fn main() {
         index.insert(i, i * i);
     }
     println!("StdBTree took {:?} ms", start.elapsed().as_millis());
+
+    let start = std::time::Instant::now();
+    for i in 0..num {
+        assert_eq!(index.get(&i), Some(&(i * i)));
+    }
+    println!("StdBTree search took {:?} ms ", start.elapsed().as_millis());
 }

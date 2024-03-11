@@ -1,9 +1,10 @@
+use std::ops::Bound;
+
 use crate::common::bounded::*;
+use crate::common::storage::GlobalStore;
 use crate::iter::Iter;
-use crate::GlobalStore;
 use num::PrimInt;
 use serde::{Deserialize, Serialize};
-use std::ops::Bound;
 use trait_set::trait_set;
 
 // Until `trait_alias` is stabilized, we have to use a macro
