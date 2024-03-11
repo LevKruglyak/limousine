@@ -68,7 +68,7 @@ pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenS
         pub mod #mod_name {
             use ::limousine_engine::private::*;
 
-            #(#alias_body)*
+            #alias_body
 
             #index_body
 
@@ -81,17 +81,43 @@ pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenS
     implementation.into()
 }
 
-fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
+fn create_type_aliases(layout: &IndexLayout) -> (TokenStream, Vec<Ident>) {
+    let address_alias: Vec<Ident> = (0..=layout.internal.len() + 1)
+        .map(|i| Ident::new(format!("A{}", i).as_str(), Span::call_site()))
+        .collect();
+
+    let mut type_alias_body = proc_macro2::TokenStream::new();
+
+    // Add body as the first component
+    let alias = address_alias[0].clone();
+    let body = layout.base.address();
+    type_alias_body.extend(quote::quote! {
+        type #alias = #body;
+    });
+
+    // Add internal components
+    for (mut index, component) in layout.internal.iter().rev().enumerate() {
+        index += 1;
+
+        let alias = address_alias[index].clone();
+        let body = component.address();
+        type_alias_body.extend(quote! {
+            type #alias = #body;
+        });
+    }
+
+    let alias = address_alias.last().unwrap().clone();
+    type_alias_body.extend(quote! { type #alias = (); });
+
     let type_alias: Vec<Ident> = (0..=layout.internal.len() + 1)
         .map(|i| Ident::new(format!("C{}", i).as_str(), Span::call_site()))
         .collect();
 
-    let mut type_alias_body = Vec::new();
-
     // Add body as the first component
+    let parent_address_alias = address_alias[1].clone();
     let alias = type_alias[0].clone();
-    let body = layout.base.to_tokens();
-    type_alias_body.push(quote::quote! {
+    let body = layout.base.to_tokens(parent_address_alias);
+    type_alias_body.extend(quote::quote! {
         type #alias<K, V> = #body;
     });
 
@@ -99,11 +125,13 @@ fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
     for (mut index, component) in layout.internal.iter().rev().enumerate() {
         index += 1;
 
-        let previous_alias = type_alias[index - 1].clone();
-        let body = component.to_tokens(quote! { #previous_alias<K, V> });
+        let base_address_alias = address_alias[index - 1].clone();
+        let parent_address_alias = address_alias[index + 1].clone();
+
+        let body = component.to_tokens(base_address_alias, parent_address_alias);
 
         let alias = type_alias[index].clone();
-        type_alias_body.push(quote! {
+        type_alias_body.extend(quote! {
             type #alias<K, V> = #body;
         });
     }
@@ -111,11 +139,11 @@ fn create_type_aliases(layout: &IndexLayout) -> (Vec<TokenStream>, Vec<Ident>) {
     // Add top component
     let index = layout.internal.len() + 1;
 
-    let previous_alias = type_alias[index - 1].clone();
-    let body = layout.top.to_tokens(quote! { #previous_alias<K, V> });
+    let base_address_alias = address_alias[index - 1].clone();
+    let body = layout.top.to_tokens(base_address_alias);
 
     let alias = type_alias[index].clone();
-    type_alias_body.push(quote! {
+    type_alias_body.extend(quote! {
         type #alias<K, V> = #body;
     });
 
@@ -263,11 +291,9 @@ fn create_insert_body(
         let field = fields[index].clone();
         let prev_field = fields[index - 1].clone();
 
-        let search = search_vars[search_vars.len() - 2 - index].clone();
-
         search_body.extend(quote! {
             let #var;
-            if let Some(x) = self.#field.insert(&self.#prev_field, #search, #prev_var) {
+            if let Some(x) = self.#field.insert(&mut self.#prev_field, #prev_var) {
                 #var = x;
             } else {
                 return result;
@@ -284,7 +310,7 @@ fn create_insert_body(
     let prev_field = fields[index - 1].clone();
 
     search_body.extend(quote! {
-        let #var = self.#field.insert(&self.#prev_field, #prev_var);
+        let #var = self.#field.insert(&mut self.#prev_field, #prev_var);
     });
 
     search_body.extend(quote! { result });
@@ -303,7 +329,7 @@ fn create_empty_body(
     let var = fields[0].clone();
 
     empty_body.extend(quote! {
-        let #var = #alias::empty();
+        let mut #var = #alias::empty();
     });
 
     // Add internal components
@@ -313,7 +339,7 @@ fn create_empty_body(
         let prev_var = fields[index - 1].clone();
 
         empty_body.extend(quote! {
-            let #var = #alias::build(&#prev_var);
+            let mut #var = #alias::build(&mut #prev_var);
         });
     }
 
@@ -323,7 +349,7 @@ fn create_empty_body(
     let prev_var = fields[index - 1].clone();
 
     empty_body.extend(quote! {
-        let #var = #alias::build(&#prev_var);
+        let mut #var = #alias::build(&mut #prev_var);
     });
 
     empty_body.extend(quote! {
@@ -347,7 +373,7 @@ fn create_build_body(
     let var = fields[0].clone();
 
     build_body.extend(quote! {
-        let #var = #alias::build(iter);
+        let mut #var = #alias::build(iter);
     });
 
     // Add internal components
@@ -357,7 +383,7 @@ fn create_build_body(
         let prev_var = fields[index - 1].clone();
 
         build_body.extend(quote! {
-            let #var = #alias::build(&#prev_var);
+            let mut #var = #alias::build(&mut #prev_var);
         });
     }
 
@@ -367,7 +393,7 @@ fn create_build_body(
     let prev_var = fields[index - 1].clone();
 
     build_body.extend(quote! {
-        let #var = #alias::build(&#prev_var);
+        let mut #var = #alias::build(&mut #prev_var);
     });
 
     build_body.extend(quote! {

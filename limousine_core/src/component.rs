@@ -1,127 +1,143 @@
+use crate::iter::{Iter, MutIter};
 use crate::kv::KeyBounded;
 use std::ops::{Bound, RangeBounds};
 use std::path::Path;
+use trait_set::trait_set;
 
-/// A `NodeLayer` is an ordered collection of key-bounded nodes which implement the `Keyed` trait.
-/// TODO: write more
-pub trait NodeLayer<K>: 'static {
+trait_set! {
+    pub trait Address = Eq + Clone + 'static;
+}
+
+// Type dependence hierarchy
+
+pub trait LinkedNode<K, SA, PA>: 'static + KeyBounded<K>
+where
+    SA: Address,
+    PA: Address,
+{
+    // Address to the next node in the current component
+    fn next(&self) -> Option<SA>;
+
+    // Address to the parent node in the above component
+    fn parent(&self) -> Option<PA>;
+
+    fn set_parent(&mut self, parent: PA);
+}
+
+/// A `NodeLayer` is a linked list of key-bounded nodes which implement the `Node<K>` trait
+pub trait NodeLayer<K, SA, PA>: 'static + Sized
+where
+    SA: Address,
+    PA: Address,
+{
     /// Node type stored in the layer. Each node roughly represents a model in the hybrid index
     /// which indexes some finite/lower-bounded collection of `Keyed` elements.
-    type Node: KeyBounded<K>;
-
-    /// A valid address/reference/pointer to a `Node` within the layer.
-    type Address: Clone + Eq;
+    type Node: LinkedNode<K, SA, PA>;
 
     /// Immutable address dereference which returns a reference to a node.
-    fn deref(&self, ptr: Self::Address) -> &Self::Node;
+    fn deref(&self, ptr: SA) -> &Self::Node;
 
     /// Mutable address dereference which returns a reference to a node.
-    fn deref_mut(&mut self, ptr: Self::Address) -> &mut Self::Node;
+    fn deref_mut(&mut self, ptr: SA) -> &mut Self::Node;
+
+    unsafe fn deref_unsafe(&self, ptr: SA) -> *mut Self::Node;
 
     /// Get the lower bound of a node. This could be overriden by some layers which might have a
     /// more optimal way of mapping the address to the lower bound.
-    fn lower_bound(&self, ptr: Self::Address) -> &K {
+    fn lower_bound(&self, ptr: SA) -> &K {
         self.deref(ptr).lower_bound()
     }
 
-    type Iter<'n>: Iterator<Item = (K, Self::Address)>
-    where
-        Self: 'n;
+    /// First node in the current node
+    fn first(&self) -> SA;
 
-    /// Ordered iterator over all of the nodes in the layer. Functionally equivalent to calling
-    /// ```self.range(None, None)```
-    fn full_range<'n>(&'n self) -> Self::Iter<'n>;
+    fn range<'n>(&'n self, start: Bound<SA>, end: Bound<SA>) -> Iter<'n, K, Self, SA, PA> {
+        Iter::range(&self, start, end)
+    }
 
-    /// Ordered iterator over a (un)bounded slice of `Address`
-    fn range<'n>(
-        &'n self,
-        start: Bound<Self::Address>,
-        end: Bound<Self::Address>,
-    ) -> Self::Iter<'n>;
+    unsafe fn mut_range<'n>(
+        &'n mut self,
+        start: Bound<SA>,
+        end: Bound<SA>,
+    ) -> MutIter<'n, K, Self, SA, PA> {
+        MutIter::range(self, start, end)
+    }
 }
 
-pub enum PropogateInsert<K, Base>
-where
-    Base: NodeLayer<K> + ?Sized,
-{
+pub enum PropogateInsert<K, SA, PA> {
     /// Insert a single newly created node into the layer
-    Single(K, Base::Address),
+    Single(K, SA, PA),
 
     /// Rebuild the entire layer
-    Rebuild,
+    Replace(PA, PA),
 }
 
-pub trait TopComponent<K, Base>
+pub trait TopComponent<K, Base, BA, SA>
 where
-    Base: NodeLayer<K>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
 {
-    fn search(&self, base: &Base, key: &K) -> Base::Address;
+    fn search(&self, base: &Base, key: &K) -> BA;
 
-    fn insert(&mut self, base: &Base, prop: PropogateInsert<K, Base>);
-
-    fn len(&self) -> usize;
+    fn insert(&mut self, base: &mut Base, prop: PropogateInsert<K, BA, SA>);
 }
 
-pub trait TopComponentInMemoryBuild<K, Base>
+pub trait TopComponentInMemoryBuild<K, Base, BA, SA>
 where
-    Base: NodeLayer<K>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
 {
-    fn build(base: &Base) -> Self;
+    fn build(base: &mut Base) -> Self;
 }
 
-pub trait InternalComponent<K, Base>
+pub trait InternalComponent<K, Base, BA, SA, PA>
 where
-    Self: NodeLayer<K>,
-    Base: NodeLayer<K>,
+    Self: NodeLayer<K, SA, PA>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
+    PA: Address,
 {
-    fn search(&self, base: &Base, ptr: Self::Address, key: &K) -> Base::Address;
+    fn search(&self, base: &Base, ptr: SA, key: &K) -> BA;
 
     fn insert<'n>(
         &'n mut self,
-        base: &Base,
-        ptr: Self::Address,
-        prop: PropogateInsert<K, Base>,
-    ) -> Option<PropogateInsert<K, Self>>;
-
-    fn len(&self) -> usize;
-
-    fn memory_size(&self) -> usize;
+        base: &mut Base,
+        prop: PropogateInsert<K, BA, SA>,
+    ) -> Option<PropogateInsert<K, SA, PA>>;
 }
 
-pub trait InternalComponentInMemoryBuild<K, Base>
+pub trait InternalComponentInMemoryBuild<K, Base, BA, SA, PA>
 where
-    Base: NodeLayer<K>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
+    PA: Address,
 {
-    fn build(base: &Base) -> Self;
+    fn build(base: &mut Base) -> Self;
 }
 
-pub trait InternalComponentDiskBuild<K, Base>
+pub trait InternalComponentDiskBuild<K, Base, BA, SA, PA>
 where
-    Base: NodeLayer<K>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: Address,
+    SA: Address,
+    PA: Address,
 {
     fn build(base: &Base, path: impl AsRef<Path>) -> Self;
 }
 
-pub trait BaseComponent<K, V, Base>
+pub trait BaseComponent<K, V, SA, PA>
 where
-    Self: NodeLayer<K>,
-    Base: NodeLayer<K>,
+    Self: NodeLayer<K, SA, PA>,
+    SA: Address,
+    PA: Address,
 {
-    fn insert(&mut self, ptr: Self::Address, key: K, value: V) -> Option<PropogateInsert<K, Self>>;
+    fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropogateInsert<K, SA, PA>>;
 
-    fn search(&self, ptr: Self::Address, key: &K) -> Option<&V>;
-
-    fn len(&self) -> usize;
-
-    fn memory_size(&self) -> usize;
-
-    // type EntryIter<'n>: Iterator<Item = (&'n K, &'n V)>
-    // where
-    //     K: 'n,
-    //     V: 'n,
-    //     Self: 'n;
-    //
-    // fn range<'n>(&'n self, range: impl RangeBounds<(K, Self::Address)>) -> Self::EntryIter<'n>;
+    fn search(&self, ptr: SA, key: &K) -> Option<&V>;
 }
 
 pub trait BaseComponentInMemoryBuild<K, V> {

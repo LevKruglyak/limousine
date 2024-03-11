@@ -2,8 +2,9 @@
 
 pub mod classical;
 pub mod component;
+pub mod iter;
 pub mod kv;
-pub mod learned;
+// pub mod learned;
 
 mod common;
 
@@ -12,6 +13,9 @@ mod common;
 pub use classical::BTreeBaseComponent;
 pub use classical::BTreeInternalComponent;
 pub use classical::BTreeTopComponent;
+
+pub use classical::BTreeBaseAddress;
+pub use classical::BTreeInternalAddress;
 
 pub use component::*;
 pub use kv::{Key, Value};
