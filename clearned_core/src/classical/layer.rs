@@ -35,6 +35,7 @@ impl<K: Key, const FANOUT: usize> InternalLayer<K> for BTreeLayer<K, FANOUT> {
         };
 
         let ptr = node.search(key);
+        println!("found node with entries {:?}", node.entries());
 
         ApproxPos {
             lo: ptr,
@@ -90,9 +91,9 @@ impl<K: Key, const FANOUT: usize> BTreeLayer<K, FANOUT> {
         mut nodes: Buffer<BTreeNode<K, usize, FANOUT>>,
     ) -> Self {
         // Always add extra padding node
-        nodes[0] = BTreeNode::empty();
+        // nodes[0] = BTreeNode::empty();
 
-        let mut index = 1;
+        let mut index = 0;
         let mut start = 0;
 
         // TODO: replace with slice

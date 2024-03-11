@@ -47,14 +47,12 @@ impl<K: Key, const EPSILON: usize> Segmentation<K, LinearModel<K, EPSILON>> for 
             p = next_p;
             if !model.add_point(p) {
                 let seg = model.get_segment();
-                // println!("created segment: {seg:#?}");
                 segments.push(seg.into());
                 model.add_point(p);
             }
         }
 
         let seg = model.get_segment();
-        // println!("created segment: {seg:#?}");
         segments.push(seg.into());
 
         segments
@@ -123,7 +121,7 @@ impl<K: Key, const EPSILON: usize> OptimalPiecewiseLinearModel<K, EPSILON> {
         let y = pair.1;
 
         if self.points_in_hull > 0 && x <= self.last_x {
-            println!("Points must be increasing by x. {x:?} {:?}", self.last_x);
+            // println!("Points must be increasing by x. {x:?} {:?}", self.last_x);
             return false;
         }
 

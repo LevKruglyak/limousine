@@ -7,7 +7,7 @@ use crate::{ApproxPos, Key};
 use super::{pgm::PGMSegmentation, Model, PiecewiseModel};
 
 /// A simple linear model for a key-rank segment of data.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct LinearModel<K, const EPSILON: usize> {
     key: K,

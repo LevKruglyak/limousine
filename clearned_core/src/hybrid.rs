@@ -1,6 +1,6 @@
 use crate::{
     search::{lower_bound, upper_bound, OptimalSearch, Search},
-    ApproxPos, BaseLayer, HybridIndexRangeIterator, ImmutableIndex, Key, NodeLayer, Value,
+    ApproxPos, BaseLayer, ImmutableIndex, Key, NodeLayer, Value,
 };
 use std::path::Path;
 
@@ -66,7 +66,7 @@ impl<K: Key, V: Value, I: HybridLayer<K>> ImmutableIndex<K, V> for HybridIndex<K
         layers.push(I::build(layer, base.nodes().into_iter().map(|x| x.key)));
         layer += 1;
 
-        while layers.last().unwrap().len() > 2 {
+        while layers.last().unwrap().len() > 1 {
             layers.push(I::build(layer, layers.last().unwrap().key_iter()));
 
             layer += 1;
@@ -95,7 +95,7 @@ impl<K: Key, V: Value, I: HybridLayer<K>> ImmutableIndex<K, V> for HybridIndex<K
 
         layer += 1;
 
-        while layers.last().unwrap().len() > 2 {
+        while layers.last().unwrap().len() > 1 {
             if layer < threshold {
                 layers.push(I::build_on_disk(
                     layer,
@@ -116,7 +116,7 @@ impl<K: Key, V: Value, I: HybridLayer<K>> ImmutableIndex<K, V> for HybridIndex<K
         let mut layers: Vec<I> = Vec::new();
         let mut layer = 0;
 
-        while layers.last().is_none() || layers.last().unwrap().len() > 2 {
+        while layers.last().is_none() || layers.last().unwrap().len() > 1 {
             if layer < threshold {
                 layers.push(I::load(
                     layer,
@@ -144,4 +144,38 @@ impl<K: Key, V: Value, I: HybridLayer<K>> ImmutableIndex<K, V> for HybridIndex<K
     }
 
     type RangeIterator<'e> = HybridIndexRangeIterator<'e, K, V>;
+}
+
+// ---------------------------------------------------------------------------
+// Hybrid index range iterator
+// ---------------------------------------------------------------------------
+
+pub struct HybridIndexRangeIterator<'e, K: Key, V: Value> {
+    data: &'e BaseLayer<K, V>,
+    low: usize,
+    high: usize,
+}
+
+impl<'e, K: Key, V: Value> HybridIndexRangeIterator<'e, K, V> {
+    pub fn new(data: &'e BaseLayer<K, V>, low: usize, high: usize) -> Self {
+        Self { data, low, high }
+    }
+}
+
+impl<'e, K: Key, V: Value> Iterator for HybridIndexRangeIterator<'e, K, V> {
+    type Item = (&'e K, &'e V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.low < self.high {
+            let result = Some((
+                &self.data.nodes()[self.low].key,
+                &self.data.nodes()[self.low].value,
+            ));
+
+            self.low += 1;
+            return result;
+        }
+
+        None
+    }
 }

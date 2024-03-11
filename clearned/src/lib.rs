@@ -14,8 +14,6 @@ use syn::{parenthesized, parse, LitInt};
 #[proc_macro]
 pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let desc = parse_macro_input!(input as HybridIndexDescription);
-    // eprintln!("{desc:#?}");
-
     let name = Ident::new(&desc.name, Span::mixed_site());
 
     let layer_name = Ident::new(
@@ -27,8 +25,8 @@ pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     for (i, layer) in desc.layer_types.iter().enumerate() {
         let variant_name = format_ident!("L{}", i);
         let (layer_name, param) = match layer {
-            LayerBase::BTree { fanout } => ("BTreeLayer", fanout),
-            LayerBase::PGM { epsilon } => ("PGMLayer", epsilon),
+            LayerType::BTree { fanout } => ("BTreeLayer", fanout),
+            LayerType::PGM { epsilon } => ("PGMLayer", epsilon),
         };
         let layer_type =
             parse_str::<TokenStream>(&format!("::clearned_core::{}<K, {}>", layer_name, param))
@@ -36,20 +34,6 @@ pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 
         variants.push(quote! { #variant_name(#layer_type) });
     }
-
-    // let mut match_expression = Vec::new();
-    // for (arm, layer) in desc.layout.iter() {
-    //     let variant_name = format_ident!("L{}", layer);
-    //     let (layer_name, param) = match layer {
-    //         LayerBase::BTree { fanout } => ("BTreeLayer", fanout),
-    //         LayerBase::PGM { epsilon } => ("PGMLayer", epsilon),
-    //     };
-    //     let layer_type =
-    //         parse_str::<TokenStream>(&format!("::clearned_core::{}<K, {}>", layer_name, param))
-    //             .expect("");
-    //
-    //     variants.push(quote! { #variant_name(#layer_type) });
-    // }
 
     let mut len_arms = Vec::new();
     let mut search_arms = Vec::new();
@@ -91,8 +75,8 @@ pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStr
         let layout_variant_name = format_ident!("L{}", index);
 
         let name = match layout_type {
-            LayerBase::BTree { fanout } => "BTreeLayer",
-            LayerBase::PGM { epsilon } => "PGMLayer",
+            LayerType::BTree { fanout } => "BTreeLayer",
+            LayerType::PGM { epsilon } => "PGMLayer",
         };
         let layer_type = parse_str::<TokenStream>(&format!("::clearned_core::{}", name)).expect("");
 
@@ -130,7 +114,7 @@ pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStr
                 use ::clearned_core::NodeLayer;
 
                 match self {
-                    #(#len_arms),*
+                    #(#len_arms)*
                 }
             }
 
@@ -138,7 +122,7 @@ pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStr
                 use ::clearned_core::InternalLayer;
 
                 match self {
-                    #(#search_arms),*
+                    #(#search_arms)*
                 }
             }
 
@@ -179,13 +163,11 @@ pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStr
                 use std::borrow::Borrow;
 
                 match self {
-                    #(#key_iter_arms),*
+                    #(#key_iter_arms)*
                 }
             }
         }
     };
-
-    eprintln!("{}", layer.to_string());
 
     let index = quote! {
         #[allow(unused_import)]
@@ -227,23 +209,12 @@ pub fn materialize_index(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum LayerBase {
+enum LayerType {
     BTree { fanout: usize },
     PGM { epsilon: usize },
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum LayerModifier {
-    Persist,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum LayerComponent {
-    Base(LayerBase),
-    Modifier(LayerModifier),
-}
-
-impl Parse for LayerComponent {
+impl Parse for LayerType {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let span = input.span();
         let lookahead = input.lookahead1();
@@ -253,110 +224,29 @@ impl Parse for LayerComponent {
                 let content;
                 parenthesized!(content in input);
                 let fanout: LitInt = content.parse()?;
-                Ok(LayerComponent::Base(LayerBase::BTree {
+                Ok(LayerType::BTree {
                     fanout: fanout.base10_parse()?,
-                }))
+                })
             }
             "pgm" => {
                 let content;
                 parenthesized!(content in input);
                 let epsilon: LitInt = content.parse()?;
-                Ok(LayerComponent::Base(LayerBase::PGM {
+                Ok(LayerType::PGM {
                     epsilon: epsilon.base10_parse()?,
-                }))
+                })
             }
-            "persist" => Ok(LayerComponent::Modifier(LayerModifier::Persist)),
             _ => Err(syn::Error::new(
                 span,
-                input.error("expected 'btree()', 'pgm()', or 'persist'"),
+                input.error("expected 'btree()', 'pgm()'"),
             )),
         }
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct LayerTypePreDescription {
-    description: Vec<LayerComponent>,
-}
-
-impl ToTokens for LayerTypePreDescription {
-    fn to_tokens(&self, tokens: &mut TokenStream) {}
-}
-
-impl Parse for LayerTypePreDescription {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let content = Punctuated::<LayerComponent, Plus>::parse_terminated(input)?;
-
-        Ok(LayerTypePreDescription {
-            description: content.into_iter().collect(),
-        })
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct LayerTypeDescription {
-    base: LayerBase,
-    modifier: Option<LayerModifier>,
-}
-
-impl Parse for LayerTypeDescription {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        // TODO: fix span issues
-        let span = input.span();
-        let mut content: LayerTypePreDescription = input.parse()?;
-
-        let base = content
-            .description
-            .iter()
-            .cloned()
-            .find(|&x| matches!(x, LayerComponent::Base(x)));
-
-        if base.is_none() {
-            return Err(syn::Error::new(
-                span,
-                input.error("expected 'btree()', 'pgm()', or 'persist'"),
-            ));
-        }
-        content.description.retain(|x| x != &base.unwrap());
-
-        // Messy, but whatever for now
-        let base = match base {
-            Some(LayerComponent::Base(base)) => base,
-            _ => unreachable!(),
-        };
-
-        let mut modifier = None;
-        for component in content.description.iter().cloned() {
-            match component {
-                LayerComponent::Base(base) => {
-                    return Err(syn::Error::new(
-                        span,
-                        input.error("multiple bases detected!"),
-                    ));
-                }
-                LayerComponent::Modifier(new_modifier) => {
-                    if modifier.is_none() {
-                        modifier = Some(new_modifier);
-                    } else {
-                        return Err(syn::Error::new(
-                            span,
-                            input.error("multiple modifier detected!"),
-                        ));
-                    }
-                }
-            }
-        }
-
-        Ok(LayerTypeDescription {
-            base: base.clone(),
-            modifier,
-        })
-    }
-}
-
 struct HybridIndexDescription {
     name: String,
-    layer_types: Vec<LayerBase>,
+    layer_types: Vec<LayerType>,
     layout: Vec<(Arm, usize)>,
 }
 
@@ -385,16 +275,16 @@ impl Parse for HybridIndexDescription {
             let _: Option<Token![,]> = content.parse()?;
             eprintln!("{:#?}", arm.body.to_token_stream().to_string());
             let body = arm.body.to_token_stream();
-            let layer_type: LayerTypeDescription = parse(body.into())?;
+            let layer_type: LayerType = parse(body.into())?;
 
-            if !layer_types.contains(&layer_type.base) {
-                layer_types.push(layer_type.base.clone());
+            if !layer_types.contains(&layer_type) {
+                layer_types.push(layer_type.clone());
             }
 
             let layer_index = layer_types
                 .iter()
                 .enumerate()
-                .find(|&(_, item)| *item == layer_type.base)
+                .find(|&(_, item)| *item == layer_type)
                 .unwrap()
                 .0;
 

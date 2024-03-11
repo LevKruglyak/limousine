@@ -9,7 +9,7 @@ use crate::{
 };
 use bytemuck::Pod;
 use mmap_buffer::Buffer;
-use std::{borrow::Borrow, marker::PhantomData, ops::Deref, path::Path};
+use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, ops::Deref, path::Path};
 
 pub mod pgm;
 pub mod pgm_node;
@@ -22,7 +22,7 @@ pub trait Segmentation<K: Key, M: Model<K>> {
 /// A model for approximate the location of a key, for use in a larged piecewise learned index
 /// layer. Must implement `Keyed<K>`, here the `.key()` method represents the maximum key which
 /// this model represents.
-pub trait Model<K: Key>: Pod + Borrow<K> {
+pub trait Model<K: Key>: Pod + Borrow<K> + Debug {
     /// Returns the approximate position of the specified key.
     fn approximate(&self, key: &K) -> ApproxPos;
 }
@@ -41,6 +41,8 @@ impl<K: Key, M: Model<K>, S: Segmentation<K, M>> InternalLayer<K> for PiecewiseM
             key,
             range.lo,
         ))];
+
+        println!("found model {:?}", model);
 
         let pos = model.approximate(key);
         pos
