@@ -17,7 +17,7 @@ impl Hash for Attribute {
 
 impl Borrow<str> for Attribute {
     fn borrow(&self) -> &str {
-        &self.key_string.as_str()
+        self.key_string.as_str()
     }
 }
 

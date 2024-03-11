@@ -274,7 +274,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     pub fn entries(&self) -> &[Entry<K, V>] {
         // SAFETY: `len` must be strictly less than `F`
         debug_assert!(self.len <= FANOUT);
-        let slice = unsafe { self.inner.get_unchecked(..usize::from(self.len)) };
+        let slice = unsafe { self.inner.get_unchecked(..self.len) };
 
         // SAFETY: feature `maybe_uninit_slice`
         unsafe { &*(slice as *const [MaybeUninit<Entry<K, V>>] as *const [Entry<K, V>]) }

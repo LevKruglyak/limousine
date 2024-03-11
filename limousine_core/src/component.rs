@@ -72,19 +72,19 @@ where
     fn last(&self) -> SA;
 
     /// An immutable iterator over the layer, returning (Key, Address) pairs
-    fn range<'n>(&'n self, start: Bound<SA>, end: Bound<SA>) -> Iter<'n, K, Self, SA, PA> {
-        Iter::range(&self, start, end)
+    fn range(&self, start: Bound<SA>, end: Bound<SA>) -> Iter<'_, K, Self, SA, PA> {
+        Iter::range(self, start, end)
     }
 
     /// A mutable iterator over the layer, returning MutNodeView objects, which have methods to
     /// access the lower bound (Key) and address, as well as interior mutability to change the
     /// parent of the underlying node. This is useful during building, since a layer cannot know
     /// its own parents until the parents themselves are built.
-    fn mut_range<'n>(
-        &'n mut self,
+    fn mut_range(
+        &mut self,
         start: Bound<SA>,
         end: Bound<SA>,
-    ) -> MutIter<'n, K, Self, SA, PA> {
+    ) -> MutIter<'_, K, Self, SA, PA> {
         MutIter::range(self, start, end)
     }
 }
@@ -130,8 +130,8 @@ where
 {
     fn search(&self, base: &Base, ptr: SA, key: &K) -> BA;
 
-    fn insert<'n>(
-        &'n mut self,
+    fn insert(
+        &mut self,
         base: &mut Base,
         prop: PropogateInsert<K, BA, SA>,
     ) -> Option<PropogateInsert<K, SA, PA>>;

@@ -25,7 +25,7 @@ impl Parse for IndexLayout {
         let span = input.span();
         let name: syn::Result<Ident> = input.parse();
         if name
-            .map(|ident| ident.to_string() != "name".to_string())
+            .map(|ident| ident != *"name")
             .unwrap_or(true)
         {
             return Err(syn::Error::new(span, "No name specified for the index!"));
@@ -38,7 +38,7 @@ impl Parse for IndexLayout {
         let span = input.span();
         let layout: syn::Result<Ident> = input.parse();
         if layout
-            .map(|ident| ident.to_string() != "layout".to_string())
+            .map(|ident| ident != *"layout")
             .unwrap_or(true)
         {
             return Err(syn::Error::new(span, "No layout specified for the index!"));
