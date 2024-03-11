@@ -1,7 +1,6 @@
-use clearned::materialize_index;
-use clearned_core::ImmutableIndex;
+use clearned::prelude::*;
 
-materialize_index! {
+create_hybrid_index! {
     name: HybridIndex,
     layout: {
         _ => btree(32),

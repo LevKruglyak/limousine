@@ -15,4 +15,3 @@ rayon = "1.7.0"
 seq-macro = "0.3.3"
 
 clearned = { path = "../clearned" }
-clearned_core = { path = "../clearned_core" }

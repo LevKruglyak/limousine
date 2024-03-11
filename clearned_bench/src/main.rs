@@ -1,30 +1,25 @@
 use average::{Estimate, MeanWithError};
 use clap::ValueEnum;
-use clearned_core::ImmutableIndex;
+use clearned::prelude::*;
 use itertools::Itertools;
 use mmap_buffer::Buffer;
 use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
 use rand_distr::Uniform;
 use rayon::prelude::*;
-use std::{
-    fs::{self},
-    hint::black_box,
-    path::Path,
-    time::Instant,
-};
+use std::{fs, hint::black_box, path::Path, time::Instant};
 
 use crate::baseline::{BTreeMapBaseline, SortedBaseline};
 
 pub mod baseline;
 
-clearned::materialize_index! {
+create_hybrid_index! {
     name: HybridIndex1,
     layout: {
         _ => btree(8),
     }
 }
 
-clearned::materialize_index! {
+create_hybrid_index! {
     name: HybridIndex2,
     layout: {
         0 => btree(8),
@@ -32,7 +27,7 @@ clearned::materialize_index! {
     }
 }
 
-clearned::materialize_index! {
+create_hybrid_index! {
     name: HybridIndex3,
     layout: {
         0 => pgm(32),
@@ -40,7 +35,7 @@ clearned::materialize_index! {
     }
 }
 
-clearned::materialize_index! {
+create_hybrid_index! {
     name: HybridIndex4,
     layout: {
         _ => pgm(32),

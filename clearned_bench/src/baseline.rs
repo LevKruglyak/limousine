@@ -1,6 +1,6 @@
-use clearned_core::{
+use clearned::private::{
     search::{lower_bound, upper_bound, OptimalSearch, Search},
-    BaseLayer, HybridIndexRangeIterator, ImmutableIndex, Key, NodeLayer, Value,
+    BaseLayer, HybridIndexRangeIterator, ImmutableIndex, Key, NodeLayer, Result, Value,
 };
 use std::collections::{btree_map::Range, BTreeMap};
 
@@ -25,11 +25,11 @@ impl<K: Key, V: Value> ImmutableIndex<K, V> for BTreeMapBaseline<K, V> {
         _: impl ExactSizeIterator<Item = (K, V)>,
         _: impl AsRef<std::path::Path>,
         _: usize,
-    ) -> clearned_core::Result<Self> {
+    ) -> Result<Self> {
         unimplemented!()
     }
 
-    fn load(_: impl AsRef<std::path::Path>, _: usize) -> clearned_core::Result<Self> {
+    fn load(_: impl AsRef<std::path::Path>, _: usize) -> Result<Self> {
         unimplemented!()
     }
 
@@ -57,11 +57,11 @@ impl<K: Key, V: Value> ImmutableIndex<K, V> for SortedBaseline<K, V> {
         _: impl ExactSizeIterator<Item = (K, V)>,
         _: impl AsRef<std::path::Path>,
         _: usize,
-    ) -> clearned_core::Result<Self> {
+    ) -> Result<Self> {
         unimplemented!()
     }
 
-    fn load(_: impl AsRef<std::path::Path>, _: usize) -> clearned_core::Result<Self> {
+    fn load(_: impl AsRef<std::path::Path>, _: usize) -> Result<Self> {
         unimplemented!()
     }
 
