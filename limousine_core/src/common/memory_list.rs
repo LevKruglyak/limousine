@@ -4,20 +4,20 @@ use generational_arena::Arena;
 
 pub use generational_arena::Index;
 
-pub struct LinkedList<N, PA> {
-    arena: Arena<LinkedNode<N, PA>>,
+pub struct MemoryList<N, PA> {
+    arena: Arena<MemoryNode<N, PA>>,
     first: Index,
     last: Index,
 }
 
-pub struct LinkedNode<N, PA> {
+pub struct MemoryNode<N, PA> {
     pub inner: N,
     next: Option<Index>,
     previous: Option<Index>,
     parent: Option<PA>,
 }
 
-impl<N, PA> LinkedNode<N, PA> {
+impl<N, PA> MemoryNode<N, PA> {
     fn new(node: N) -> Self {
         Self {
             inner: node,
@@ -28,12 +28,12 @@ impl<N, PA> LinkedNode<N, PA> {
     }
 }
 
-impl<N, PA> LinkedList<N, PA> {
+impl<N, PA> MemoryList<N, PA> {
     pub fn new(inner: N) -> Self {
         let mut arena = Arena::new();
-        let ptr = arena.insert(LinkedNode::new(inner));
+        let ptr = arena.insert(MemoryNode::new(inner));
 
-        LinkedList {
+        MemoryList {
             arena,
             first: ptr,
             last: ptr,
@@ -43,7 +43,7 @@ impl<N, PA> LinkedList<N, PA> {
     pub fn insert_after(&mut self, inner: N, ptr: Index) -> Index {
         let next_ptr = self.arena[ptr].next;
 
-        let mut new_node = LinkedNode::new(inner);
+        let mut new_node = MemoryNode::new(inner);
         new_node.previous = Some(ptr);
         new_node.next = next_ptr;
 
@@ -62,7 +62,7 @@ impl<N, PA> LinkedList<N, PA> {
     pub fn insert_before(&mut self, inner: N, ptr: Index) -> Index {
         let previous_ptr = self.arena[ptr].previous;
 
-        let mut new_node = LinkedNode::new(inner);
+        let mut new_node = MemoryNode::new(inner);
         new_node.previous = previous_ptr;
         new_node.next = Some(ptr);
 
@@ -80,7 +80,7 @@ impl<N, PA> LinkedList<N, PA> {
 
     pub fn clear(&mut self, inner: N) -> Index {
         self.arena.clear();
-        let ptr = self.arena.insert(LinkedNode::new(inner));
+        let ptr = self.arena.insert(MemoryNode::new(inner));
 
         self.first = ptr;
         self.last = ptr;
@@ -103,7 +103,7 @@ impl<N, PA> LinkedList<N, PA> {
 // Common implementations
 // ----------------------------------------
 
-impl<K, N, PA> KeyBounded<K> for LinkedNode<N, PA>
+impl<K, N, PA> KeyBounded<K> for MemoryNode<N, PA>
 where
     N: KeyBounded<K>,
 {
@@ -112,7 +112,7 @@ where
     }
 }
 
-impl<K, N, PA> Model<K, Index, PA> for LinkedNode<N, PA>
+impl<K, N, PA> Model<K, Index, PA> for MemoryNode<N, PA>
 where
     N: KeyBounded<K> + 'static,
     PA: Address,
@@ -134,7 +134,7 @@ where
     }
 }
 
-impl<N, PA> std::ops::Index<Index> for LinkedList<N, PA> {
+impl<N, PA> std::ops::Index<Index> for MemoryList<N, PA> {
     type Output = N;
 
     fn index(&self, index: Index) -> &Self::Output {
@@ -142,19 +142,19 @@ impl<N, PA> std::ops::Index<Index> for LinkedList<N, PA> {
     }
 }
 
-impl<N, PA> std::ops::IndexMut<Index> for LinkedList<N, PA> {
+impl<N, PA> std::ops::IndexMut<Index> for MemoryList<N, PA> {
     fn index_mut(&mut self, index: Index) -> &mut Self::Output {
         &mut self.arena[index].inner
     }
 }
 
-impl<K, N, PA> NodeLayer<K, Index, PA> for LinkedList<N, PA>
+impl<K, N, PA> NodeLayer<K, Index, PA> for MemoryList<N, PA>
 where
     K: Copy,
     N: KeyBounded<K> + 'static,
     PA: Address,
 {
-    type Node = LinkedNode<N, PA>;
+    type Node = MemoryNode<N, PA>;
 
     fn deref(&self, ptr: Index) -> &Self::Node {
         &self.arena[ptr]
@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_new() {
-        let list: LinkedList<i32, ()> = LinkedList::new(1);
+        let list: MemoryList<i32, ()> = MemoryList::new(1);
 
         assert_eq!(list.len(), 1);
         assert_eq!(list[list.first], 1);
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_insert_after() {
-        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+        let mut list: MemoryList<i32, ()> = MemoryList::new(1);
 
         let first_ptr = list.first;
         let second_ptr = list.insert_after(2, first_ptr);
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_insert_before() {
-        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+        let mut list: MemoryList<i32, ()> = MemoryList::new(1);
 
         let first_ptr = list.first;
         let zero_ptr = list.insert_before(0, first_ptr);
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_clear() {
-        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+        let mut list: MemoryList<i32, ()> = MemoryList::new(1);
         list.insert_after(2, list.first);
 
         assert_eq!(list.arena.len(), 2);
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_linked_node_new() {
-        let node: LinkedNode<i32, ()> = LinkedNode::new(10);
+        let node: MemoryNode<i32, ()> = MemoryNode::new(10);
 
         assert_eq!(node.inner, 10);
         assert_eq!(node.next, None);
