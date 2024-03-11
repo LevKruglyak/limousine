@@ -23,7 +23,11 @@ fn main() {
     for i in 0..num {
         index.insert(i, i * i);
     }
-    println!("{:?} after {:?} ms", index.search(&10), start.elapsed());
+    println!(
+        "{:?} after {:?} ms",
+        index.search(&10),
+        start.elapsed().as_millis()
+    );
 
     use std::collections::BTreeMap;
     let mut index: BTreeMap<u128, u128> = BTreeMap::new();

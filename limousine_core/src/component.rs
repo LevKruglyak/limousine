@@ -10,6 +10,12 @@ trait_set! {
 
 // Type dependence hierarchy
 
+/// A `LinkedNode` is a model in a `NodeLayer`, representing a set of entries above a
+/// lower bound. In addition to storing a pointer to its neighbor, it also stores a
+/// pointer to its parent, which is in a different layer.
+///
+/// In order to avoid circular type dependencies during composition, it is generic over
+/// its own address type, as well as its parent type. (SA, PA respectively)
 pub trait LinkedNode<K, SA, PA>: 'static + KeyBounded<K>
 where
     SA: Address,
@@ -24,9 +30,10 @@ where
     fn set_parent(&mut self, parent: PA);
 }
 
-/// A `NodeLayer` is a linked list of key-bounded nodes which implement the `Node<K>` trait
+/// A `NodeLayer` is a linked list of key-bounded nodes which implement the `LinkedNode<K>` trait.
 pub trait NodeLayer<K, SA, PA>: 'static + Sized
 where
+    K: Copy,
     SA: Address,
     PA: Address,
 {
@@ -48,14 +55,19 @@ where
         self.deref(ptr).lower_bound()
     }
 
-    /// First node in the current node
+    /// First node in the current node layer
     fn first(&self) -> SA;
 
+    /// An immutable iterator over the layer, returning (Key, Address) pairs
     fn range<'n>(&'n self, start: Bound<SA>, end: Bound<SA>) -> Iter<'n, K, Self, SA, PA> {
         Iter::range(&self, start, end)
     }
 
-    unsafe fn mut_range<'n>(
+    /// A mutable iterator over the layer, returning MutNodeView objects, which have methods to
+    /// access the lower bound (Key) and address, as well as interior mutability to change the
+    /// parent of the underlying node. This is useful during building, since a layer cannot know
+    /// its own parents until the parents themselves are built.
+    fn mut_range<'n>(
         &'n mut self,
         start: Bound<SA>,
         end: Bound<SA>,
@@ -68,7 +80,7 @@ pub enum PropogateInsert<K, SA, PA> {
     /// Insert a single newly created node into the layer
     Single(K, SA, PA),
 
-    /// Rebuild the entire layer
+    /// Rebuild a region of the layer completely
     Replace(PA, PA),
 }
 
@@ -77,6 +89,7 @@ where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
     SA: Address,
+    K: Copy,
 {
     fn search(&self, base: &Base, key: &K) -> BA;
 
@@ -88,6 +101,7 @@ where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
     SA: Address,
+    K: Copy,
 {
     fn build(base: &mut Base) -> Self;
 }
@@ -99,6 +113,7 @@ where
     BA: Address,
     SA: Address,
     PA: Address,
+    K: Copy,
 {
     fn search(&self, base: &Base, ptr: SA, key: &K) -> BA;
 
@@ -115,6 +130,7 @@ where
     BA: Address,
     SA: Address,
     PA: Address,
+    K: Copy,
 {
     fn build(base: &mut Base) -> Self;
 }
@@ -125,6 +141,7 @@ where
     BA: Address,
     SA: Address,
     PA: Address,
+    K: Copy,
 {
     fn build(base: &Base, path: impl AsRef<Path>) -> Self;
 }
@@ -134,6 +151,7 @@ where
     Self: NodeLayer<K, SA, PA>,
     SA: Address,
     PA: Address,
+    K: Copy,
 {
     fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropogateInsert<K, SA, PA>>;
 
