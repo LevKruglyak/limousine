@@ -1,5 +1,5 @@
 macro_rules! impl_node_layer {
-    ($SA:ty) => {
+    ($SA:ty, $PA:ty) => {
         fn deref(&self, ptr: $SA) -> &Self::Node {
             self.inner.deref(ptr)
         }
@@ -8,8 +8,16 @@ macro_rules! impl_node_layer {
             self.inner.deref_mut(ptr)
         }
 
-        unsafe fn deref_unsafe(&self, ptr: $SA) -> *mut Self::Node {
-            self.inner.deref_unsafe(ptr)
+        fn parent(&self, ptr: $SA) -> Option<$PA> {
+            self.inner.parent(ptr)
+        }
+
+        fn set_parent(&mut self, ptr: $SA, parent: $PA) {
+            self.inner.set_parent(ptr, parent)
+        }
+
+        unsafe fn set_parent_unsafe(&self, ptr: $SA, parent: $PA) {
+            self.inner.set_parent_unsafe(ptr, parent)
         }
 
         fn first(&self) -> $SA {

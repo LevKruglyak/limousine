@@ -5,5 +5,5 @@ pub mod memory;
 mod node;
 
 pub use btree_top::*;
-pub use disk::*;
+// pub use disk::*;
 pub use memory::*;

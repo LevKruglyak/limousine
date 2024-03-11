@@ -9,6 +9,7 @@ create_hybrid_index! {
         btree(fanout = 4),
         btree(fanout = 4),
         btree(fanout = 4),
+        btree(fanout = 4),
         btree(fanout = 64),
     ]
 }

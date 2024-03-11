@@ -1,7 +1,8 @@
 use crate::common::bounded::*;
-use crate::iter::{Iter, MutIter};
-use crate::IndexStore;
+use crate::iter::Iter;
+use crate::GlobalStore;
 use num::PrimInt;
+use serde::{Deserialize, Serialize};
 use std::ops::Bound;
 use trait_set::trait_set;
 
@@ -9,6 +10,8 @@ use trait_set::trait_set;
 trait_set! {
     /// A simple address trait,
     pub trait Address = Eq + Clone + 'static;
+
+    pub trait DiskAddress = Address + Default + Serialize + for<'de> Deserialize<'de>;
 
     /// General value type, thread-safe
     pub trait Value = Send + Sync + Default + Copy + 'static;
@@ -25,20 +28,19 @@ trait_set! {
 ///
 /// In order to avoid circular type dependencies during composition, it is generic over
 /// its own address type, as well as its parent type. (SA, PA respectively)
-pub trait Model<K, SA, PA>: 'static + KeyBounded<K>
+pub trait Node<K, SA>: 'static + KeyBounded<K>
 where
     SA: Address,
-    PA: Address,
 {
     // Address to the next node in the current component
     fn next(&self) -> Option<SA>;
 
     fn previous(&self) -> Option<SA>;
 
-    // Address to the parent node in the above component
-    fn parent(&self) -> Option<PA>;
-
-    fn set_parent(&mut self, parent: PA);
+    // // Address to the parent node in the above component
+    // fn parent(&self) -> Option<PA>;
+    //
+    // fn set_parent(&mut self, parent: PA);
 }
 
 /// A `NodeLayer` is has the interface of a linked list of key-bounded nodes which implement the
@@ -52,7 +54,7 @@ where
 {
     /// Node type stored in the layer. Each node roughly represents a model in the hybrid index
     /// which indexes some finite/lower-bounded collection of `Keyed` elements.
-    type Node: Model<K, SA, PA>;
+    type Node: Node<K, SA>;
 
     /// Immutable address dereference which returns a reference to a node.
     fn deref(&self, ptr: SA) -> &Self::Node;
@@ -60,16 +62,13 @@ where
     /// Mutable address dereference which returns a reference to a node.
     fn deref_mut(&mut self, ptr: SA) -> &mut Self::Node;
 
-    /// Get a raw mutable pointer to a node. This is mostly used internally by mutable iterators
-    /// for updating parent pointers of a base layer.
-    ///
-    /// # Safety
-    ///
-    /// It is up to the user to enforce the standard Rust aliasing rules for raw mutable pointers
-    /// to ensure safety.
-    unsafe fn deref_unsafe(&self, ptr: SA) -> *mut Self::Node;
+    fn parent(&self, ptr: SA) -> Option<PA>;
 
-    /// Get the lower bound of a node. This could be overriden by some layers which might have a
+    fn set_parent(&mut self, ptr: SA, parent: PA);
+
+    unsafe fn set_parent_unsafe(&self, ptr: SA, parent: PA);
+
+    /// Get the lower bound of a node. This could be overridden by some layers which might have a
     /// more optimal way of mapping the address to the lower bound.
     fn lower_bound(&self, ptr: SA) -> &K {
         self.deref(ptr).lower_bound()
@@ -86,16 +85,16 @@ where
         Iter::range(self, start, end)
     }
 
-    /// A mutable iterator over the layer, returning MutNodeView objects, which have methods to
-    /// access the lower bound (Key) and address, as well as interior mutability to change the
-    /// parent of the underlying node. This is useful during building, since a layer cannot know
-    /// its own parents until the parents themselves are built.
-    fn mut_range(&mut self, start: Bound<SA>, end: Bound<SA>) -> MutIter<'_, K, Self, SA, PA> {
-        MutIter::range(self, start, end)
-    }
+    // /// A mutable iterator over the layer, returning MutNodeView objects, which have methods to
+    // /// access the lower bound (Key) and address, as well as interior mutability to change the
+    // /// parent of the underlying node. This is useful during building, since a layer cannot know
+    // /// its own parents until the parents themselves are built.
+    // fn mut_range(&mut self, start: Bound<SA>, end: Bound<SA>) -> MutIter<'_, K, Self, SA, PA> {
+    //     MutIter::range(self, start, end)
+    // }
 }
 
-pub enum PropogateInsert<K, SA, PA> {
+pub enum PropagateInsert<K, SA, PA> {
     /// Insert a single newly created node into the layer
     Single(K, SA, PA),
 
@@ -112,7 +111,7 @@ where
 {
     fn search(&self, base: &Base, key: &K) -> BA;
 
-    fn insert(&mut self, base: &mut Base, prop: PropogateInsert<K, BA, SA>);
+    fn insert(&mut self, base: &mut Base, prop: PropagateInsert<K, BA, SA>);
 }
 
 pub trait TopComponentBuild<K, Base, BA, SA>
@@ -139,8 +138,8 @@ where
     fn insert(
         &mut self,
         base: &mut Base,
-        prop: PropogateInsert<K, BA, SA>,
-    ) -> Option<PropogateInsert<K, SA, PA>>;
+        prop: PropagateInsert<K, BA, SA>,
+    ) -> Option<PropagateInsert<K, SA, PA>>;
 }
 
 pub trait InternalComponentBuild<K, Base, BA, SA, PA>
@@ -162,9 +161,9 @@ where
     PA: Address,
     K: Copy,
 {
-    fn load(base: &Base, store: IndexStore) -> Self;
+    fn load(base: &Base, store: &mut GlobalStore) -> Self;
 
-    fn build(base: &Base, store: IndexStore) -> Self;
+    fn build(base: &Base, store: &mut GlobalStore) -> Self;
 }
 
 pub trait BaseComponent<K, V, SA, PA>
@@ -174,7 +173,7 @@ where
     PA: Address,
     K: Copy,
 {
-    fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropogateInsert<K, SA, PA>>;
+    fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropagateInsert<K, SA, PA>>;
 
     fn search(&self, ptr: SA, key: &K) -> Option<&V>;
 }
@@ -186,7 +185,7 @@ pub trait BaseComponentBuild<K, V> {
 }
 
 pub trait BaseComponentBuildDisk<K, V> {
-    fn load(store: IndexStore) -> Self;
+    fn load(store: &mut GlobalStore) -> Self;
 
-    fn build(iter: impl Iterator<Item = (K, V)>, store: IndexStore) -> Self;
+    fn build(iter: impl Iterator<Item = (K, V)>, store: &mut GlobalStore) -> Self;
 }

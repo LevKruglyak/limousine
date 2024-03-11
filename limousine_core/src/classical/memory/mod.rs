@@ -27,7 +27,7 @@ where
     type Node =
         <MemoryBTreeLayer<K, BA, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
 
-    impl_node_layer!(Index);
+    impl_node_layer!(Index, PA);
 }
 
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
@@ -47,14 +47,14 @@ where
     fn insert(
         &mut self,
         base: &mut B,
-        prop: PropogateInsert<K, BA, BTreeInternalAddress>,
-    ) -> Option<PropogateInsert<K, BTreeInternalAddress, PA>> {
+        prop: PropagateInsert<K, BA, BTreeInternalAddress>,
+    ) -> Option<PropagateInsert<K, BTreeInternalAddress, PA>> {
         match prop {
-            PropogateInsert::Single(key, address, ptr) => self
+            PropagateInsert::Single(key, address, ptr) => self
                 .inner
                 .insert_with_parent(key, address, base, ptr)
-                .map(|(key, address, parent)| PropogateInsert::Single(key, address, parent)),
-            PropogateInsert::Replace { .. } => {
+                .map(|(key, address, parent)| PropagateInsert::Single(key, address, parent)),
+            PropagateInsert::Replace { .. } => {
                 unimplemented!()
             }
         }
@@ -100,7 +100,7 @@ where
     type Node =
         <MemoryBTreeLayer<K, V, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
 
-    impl_node_layer!(Index);
+    impl_node_layer!(Index, PA);
 }
 
 impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>
@@ -115,9 +115,9 @@ where
         ptr: BTreeInternalAddress,
         key: K,
         value: V,
-    ) -> Option<PropogateInsert<K, BTreeBaseAddress, PA>> {
+    ) -> Option<PropagateInsert<K, BTreeBaseAddress, PA>> {
         if let Some((key, address, parent)) = self.inner.insert(key, value, ptr) {
-            Some(PropogateInsert::Single(key, address, parent))
+            Some(PropagateInsert::Single(key, address, parent))
         } else {
             None
         }

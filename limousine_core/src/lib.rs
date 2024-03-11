@@ -9,8 +9,8 @@ mod common;
 // Used by proc_macro
 pub use anyhow::Result;
 
-pub use classical::BTreeBaseAddressDisk;
-pub use classical::BTreeBaseComponentDisk;
+// pub use classical::BTreeBaseAddressDisk;
+// pub use classical::BTreeBaseComponentDisk;
 
 pub use classical::BTreeBaseAddress;
 pub use classical::BTreeBaseComponent;

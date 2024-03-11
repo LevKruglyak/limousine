@@ -19,14 +19,14 @@ where
         *self.inner.range(..=key).next_back().unwrap().1
     }
 
-    fn insert(&mut self, base: &mut Base, prop: PropogateInsert<K, BA, ()>) {
+    fn insert(&mut self, base: &mut Base, prop: PropagateInsert<K, BA, ()>) {
         match prop {
-            PropogateInsert::Single(key, address, _parent) => {
+            PropagateInsert::Single(key, address, _parent) => {
                 // TODO: figure out how to leverage parent?
                 self.inner.insert(key, address);
-                base.deref_mut(address).set_parent(());
+                base.set_parent(address, ());
             }
-            PropogateInsert::Replace { .. } => {
+            PropagateInsert::Replace { .. } => {
                 unimplemented!()
             }
         }
@@ -42,9 +42,9 @@ where
     fn build(base: &mut Base) -> Self {
         let mut inner = BTreeMap::new();
 
-        for view in base.mut_range(Bound::Unbounded, Bound::Unbounded) {
-            inner.insert(view.key(), view.address());
-            view.set_parent(());
+        for (key, address) in base.range(Bound::Unbounded, Bound::Unbounded) {
+            inner.insert(key, address);
+            unsafe { base.set_parent_unsafe(address, ()) };
         }
 
         Self {

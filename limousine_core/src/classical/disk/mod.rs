@@ -1,17 +1,17 @@
-use crate::classical::node::BTreeNode;
-use crate::common::bounded::*;
-use crate::{Address, BaseComponentBuildDisk, IndexStore, NodeLayer, StoreId};
+// use crate::classical::node::BTreeNode;
+// use crate::common::bounded::*;
+// use crate::{Address, BaseComponentBuildDisk, IndexStore, NodeLayer, StoreId};
 
 // -------------------------------------------------------
 //                  Base Component
 // -------------------------------------------------------
 
-pub type BTreeBaseAddressDisk = StoreId;
-
-pub struct BTreeBaseComponentDisk<K, V, const FANOUT: usize, PA> {
-    store: IndexStore,
-    _ph: std::marker::PhantomData<(K, V, PA)>,
-}
+// pub type BTreeBaseAddressDisk = StoreId;
+//
+// pub struct BTreeBaseComponentDisk<K, V, const FANOUT: usize, PA> {
+//     store: IndexStore,
+//     _ph: std::marker::PhantomData<(K, V, PA)>,
+// }
 
 // impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddressDisk, PA>
 //     for BTreeBaseComponentDisk<K, V, FANOUT, PA>
@@ -54,24 +54,24 @@ pub struct BTreeBaseComponentDisk<K, V, const FANOUT: usize, PA> {
 //     }
 // }
 //
-impl<K, V, const FANOUT: usize, PA> BaseComponentBuildDisk<K, V>
-    for BTreeBaseComponentDisk<K, V, FANOUT, PA>
-where
-    K: StaticBounded,
-    V: 'static,
-    PA: Address,
-{
-    fn load(store: IndexStore) -> Self {
-        Self {
-            store,
-            _ph: std::marker::PhantomData,
-        }
-    }
-
-    fn build(iter: impl Iterator<Item = (K, V)>, store: IndexStore) -> Self {
-        Self {
-            store,
-            _ph: std::marker::PhantomData,
-        }
-    }
-}
+// impl<K, V, const FANOUT: usize, PA> BaseComponentBuildDisk<K, V>
+//     for BTreeBaseComponentDisk<K, V, FANOUT, PA>
+// where
+//     K: StaticBounded,
+//     V: 'static,
+//     PA: Address,
+// {
+//     fn load(store: IndexStore) -> Self {
+//         Self {
+//             store,
+//             _ph: std::marker::PhantomData,
+//         }
+//     }
+//
+//     fn build(iter: impl Iterator<Item = (K, V)>, store: IndexStore) -> Self {
+//         Self {
+//             store,
+//             _ph: std::marker::PhantomData,
+//         }
+//     }
+// }

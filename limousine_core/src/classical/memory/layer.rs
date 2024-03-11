@@ -50,20 +50,21 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         // Add empty cap node
         let mut ptr = self.inner.clear(BTreeNode::empty());
 
-        for view in base.mut_range(Bound::Unbounded, Bound::Unbounded) {
+        for (key, address) in base.range(Bound::Unbounded, Bound::Unbounded) {
             // If node too full, carry over to next
             if self.inner[ptr].is_half_full() {
                 ptr = self.inner.insert_after(BTreeNode::empty(), ptr);
             }
 
-            self.inner[ptr].insert(view.key(), view.address());
-            view.set_parent(ptr);
+            self.inner[ptr].insert(key, address.clone());
+            unsafe { base.set_parent_unsafe(address, ptr) };
         }
     }
 
     pub fn insert(&mut self, key: K, value: V, ptr: Index) -> Option<(K, Index, PA)>
     where
         K: Copy + Ord + StaticBounded,
+        V: 'static,
         PA: Address,
     {
         if self.inner[ptr].is_full() {
@@ -114,16 +115,16 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
 
             // Update all of the parents for the split node
             for entry in self.inner[new_node_ptr].entries() {
-                base.deref_mut(entry.value.clone()).set_parent(new_node_ptr);
+                base.set_parent(entry.value.clone(), new_node_ptr)
             }
 
             // Insert into the right node
             if key < split_point {
                 self.inner[ptr].insert(key, value.clone());
-                base.deref_mut(value).set_parent(ptr);
+                base.set_parent(value, ptr);
             } else {
                 self.inner[new_node_ptr].insert(key, value.clone());
-                base.deref_mut(value).set_parent(new_node_ptr);
+                base.set_parent(value, new_node_ptr);
             }
 
             return Some((
@@ -133,7 +134,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
             ));
         } else {
             self.inner[ptr].insert(key, value.clone());
-            base.deref_mut(value).set_parent(ptr);
+            base.set_parent(value, ptr);
         }
 
         None
@@ -148,5 +149,5 @@ where
 {
     type Node = <MemoryList<BTreeNode<K, V, FANOUT>, PA> as NodeLayer<K, Index, PA>>::Node;
 
-    impl_node_layer!(Index);
+    impl_node_layer!(Index, PA);
 }
