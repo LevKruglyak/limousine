@@ -27,14 +27,16 @@ impl<K: Key, const FANOUT: usize> NodeLayer<K> for BTreeLayer<K, FANOUT> {
 impl<K: Key, const FANOUT: usize> InternalLayer<K> for BTreeLayer<K, FANOUT> {
     fn search(&self, key: &K, range: ApproxPos) -> ApproxPos {
         // Small optimization for exact positions
-        let node = if range.lo == range.hi - 1 {
-            self.nodes[range.lo]
-        } else {
-            self.nodes[lower_bound(OptimalSearch::search_by_key_with_offset(
-                &self.nodes[range.lo..range.hi],
-                key,
-                range.lo,
-            ))]
+        let node = {
+            if range.lo == range.hi - 1 {
+                self.nodes[range.lo]
+            } else {
+                self.nodes[lower_bound(OptimalSearch::search_by_key_with_offset(
+                    &self.nodes[range.lo..range.hi],
+                    key,
+                    range.lo,
+                ))]
+            }
         };
 
         let ptr = node.search(key);
