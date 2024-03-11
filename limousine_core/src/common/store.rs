@@ -6,9 +6,9 @@ use std::path::Path;
 use std::rc::Rc;
 
 pub type StoreId = u64;
-pub const STORE_ID_NONE: StoreId = 0;
 
-const INDEX_CATALOG_ID: StoreId = 1;
+pub const STORE_ID_NONE: StoreId = 0;
+pub const GLOBAL_CATALOG_ID: StoreId = 1;
 
 #[derive(Serialize, Deserialize)]
 pub struct IndexCatalogPage {
@@ -18,7 +18,7 @@ pub struct IndexCatalogPage {
 impl Default for IndexCatalogPage {
     fn default() -> Self {
         Self {
-            max_id: INDEX_CATALOG_ID + 1,
+            max_id: GLOBAL_CATALOG_ID + 1,
         }
     }
 }
@@ -28,6 +28,7 @@ pub struct IndexStoreInner {
     catalog: IndexCatalogPage,
 }
 
+#[derive(Clone)]
 pub struct IndexStore {
     inner: Rc<RefCell<IndexStoreInner>>,
     local_catalog: StoreId,
@@ -38,13 +39,13 @@ impl IndexStore {
         let store = marble::open(path.as_ref())?;
 
         // Load catalog
-        let catalog = if let Some(catalog_data) = store.read(INDEX_CATALOG_ID)? {
+        let catalog = if let Some(catalog_data) = store.read(GLOBAL_CATALOG_ID)? {
             bincode::deserialize(&catalog_data).expect("Corrupted catalog!")
         } else {
             let catalog = IndexCatalogPage::default();
             let catalog_data = bincode::serialize(&catalog).unwrap();
 
-            store.write_batch([(INDEX_CATALOG_ID, Some(&catalog_data))])?;
+            store.write_batch([(GLOBAL_CATALOG_ID, Some(&catalog_data))])?;
             catalog
         };
 
@@ -52,7 +53,7 @@ impl IndexStore {
 
         Ok(Self {
             inner: Rc::new(RefCell::new(inner)),
-            local_catalog: INDEX_CATALOG_ID,
+            local_catalog: GLOBAL_CATALOG_ID,
         })
     }
 
@@ -68,14 +69,12 @@ impl IndexStore {
         self.inner
             .borrow_mut()
             .store
-            .write_batch([(INDEX_CATALOG_ID, Some(&catalog_data))])?;
+            .write_batch([(GLOBAL_CATALOG_ID, Some(&catalog_data))])?;
 
         Ok(())
     }
-}
 
-impl Clone for IndexStore {
-    fn clone(&self) -> Self {
+    pub fn new_local_store(&self) -> Self {
         // Make sure the allocator doesn't overwrite our local catalog
         {
             let catalog = &mut self.inner.borrow_mut().catalog;

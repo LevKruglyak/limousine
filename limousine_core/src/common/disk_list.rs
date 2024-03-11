@@ -1,4 +1,6 @@
-use crate::{StoreId, STORE_ID_NONE};
+use crate::{IndexStore, StoreId, STORE_ID_NONE};
+use serde::{Deserialize, Serialize};
+use std::collections::hash_map::HashMap;
 
 pub struct DiskNode<N> {
     pub inner: N,
@@ -14,6 +16,31 @@ impl<N> DiskNode<N> {
             previous: STORE_ID_NONE,
         }
     }
+}
+
+pub struct DiskList<N, PA> {
+    parents: HashMap<StoreId, PA>,
+    store: IndexStore,
+    _ph: std::marker::PhantomData<N>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DiskListCatalogPage {}
+
+impl<N, PA> DiskList<N, PA> {
+    // pub fn empty() -> Self
+    // where
+    //     N: Default,
+    // {
+    //     let mut arena = Arena::new();
+    //     let ptr = arena.insert(MemoryNode::new(Default::default()));
+    //
+    //     MemoryList {
+    //         arena,
+    //         first: ptr,
+    //         last: ptr,
+    //     }
+    // }
 }
 
 // impl<N, PA> MemoryList<N, PA> {

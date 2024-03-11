@@ -2,6 +2,7 @@
 
 use crate::common::entry::Entry;
 use crate::common::search::*;
+use serde::de::{SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -31,7 +32,39 @@ where
     }
 }
 
-impl<K, V, const FANOUT: usize> Deserialize for StackMap<K, V, FANOUT>
+struct StackMapDeserializer<K, V, const FANOUT: usize>(
+    std::marker::PhantomData<(K, V, [(); FANOUT])>,
+);
+
+impl<'de, K, V, const FANOUT: usize> Visitor<'de> for StackMapDeserializer<K, V, FANOUT> {
+    type Value = StackMap<K, V, FANOUT>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("ArrayKeyedMap key value sequence.")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        // let mut new_obj = ArrayKeyedMap::new();
+        // while let Some(key) = seq.next_element()? {
+        //     if let Some(value) = seq.next_element()? {
+        //         new_obj.the_map.insert(key, value);
+        //     } else {
+        //         return Err(de::Error::custom(format!(
+        //             "Didn't find the right sequence of values in ArrayKeyedMap."
+        //         )));
+        //     }
+        // }
+        //
+        // Ok(new_obj)
+
+        todo!()
+    }
+}
+
+impl<'de, K, V, const FANOUT: usize> Deserialize<'de> for StackMap<K, V, FANOUT>
 where
     K: Serialize,
     V: Serialize,
@@ -40,7 +73,7 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        let mut seq = deserializer.deserialize_seq()
+        deserializer.deserialize_seq(StackMapDeserializer(std::marker::PhantomData))
     }
 }
 

@@ -217,7 +217,7 @@ fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) 
     // Base layer is guaranteed to be a disk component
     empty_body.extend(quote! {
         // Load the store
-        let mut #var = #alias::load(store.clone());
+        let mut #var = #alias::load(store.new_local_store());
     });
 
     // Add internal components
