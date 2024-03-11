@@ -1,4 +1,4 @@
-use crate::{IndexStore, StoreId, STORE_ID_NONE};
+use crate::{IndexStore, StoreId, TypedIndexStore, STORE_ID_NONE};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::HashMap;
 
@@ -18,29 +18,36 @@ impl<N> DiskNode<N> {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct DiskListCatalogPage<PA> {
+    // We should only persist parents when we are in a deep persisted layer
+    parents: Option<HashMap<StoreId, PA>>,
+}
+
 pub struct DiskList<N, PA> {
+    // In the case that parents can be persisted as well, i.e. we
+    // are in a deep persisted layer, this is serialized/deserialized
+    // at startup/shutdown respectively
     parents: HashMap<StoreId, PA>,
-    store: IndexStore,
+    store: TypedIndexStore<DiskListCatalogPage<PA>>,
     _ph: std::marker::PhantomData<N>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct DiskListCatalogPage {}
-
+/// Implementation for boundary persistence layer
 impl<N, PA> DiskList<N, PA> {
-    // pub fn empty() -> Self
-    // where
-    //     N: Default,
-    // {
-    //     let mut arena = Arena::new();
-    //     let ptr = arena.insert(MemoryNode::new(Default::default()));
-    //
-    //     MemoryList {
-    //         arena,
-    //         first: ptr,
-    //         last: ptr,
-    //     }
-    // }
+    fn load_boundary(store: IndexStore) -> Self {
+        unimplemented!()
+    }
+}
+
+/// Implementation for deep persistence layer
+impl<N, PA> DiskList<N, PA>
+where
+    for<'de> PA: Serialize + Deserialize<'de>,
+{
+    fn load_deep(store: IndexStore) -> Self {
+        unimplemented!()
+    }
 }
 
 // impl<N, PA> MemoryList<N, PA> {
@@ -194,3 +201,18 @@ impl<N, PA> DiskList<N, PA> {
 //         self.last
 //     }
 // }
+
+#[cfg(test)]
+mod tests {
+    use crate::IndexStore;
+
+    use super::DiskList;
+
+    #[test]
+    fn test_deep_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = IndexStore::load_new(dir);
+
+        // let list = DiskList::load_deep(store);
+    }
+}

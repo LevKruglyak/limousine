@@ -6,5 +6,4 @@ pub mod store;
 
 pub mod stack_map;
 
-pub mod disk_list;
-pub mod memory_list;
+pub mod list;

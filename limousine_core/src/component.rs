@@ -1,6 +1,6 @@
 use crate::common::bounded::*;
 use crate::iter::{Iter, MutIter};
-use crate::{IndexStore, StoreId};
+use crate::IndexStore;
 use num::PrimInt;
 use std::ops::Bound;
 use trait_set::trait_set;

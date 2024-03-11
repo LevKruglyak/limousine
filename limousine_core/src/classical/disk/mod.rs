@@ -13,19 +13,20 @@ pub struct BTreeBaseComponentDisk<K, V, const FANOUT: usize, PA> {
     _ph: std::marker::PhantomData<(K, V, PA)>,
 }
 
-impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddressDisk, PA>
-    for BTreeBaseComponentDisk<K, V, FANOUT, PA>
-where
-    K: StaticBounded,
-    V: 'static,
-    PA: Address,
-{
-    type Node = BTreeNode<K, V, FANOUT>;
-
-    fn deref(&self, ptr: BTreeBaseAddressDisk) -> &Self::Node {
-        todo!()
-    }
-}
+// impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddressDisk, PA>
+//     for BTreeBaseComponentDisk<K, V, FANOUT, PA>
+// where
+//     K: StaticBounded,
+//     V: 'static,
+//     PA: Address,
+// {
+//     type Node = BTreeNode<K, V, FANOUT>;
+//
+//     fn deref(&self, ptr: BTreeBaseAddressDisk) -> &Self::Node {
+//         todo!()
+//     }
+// }
+//
 //
 // impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>
 //     for BTreeBaseComponent<K, V, FANOUT, PA>

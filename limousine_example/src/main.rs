@@ -9,7 +9,7 @@ create_hybrid_index! {
         btree(fanout = 4),
         btree(fanout = 4),
         btree(fanout = 4),
-        btree(fanout = 64, persist),
+        btree(fanout = 64),
     ]
 }
 
@@ -22,13 +22,13 @@ fn main() {
     let num = 10_000_000;
     println!("Inserting {} entries:", num);
 
-    let mut index: Index1<u128, u128> = Index1::load("db.store").expect("failed to load index!");
+    // let mut index: Index1<u128, u128> = Index1::load("db.store").expect("failed to load index!");
 
-    let start = std::time::Instant::now();
-    for i in 0..num {
-        index.insert(i, i * i);
-    }
-    println!("Index1 took {:?} ms", start.elapsed().as_millis());
+    // let start = std::time::Instant::now();
+    // for i in 0..num {
+    //     index.insert(i, i * i);
+    // }
+    // println!("Index1 took {:?} ms", start.elapsed().as_millis());
 
     let mut index: Index2<u128, u128> = Index2::empty();
 

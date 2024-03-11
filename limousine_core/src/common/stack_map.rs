@@ -43,10 +43,11 @@ impl<'de, K, V, const FANOUT: usize> Visitor<'de> for StackMapDeserializer<K, V,
         formatter.write_str("ArrayKeyedMap key value sequence.")
     }
 
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    fn visit_seq<A>(self, _: A) -> Result<Self::Value, A::Error>
     where
         A: SeqAccess<'de>,
     {
+        unimplemented!()
         // let mut new_obj = ArrayKeyedMap::new();
         // while let Some(key) = seq.next_element()? {
         //     if let Some(value) = seq.next_element()? {
@@ -59,8 +60,6 @@ impl<'de, K, V, const FANOUT: usize> Visitor<'de> for StackMapDeserializer<K, V,
         // }
         //
         // Ok(new_obj)
-
-        todo!()
     }
 }
 
