@@ -60,6 +60,7 @@ impl<N, PA> MemoryList<N, PA> {
         new_node_ptr
     }
 
+    #[allow(unused)]
     pub fn insert_before(&mut self, inner: N, ptr: ArenaID) -> ArenaID {
         let previous_ptr = self.arena[ptr].0.previous;
 
@@ -88,6 +89,7 @@ impl<N, PA> MemoryList<N, PA> {
         ptr
     }
 
+    #[allow(unused)]
     pub fn len(&self) -> usize {
         self.arena.len()
     }
