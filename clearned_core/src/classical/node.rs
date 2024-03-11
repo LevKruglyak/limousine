@@ -13,6 +13,12 @@ pub struct KeyPtr<K, V> {
     value: V,
 }
 
+impl<K, V> KeyPtr<K, V> {
+    pub fn new(key: K, value: V) -> Self {
+        Self { key, value }
+    }
+}
+
 impl<K, V> Borrow<K> for KeyPtr<K, V> {
     fn borrow(&self) -> &K {
         &self.key
@@ -79,6 +85,13 @@ impl<K: Bounded, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
             min: K::min_value(),
             len: 0,
         }
+    }
+
+    pub fn push(&mut self, key_ptr: KeyPtr<K, V>) {
+        debug_assert!(self.len < FANOUT, "Tried to push into a full BTreeNode.");
+
+        self.key_ptrs[self.len] = MaybeUninit::new(key_ptr);
+        self.len += 1;
     }
 
     /// Borrow a slice view into the entries stored in the `MergePage`

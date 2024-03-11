@@ -1,6 +1,10 @@
 use bytemuck::Pod;
 use num::PrimInt;
-use std::{borrow::Borrow, fmt::Debug, path::Path};
+use std::{
+    borrow::Borrow,
+    fmt::Debug,
+    path::{Path, PathBuf},
+};
 use trait_set::trait_set;
 
 pub mod classical;
@@ -43,9 +47,6 @@ pub trait ImmutableIndex<K: Key, V: Value>: Sized {
 
     /// Returns an iterator which iterates the entries between `low` and `high`, inclusive
     fn range(&self, low: &K, high: &K) -> Self::RangeIterator<'_>;
-
-    /// Return the size of the index in bytes
-    fn size(&self) -> usize;
 
     type RangeIterator<'e>: Iterator<Item = (&'e K, &'e V)>
     where
@@ -94,4 +95,11 @@ pub trait InternalLayerBuild<K: Key>: NodeLayer<K> {
     fn load(path: impl AsRef<Path>) -> crate::Result<Self>
     where
         Self: Sized;
+}
+
+/// Utility function to create a new path with the given extension
+fn path_with_extension(path: impl AsRef<Path>, extension: &str) -> Box<Path> {
+    let mut buf = PathBuf::from(path.as_ref());
+    buf.set_extension(extension);
+    buf.into_boxed_path()
 }
