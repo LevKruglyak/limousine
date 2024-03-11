@@ -48,6 +48,8 @@ impl<N, PA> LinkedList<N, PA> {
         new_node.next = next_ptr;
 
         let new_node_ptr = self.arena.insert(new_node);
+        self.arena[ptr].next = Some(new_node_ptr);
+
         if let Some(next_ptr) = next_ptr {
             self.arena[next_ptr].previous = Some(new_node_ptr);
         } else {
@@ -65,6 +67,8 @@ impl<N, PA> LinkedList<N, PA> {
         new_node.next = Some(ptr);
 
         let new_node_ptr = self.arena.insert(new_node);
+        self.arena[ptr].previous = Some(new_node_ptr);
+
         if let Some(previous_ptr) = previous_ptr {
             self.arena[previous_ptr].next = Some(new_node_ptr);
         } else {
@@ -88,6 +92,10 @@ impl<N, PA> LinkedList<N, PA> {
         PA: Address,
     {
         self.arena[ptr].parent.clone()
+    }
+
+    pub fn len(&self) -> usize {
+        self.arena.len()
     }
 }
 
@@ -166,5 +174,67 @@ where
 
     fn last(&self) -> Index {
         self.last
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_linked_list_new() {
+        let list: LinkedList<i32, ()> = LinkedList::new(1);
+
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[list.first], 1);
+        assert_eq!(list.first, list.last);
+    }
+
+    #[test]
+    fn test_linked_list_insert_after() {
+        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+
+        let first_ptr = list.first;
+        let second_ptr = list.insert_after(2, first_ptr);
+
+        assert_eq!(list.arena[first_ptr].next, Some(second_ptr));
+        assert_eq!(list.arena[second_ptr].previous, Some(first_ptr));
+        assert_eq!(list.last, second_ptr);
+    }
+
+    #[test]
+    fn test_linked_list_insert_before() {
+        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+
+        let first_ptr = list.first;
+        let zero_ptr = list.insert_before(0, first_ptr);
+
+        assert_eq!(list.arena[first_ptr].previous, Some(zero_ptr));
+        assert_eq!(list.arena[zero_ptr].next, Some(first_ptr));
+        assert_eq!(list.first, zero_ptr);
+    }
+
+    #[test]
+    fn test_linked_list_clear() {
+        let mut list: LinkedList<i32, ()> = LinkedList::new(1);
+        list.insert_after(2, list.first);
+
+        assert_eq!(list.arena.len(), 2);
+
+        list.clear(5);
+
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[list.first], 5);
+        assert_eq!(list.first, list.last);
+    }
+
+    #[test]
+    fn test_linked_node_new() {
+        let node: LinkedNode<i32, ()> = LinkedNode::new(10);
+
+        assert_eq!(node.inner, 10);
+        assert_eq!(node.next, None);
+        assert_eq!(node.previous, None);
+        assert_eq!(node.parent, None);
     }
 }
