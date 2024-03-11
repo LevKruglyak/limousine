@@ -52,15 +52,6 @@ where
     N: KeyBounded<K> + 'static,
     PA: Address,
 {
-    type Node = BoundaryDiskNode<N>;
-
-    fn node_ref(&self, ptr: StoreID) -> &Self::Node {
-        // self.cache.
-        // self.parents.get(ptr)
-        // &self.arena[ptr]
-        unimplemented!()
-    }
-
     fn first(&self) -> StoreID {
         // self.first
         unimplemented!()
@@ -76,6 +67,14 @@ where
     }
 
     fn set_parent(&mut self, ptr: StoreID, parent: PA) {
+        unimplemented!()
+    }
+
+    fn lower_bound(&self, ptr: StoreID) -> K {
+        unimplemented!()
+    }
+
+    fn next(&self, ptr: StoreID) -> Option<StoreID> {
         unimplemented!()
     }
 

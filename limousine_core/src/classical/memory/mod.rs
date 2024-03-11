@@ -24,9 +24,6 @@ where
     BA: Address,
     PA: Address,
 {
-    type Node =
-        <MemoryBTreeLayer<K, BA, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
-
     impl_node_layer!(ArenaID, PA);
 }
 
@@ -39,8 +36,7 @@ where
     PA: Address,
 {
     fn search(&self, _: &B, ptr: BTreeInternalAddress, key: K) -> BA {
-        let node = self.inner.node_ref(ptr);
-        node.as_ref().inner.search_lub(&key).clone()
+        self.inner[ptr].search_lub(&key).clone()
     }
 
     fn insert(
@@ -96,9 +92,6 @@ where
     V: 'static,
     PA: Address,
 {
-    type Node =
-        <MemoryBTreeLayer<K, V, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
-
     impl_node_layer!(ArenaID, PA);
 }
 
@@ -123,8 +116,7 @@ where
     }
 
     fn search(&self, ptr: BTreeInternalAddress, key: K) -> Option<V> {
-        let node = self.inner.node_ref(ptr);
-        node.as_ref().inner.search_exact(&key).cloned()
+        self.inner[ptr].search_exact(&key).cloned()
     }
 }
 

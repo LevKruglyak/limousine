@@ -35,16 +35,6 @@ where
     SA: Address,
     PA: Address,
 {
-    /// Node type stored in the layer. Each node roughly represents a model in the hybrid index
-    /// which indexes some finite/lower-bounded collection of `Keyed` elements.
-    type Node: Node<K, SA>;
-
-    /// Immutable address dereference which returns a reference to a node.
-    fn node_ref(&self, ptr: SA) -> impl AsRef<Self::Node>;
-
-    /// Mutable address dereference which returns a reference to a node.
-    // fn deref_mut(&mut self, ptr: SA) -> &mut Self::Node;
-
     fn parent(&self, ptr: SA) -> Option<PA>;
 
     fn set_parent(&mut self, ptr: SA, parent: PA);
@@ -53,13 +43,9 @@ where
 
     /// Get the lower bound of a node. This could be overridden by some layers which might have a
     /// more optimal way of mapping the address to the lower bound.
-    fn lower_bound(&self, ptr: SA) -> K {
-        *self.node_ref(ptr).as_ref().lower_bound()
-    }
+    fn lower_bound(&self, ptr: SA) -> K;
 
-    fn next(&self, ptr: SA) -> Option<SA> {
-        self.node_ref(ptr).as_ref().next()
-    }
+    fn next(&self, ptr: SA) -> Option<SA>;
 
     /// First node in the current node layer
     fn first(&self) -> SA;
@@ -75,10 +61,6 @@ where
 
 macro_rules! impl_node_layer {
     ($SA:ty, $PA:ty) => {
-        fn node_ref(&self, ptr: $SA) -> impl AsRef<Self::Node> {
-            self.inner.node_ref(ptr)
-        }
-
         fn parent(&self, ptr: $SA) -> Option<$PA> {
             self.inner.parent(ptr)
         }

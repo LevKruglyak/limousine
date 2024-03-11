@@ -137,13 +137,19 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     }
 }
 
+impl<K, V, const FANOUT: usize, PA> core::ops::Index<Index> for MemoryBTreeLayer<K, V, FANOUT, PA> {
+    type Output = BTreeNode<K, V, FANOUT>;
+
+    fn index(&self, index: Index) -> &Self::Output {
+        &self.inner[index]
+    }
+}
+
 impl<K, V, const FANOUT: usize, PA> NodeLayer<K, Index, PA> for MemoryBTreeLayer<K, V, FANOUT, PA>
 where
     K: Copy + StaticBounded + 'static,
     V: 'static,
     PA: Address,
 {
-    type Node = <MemoryList<BTreeNode<K, V, FANOUT>, PA> as NodeLayer<K, Index, PA>>::Node;
-
     impl_node_layer!(Index, PA);
 }

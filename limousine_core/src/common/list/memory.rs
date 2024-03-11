@@ -145,12 +145,6 @@ where
     N: KeyBounded<K> + 'static,
     PA: Address,
 {
-    type Node = MemoryNode<N>;
-
-    fn node_ref(&self, ptr: ArenaID) -> impl AsRef<Self::Node> {
-        &self.arena[ptr].0
-    }
-
     unsafe fn set_parent_unsafe(&self, ptr: ArenaID, parent: PA) {
         unsafe fn make_mut<T>(ptr: &T) -> *mut T {
             ptr as *const T as *mut T
@@ -165,6 +159,14 @@ where
 
     fn set_parent(&mut self, ptr: ArenaID, parent: PA) {
         self.arena[ptr].1 = Some(parent);
+    }
+
+    fn lower_bound(&self, ptr: ArenaID) -> K {
+        *self.arena[ptr].0.lower_bound()
+    }
+
+    fn next(&self, ptr: ArenaID) -> Option<ArenaID> {
+        self.arena[ptr].0.next
     }
 
     fn first(&self) -> ArenaID {
