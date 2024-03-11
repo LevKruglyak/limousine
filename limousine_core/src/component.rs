@@ -41,7 +41,9 @@ where
     fn set_parent(&mut self, parent: PA);
 }
 
-/// A `NodeLayer` is a linked list of key-bounded nodes which implement the `LinkedNode<K>` trait.
+/// A `NodeLayer` is has the interface of a linked list of key-bounded nodes which implement the
+/// `Model` trait. It's assumed that a `NodeLayer` is always non-empty, and thus should always have
+/// a `first` and `last` node.
 pub trait NodeLayer<K, SA, PA>: 'static + Sized
 where
     K: Copy,
@@ -58,6 +60,13 @@ where
     /// Mutable address dereference which returns a reference to a node.
     fn deref_mut(&mut self, ptr: SA) -> &mut Self::Node;
 
+    /// Get a raw mutable pointer to a node. This is mostly used internally by mutable iterators
+    /// for updating parent pointers of a base layer.
+    ///
+    /// # Safety
+    ///
+    /// It is up to the user to enforce the standard Rust aliasing rules for raw mutable pointers
+    /// to ensure safety.
     unsafe fn deref_unsafe(&self, ptr: SA) -> *mut Self::Node;
 
     /// Get the lower bound of a node. This could be overriden by some layers which might have a
@@ -69,6 +78,7 @@ where
     /// First node in the current node layer
     fn first(&self) -> SA;
 
+    /// Last node in the current node layer
     fn last(&self) -> SA;
 
     /// An immutable iterator over the layer, returning (Key, Address) pairs
@@ -80,11 +90,7 @@ where
     /// access the lower bound (Key) and address, as well as interior mutability to change the
     /// parent of the underlying node. This is useful during building, since a layer cannot know
     /// its own parents until the parents themselves are built.
-    fn mut_range(
-        &mut self,
-        start: Bound<SA>,
-        end: Bound<SA>,
-    ) -> MutIter<'_, K, Self, SA, PA> {
+    fn mut_range(&mut self, start: Bound<SA>, end: Bound<SA>) -> MutIter<'_, K, Self, SA, PA> {
         MutIter::range(self, start, end)
     }
 }

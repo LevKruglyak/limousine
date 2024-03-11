@@ -115,7 +115,7 @@ fn create_type_aliases(layout: &IndexLayout) -> (TokenStream, Vec<Ident>) {
     // Add body as the first component
     let parent_address_alias = address_alias[1].clone();
     let alias = type_alias[0].clone();
-    let body = layout.base.to_tokens(parent_address_alias);
+    let body = layout.base.as_tokens(parent_address_alias);
     type_alias_body.extend(quote::quote! {
         type #alias<K, V> = #body;
     });
@@ -127,7 +127,7 @@ fn create_type_aliases(layout: &IndexLayout) -> (TokenStream, Vec<Ident>) {
         let base_address_alias = address_alias[index - 1].clone();
         let parent_address_alias = address_alias[index + 1].clone();
 
-        let body = component.to_tokens(base_address_alias, parent_address_alias);
+        let body = component.as_tokens(base_address_alias, parent_address_alias);
 
         let alias = type_alias[index].clone();
         type_alias_body.extend(quote! {
@@ -139,7 +139,7 @@ fn create_type_aliases(layout: &IndexLayout) -> (TokenStream, Vec<Ident>) {
     let index = layout.internal.len() + 1;
 
     let base_address_alias = address_alias[index - 1].clone();
-    let body = layout.top.to_tokens(base_address_alias);
+    let body = layout.top.as_tokens(base_address_alias);
 
     let alias = type_alias[index].clone();
     type_alias_body.extend(quote! {
@@ -149,7 +149,7 @@ fn create_type_aliases(layout: &IndexLayout) -> (TokenStream, Vec<Ident>) {
     (type_alias_body, type_alias)
 }
 
-fn create_index_struct(layout: &IndexLayout, alias: &Vec<Ident>) -> (TokenStream, Vec<Ident>) {
+fn create_index_struct(layout: &IndexLayout, alias: &[Ident]) -> (TokenStream, Vec<Ident>) {
     let name = layout.name();
 
     // Create fields
@@ -181,11 +181,7 @@ fn create_index_struct(layout: &IndexLayout, alias: &Vec<Ident>) -> (TokenStream
     (body, fields)
 }
 
-fn create_search_body(
-    layout: &IndexLayout,
-    _aliases: &Vec<Ident>,
-    fields: &Vec<Ident>,
-) -> TokenStream {
+fn create_search_body(layout: &IndexLayout, _aliases: &[Ident], fields: &[Ident]) -> TokenStream {
     let search_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
         .rev()
         .map(|i| Ident::new(format!("s{}", i).as_str(), Span::call_site()))
@@ -224,11 +220,7 @@ fn create_search_body(
     search_body
 }
 
-fn create_insert_body(
-    layout: &IndexLayout,
-    _aliases: &Vec<Ident>,
-    fields: &Vec<Ident>,
-) -> TokenStream {
+fn create_insert_body(layout: &IndexLayout, _aliases: &[Ident], fields: &[Ident]) -> TokenStream {
     let search_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
         .rev()
         .map(|i| Ident::new(format!("s{}", i).as_str(), Span::call_site()))
@@ -316,11 +308,7 @@ fn create_insert_body(
     search_body
 }
 
-fn create_empty_body(
-    layout: &IndexLayout,
-    aliases: &Vec<Ident>,
-    fields: &Vec<Ident>,
-) -> TokenStream {
+fn create_empty_body(layout: &IndexLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
     let mut empty_body = TokenStream::new();
 
     // Add body as the first component
@@ -360,11 +348,7 @@ fn create_empty_body(
     empty_body
 }
 
-fn create_build_body(
-    layout: &IndexLayout,
-    aliases: &Vec<Ident>,
-    fields: &Vec<Ident>,
-) -> TokenStream {
+fn create_build_body(layout: &IndexLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
     let mut build_body = TokenStream::new();
 
     // Add body as the first component
@@ -404,11 +388,7 @@ fn create_build_body(
     build_body
 }
 
-fn create_index_impl(
-    layout: &IndexLayout,
-    aliases: &Vec<Ident>,
-    fields: &Vec<Ident>,
-) -> TokenStream {
+fn create_index_impl(layout: &IndexLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
     let name = layout.name();
 
     let search_body = create_search_body(layout, aliases, fields);
