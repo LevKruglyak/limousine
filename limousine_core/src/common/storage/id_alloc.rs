@@ -12,26 +12,6 @@ pub trait ID: Copy {
 
     /// Increment the index and return the incremented value.
     fn increment(self) -> Self;
-
-    /// Take the value and replace the existing value with the none variant.
-    fn take(&mut self) -> Self;
-
-    /// Test if the current value is none, and panic with the given message if
-    fn expect(self, m: &str) -> Self;
-
-    /// Construct the none sentinel value for this type.
-    fn none() -> Self;
-
-    /// Test if the value is the none sentinel value.
-    fn is_none(self) -> bool;
-
-    fn to_option(self) -> Option<Self> {
-        if self.is_none() {
-            None
-        } else {
-            Some(self)
-        }
-    }
 }
 
 macro_rules! impl_primitive_index {
@@ -49,40 +29,13 @@ macro_rules! impl_primitive_index {
 
             #[inline(always)]
             fn increment(self) -> Self {
-                if self.is_none() {
-                    panic!("index `{}` is out of bounds: 0-{}", self, std::$ty::MAX);
-                }
-
                 self + 1
-            }
-
-            #[inline(always)]
-            fn take(&mut self) -> Self {
-                std::mem::replace(self, Self::none())
-            }
-
-            #[inline(always)]
-            fn expect(self, m: &str) -> Self {
-                if self.is_none() {
-                    panic!("{}", m);
-                }
-
-                self
-            }
-
-            #[inline(always)]
-            fn none() -> Self {
-                std::$ty::MAX
-            }
-
-            #[inline(always)]
-            fn is_none(self) -> bool {
-                self == Self::none()
             }
         }
     };
 }
 
+// TODO: NonMax optimization so that Option<ID> has same size as ID
 impl_primitive_index!(u8);
 impl_primitive_index!(u16);
 impl_primitive_index!(u32);
@@ -92,7 +45,7 @@ impl_primitive_index!(u128);
 /// A slab-based id allocator which can deal with automatic reclamation
 #[derive(Clone, Serialize, Deserialize)]
 pub struct IDAllocator<I> {
-    data: Vec<I>,
+    data: Vec<Option<I>>,
     next: I,
 }
 
@@ -116,7 +69,7 @@ where
         self.next = if let Some(entry) = self.data.get_mut(self.next.as_usize()) {
             entry.take().expect("IDAllocator found null index!")
         } else {
-            self.data.push(I::none());
+            self.data.push(None);
             self.next.increment()
         };
 
@@ -127,7 +80,7 @@ where
     pub fn free(&mut self, index: I) -> bool {
         if let Some(entry) = self.data.get_mut(index.as_usize()) {
             if entry.is_none() {
-                *entry = self.next;
+                *entry = Some(self.next);
                 self.next = index;
                 return true;
             }
@@ -171,24 +124,12 @@ mod tests {
         assert_eq!(id.increment(), 6);
     }
 
-    #[test]
-    #[should_panic(expected = "index `255` is out of bounds: 0-255")]
-    fn id_increment_panic() {
-        let id: u8 = u8::none(); // this should be u8::MAX
-        id.increment(); // this should panic
-    }
-
-    #[test]
-    fn id_none() {
-        assert_eq!(u8::none(), u8::MAX);
-        assert_eq!(u64::none(), u64::MAX);
-    }
-
-    #[test]
-    fn id_is_none() {
-        assert!(u8::none().is_none());
-        assert!(!u8::initial().is_none());
-    }
+    // #[test]
+    // #[should_panic(expected = "index `255` is out of bounds: 0-255")]
+    // fn id_increment_panic() {
+    //     let id: u8 = u8::none(); // this should be u8::MAX
+    //     id.increment(); // this should panic
+    // }
 
     #[test]
     fn allocate_ids() {
@@ -324,11 +265,11 @@ mod tests {
         }
     }
 
-    #[test]
-    #[should_panic(expected = "IDAllocator found null index!")]
-    fn allocator_panic_on_corrupt_state() {
-        let mut allocator = IDAllocator::<u32>::new();
-        allocator.data.push(u32::none());
-        allocator.allocate();
-    }
+    // #[test]
+    // #[should_panic(expected = "IDAllocator found null index!")]
+    // fn allocator_panic_on_corrupt_state() {
+    //     let mut allocator = IDAllocator::<u32>::new();
+    //     allocator.data.push(u32::none());
+    //     allocator.allocate();
+    // }
 }

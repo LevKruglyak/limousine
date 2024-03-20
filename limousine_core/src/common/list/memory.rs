@@ -13,6 +13,7 @@ pub struct MemoryList<N, PA> {
     last: ArenaID,
 }
 
+#[derive(Default)]
 pub struct MemoryNode<N> {
     pub inner: N,
     next: Option<ArenaID>,
@@ -29,10 +30,13 @@ impl<N> MemoryNode<N> {
     }
 }
 
-impl<N, PA> MemoryList<N, PA> {
-    pub fn new(inner: N) -> Self {
+impl<N, PA> MemoryList<N, PA>
+where
+    N: Default,
+{
+    pub fn new() -> Self {
         let mut arena = Arena::new();
-        let ptr = arena.insert((MemoryNode::new(inner), None));
+        let ptr = arena.insert((Default::default(), None));
 
         MemoryList {
             arena,
@@ -178,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_new() {
-        let list: MemoryList<i32, ()> = MemoryList::new(Default::default());
+        let list: MemoryList<i32, ()> = MemoryList::new();
 
         assert_eq!(list.len(), 1);
         assert_eq!(list[list.first], Default::default());
@@ -187,7 +191,7 @@ mod tests {
 
     #[test]
     fn linked_list_insert_after() {
-        let mut list: MemoryList<u32, ()> = MemoryList::new(1);
+        let mut list: MemoryList<u32, ()> = MemoryList::new();
 
         let first_ptr = list.first;
         let second_ptr = list.insert_after(2, first_ptr);
@@ -199,7 +203,7 @@ mod tests {
 
     #[test]
     fn linked_list_insert_before() {
-        let mut list: MemoryList<u32, ()> = MemoryList::new(1);
+        let mut list: MemoryList<u32, ()> = MemoryList::new();
 
         let first_ptr = list.first;
         let zero_ptr = list.insert_before(0, first_ptr);
@@ -211,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_clear() {
-        let mut list: MemoryList<i32, ()> = MemoryList::new(1);
+        let mut list: MemoryList<i32, ()> = MemoryList::new();
         list.insert_after(2, list.first);
 
         assert_eq!(list.arena.len(), 2);

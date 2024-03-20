@@ -19,6 +19,9 @@ type K = u128;
 type V = u128;
 
 fn test_index<T: Index<K, V> + IndexBuild<K, V>>(num: K) {
+    let name_vec: Vec<&str> = core::any::type_name::<T>().split("::").collect();
+    let name = name_vec.last().unwrap().split_once("<").unwrap().0;
+
     let mut index: T = T::empty();
 
     let start = std::time::Instant::now();
@@ -27,7 +30,7 @@ fn test_index<T: Index<K, V> + IndexBuild<K, V>>(num: K) {
     }
     println!(
         "{} insertion took {:?} ms ",
-        core::any::type_name::<T>(),
+        name,
         start.elapsed().as_millis()
     );
 
@@ -35,15 +38,11 @@ fn test_index<T: Index<K, V> + IndexBuild<K, V>>(num: K) {
     for i in 0..num {
         assert_eq!(index.search(i), Some(i * i));
     }
-    println!(
-        "{} search took {:?} ms ",
-        core::any::type_name::<T>(),
-        start.elapsed().as_millis()
-    );
+    println!("{} search took {:?} ms ", name, start.elapsed().as_millis());
 }
 
 fn main() {
-    let num = 10_000_000;
+    let num = 50_000_000;
     println!("Inserting {} entries:", num);
 
     test_index::<Index1<K, V>>(num);

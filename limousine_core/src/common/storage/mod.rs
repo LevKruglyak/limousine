@@ -6,7 +6,6 @@ mod id_alloc;
 mod store;
 
 // pub use cached_store::CachedLocalStore;
-pub use id_alloc::ID;
 pub use store::GlobalStore;
 pub use store::LocalStore;
 

@@ -16,7 +16,7 @@ pub struct MemoryBTreeLayer<K, V, const FANOUT: usize, PA> {
 impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     pub fn empty() -> Self {
         Self {
-            inner: MemoryList::new(BTreeNode::empty()),
+            inner: MemoryList::new(),
         }
     }
 
