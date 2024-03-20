@@ -45,15 +45,16 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     {
         // Add empty cap node
         let mut ptr = self.inner.clear(BTreeNode::empty());
+        let mut iter = base.range_mut(Bound::Unbounded, Bound::Unbounded);
 
-        for (key, address) in base.range(Bound::Unbounded, Bound::Unbounded) {
+        while let Some((key, address, parent)) = iter.next() {
             // If node too full, carry over to next
             if self.inner[ptr].is_half_full() {
                 ptr = self.inner.insert_after(BTreeNode::empty(), ptr);
             }
 
             self.inner[ptr].insert(key, address.clone());
-            unsafe { base.set_parent_unsafe(address, ptr) };
+            parent.set(ptr);
         }
     }
 

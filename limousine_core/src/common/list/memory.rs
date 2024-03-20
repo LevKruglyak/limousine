@@ -147,14 +147,6 @@ where
     N: KeyBounded<K> + 'static,
     PA: Address,
 {
-    unsafe fn set_parent_unsafe(&self, ptr: ArenaID, parent: PA) {
-        unsafe fn make_mut<T>(ptr: &T) -> *mut T {
-            ptr as *const T as *mut T
-        }
-
-        *make_mut(&self.arena[ptr].1) = Some(parent);
-    }
-
     fn parent(&self, ptr: ArenaID) -> Option<PA> {
         self.arena[ptr].1.clone()
     }

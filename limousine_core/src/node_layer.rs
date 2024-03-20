@@ -2,7 +2,7 @@
 
 use std::ops::Bound;
 
-use crate::iter::Iter;
+use crate::iter::{Iter, IterMut};
 use crate::traits::*;
 
 /// A `LinkedNode` is a model in a `NodeLayer`, representing a set of entries above a
@@ -39,8 +39,6 @@ where
 
     fn set_parent(&mut self, ptr: SA, parent: PA);
 
-    unsafe fn set_parent_unsafe(&self, ptr: SA, parent: PA);
-
     /// Get the lower bound of a node. This could be overridden by some layers which might have a
     /// more optimal way of mapping the address to the lower bound.
     fn lower_bound(&self, ptr: SA) -> K;
@@ -57,6 +55,12 @@ where
     fn range(&self, start: Bound<SA>, end: Bound<SA>) -> Iter<'_, K, Self, SA, PA> {
         Iter::range(self, start, end)
     }
+
+    /// An iterator over the layer, returning (Key, Address, ParentView) pairs, where parents
+    /// can be modified by the ParentView struct
+    fn range_mut(&mut self, start: Bound<SA>, end: Bound<SA>) -> IterMut<'_, K, Self, SA, PA> {
+        IterMut::range(self, start, end)
+    }
 }
 
 macro_rules! impl_node_layer {
@@ -67,10 +71,6 @@ macro_rules! impl_node_layer {
 
         fn set_parent(&mut self, ptr: $SA, parent: $PA) {
             self.inner.set_parent(ptr, parent)
-        }
-
-        unsafe fn set_parent_unsafe(&self, ptr: $SA, parent: $PA) {
-            self.inner.set_parent_unsafe(ptr, parent)
         }
 
         fn lower_bound(&self, ptr: $SA) -> K {

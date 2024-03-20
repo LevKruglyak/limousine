@@ -43,10 +43,11 @@ where
 {
     fn build(base: &mut Base) -> Self {
         let mut inner = BTreeMap::new();
+        let mut iter = base.range_mut(Bound::Unbounded, Bound::Unbounded);
 
-        for (key, address) in base.range(Bound::Unbounded, Bound::Unbounded) {
+        while let Some((key, address, parent)) = iter.next() {
             inner.insert(key, address);
-            unsafe { base.set_parent_unsafe(address, ()) };
+            parent.set(());
         }
 
         Self {

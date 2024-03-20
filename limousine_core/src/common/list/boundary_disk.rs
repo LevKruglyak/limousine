@@ -6,8 +6,6 @@ use crate::{common::storage::*, node_layer::Node};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-const NODE_CACHE_SIZE: usize = 20;
-
 pub struct BoundaryDiskNode<N> {
     pub inner: N,
     next: StoreID,
@@ -18,31 +16,32 @@ pub struct BoundaryDiskNode<N> {
 pub struct BoundaryDiskListCatalogPage {}
 
 pub struct BoundaryDiskList<N, PA> {
-    store: CachedLocalStore<BoundaryDiskListCatalogPage, BoundaryDiskNode<N>>,
+    store: LocalStore<BoundaryDiskListCatalogPage>,
 
     // We should only persist parents when we are in a deep persisted layer, in a boundary layer we
     // keep them in transient memory
     parents: HashMap<StoreID, PA>,
+
+    _ph: std::marker::PhantomData<N>,
 }
 
-impl<N, PA> BoundaryDiskList<N, PA> {
-    fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
-        unimplemented!()
-        // let store = store.load_local_store(ident)?;
-        // let parents = HashMap::new();
-        // let cache = LRUCache::new(NODE_CACHE_SIZE).expect("Failed to construct read cache!");
-        // let write_buffer = Vec::new();
-        //
-        // Ok(Self {
-        //     store,
-        //     cache,
-        //     write_buffer,
-        //     parents,
-        // })
+impl<N, PA> BoundaryDiskList<N, PA>
+where
+    N: Serialize + for<'de> Deserialize<'de>,
+{
+    pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
+        let store = store.load_local_store(ident)?;
+        let parents = HashMap::new();
+
+        Ok(Self {
+            store,
+            parents,
+            _ph: std::marker::PhantomData,
+        })
     }
 
-    fn flush(&mut self) {
-        // for entry in self.cache. {}
+    fn read_node(&self, ptr: StoreID) -> crate::Result<Option<N>> {
+        self.store.read_page(ptr)
     }
 }
 
@@ -75,10 +74,6 @@ where
     }
 
     fn next(&self, ptr: StoreID) -> Option<StoreID> {
-        unimplemented!()
-    }
-
-    unsafe fn set_parent_unsafe(&self, ptr: StoreID, parent: PA) {
         unimplemented!()
     }
 }

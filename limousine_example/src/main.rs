@@ -6,11 +6,7 @@ create_hybrid_index! {
     name: Index1,
     layout: [
         btree_top(),
-        btree(fanout = 4),
-        btree(fanout = 4),
-        btree(fanout = 4),
-        btree(fanout = 4),
-        btree(fanout = 64),
+        btree(fanout = 1024),
     ]
 }
 
@@ -19,26 +15,19 @@ create_hybrid_index! {
     path: "limousine_example/sample.layout"
 }
 
-fn main() {
-    let num = 10_000_000;
-    println!("Inserting {} entries:", num);
+type K = u128;
+type V = u128;
 
-    // let mut index: Index1<u128, u128> = Index1::load("db.store").expect("failed to load index!");
-
-    // let start = std::time::Instant::now();
-    // for i in 0..num {
-    //     index.insert(i, i * i);
-    // }
-    // println!("Index1 took {:?} ms", start.elapsed().as_millis());
-
-    let mut index: Index2<u128, u128> = Index2::empty();
+fn test_index<T: Index<K, V> + IndexBuild<K, V>>(num: K) {
+    let mut index: T = T::empty();
 
     let start = std::time::Instant::now();
     for i in 0..num {
         index.insert(i, i * i);
     }
     println!(
-        "Index2 insertion took {:?} ms ",
+        "{} insertion took {:?} ms ",
+        core::any::type_name::<T>(),
         start.elapsed().as_millis()
     );
 
@@ -46,7 +35,19 @@ fn main() {
     for i in 0..num {
         assert_eq!(index.search(i), Some(i * i));
     }
-    println!("Index2 search took {:?} ms ", start.elapsed().as_millis());
+    println!(
+        "{} search took {:?} ms ",
+        core::any::type_name::<T>(),
+        start.elapsed().as_millis()
+    );
+}
+
+fn main() {
+    let num = 10_000_000;
+    println!("Inserting {} entries:", num);
+
+    test_index::<Index1<K, V>>(num);
+    test_index::<Index2<K, V>>(num);
 
     use std::collections::BTreeMap;
     let mut index: BTreeMap<u128, u128> = BTreeMap::new();

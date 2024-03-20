@@ -7,7 +7,7 @@ mod memory;
 
 pub fn create_implementation(name: Ident, layout: HybridLayout) -> proc_macro::TokenStream {
     let mod_name = proc_macro2::Ident::new(
-        format!("__implmentation_{}", name.to_string().to_lowercase()).as_str(),
+        format!("__{}", name.to_string().to_lowercase()).as_str(),
         proc_macro2::Span::call_site(),
     );
 
