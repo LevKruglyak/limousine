@@ -8,7 +8,7 @@ use limousine_core::{
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 
 struct AppState<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize> {
-    model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>,
+    model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE, 5, 8>,
     lol: Option<Vec<Vec<Vec<(GappedIndex, Entry<GappedKey, V>)>>>>,
 }
 
@@ -16,7 +16,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
     AppState<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>
 {
     /// Create an empty app state
-    fn new(_ctx: &eframe::CreationContext<'_>, model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>) -> Self {
+    fn new(_ctx: &eframe::CreationContext<'_>, model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE, 5, 8>) -> Self {
         Self { model, lol: None }
     }
 }
@@ -119,7 +119,7 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const BUFSIZE:
 }
 
 pub fn viz_model<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize>(
-    model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>,
+    model: GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE, 5, 8>,
 ) {
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
@@ -148,7 +148,7 @@ fn generate_random_entries(size: usize, seed: Option<u64>) -> Vec<Entry<i32, i32
 
 fn main() {
     let entries = generate_random_entries(120, Some(3123));
-    let gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+    let gapped_pgm: GappedPGM<i32, 4, 4, 4, 5, 8> = GappedPGM::build_from_slice(&entries);
     println!("height: {}", gapped_pgm.height);
     let missing_key = 1805739375;
     gapped_pgm.search(missing_key);

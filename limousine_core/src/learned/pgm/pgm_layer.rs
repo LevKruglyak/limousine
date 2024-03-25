@@ -100,7 +100,7 @@ impl<K: Key, V: Value, const EPSILON: usize, PA: Address> MemoryPGMLayer<K, V, E
             }
             bot_ptr = node.next();
         }
-        println!("Replace is seeing {} entries", entries.len());
+        // println!("Replace is seeing {} entries", entries.len());
         // Now we can train new nodes over this added data
         let blueprint = LinearModel::<K, EPSILON>::make_segmentation(entries.into_iter());
         let new_innards: Vec<PGMInner<K, V, EPSILON>> = blueprint
@@ -308,14 +308,14 @@ mod pgm_layer_tests {
             next_data_end_address = beneath.deref(data_end_address).next();
         }
 
-        // Sanity
-        println!(
-            "Replace should be seeing {} + {} + {} = {} entries",
-            start_count,
-            num_gen,
-            end_count,
-            start_count + num_gen + end_count
-        );
+        // // Sanity
+        // println!(
+        //     "Replace should be seeing {} + {} + {} = {} entries",
+        //     start_count,
+        //     num_gen,
+        //     end_count,
+        //     start_count + num_gen + end_count
+        // );
 
         // Clean-up the deleted elements
         let mut finished = false;

@@ -357,7 +357,14 @@ pub fn build_layer_from_slice<V: GappedValue, const EPSILON: usize, const BUFSIZ
     }
 }
 
-pub struct GappedPGM<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize> {
+pub struct GappedPGM<
+    V: GappedValue,
+    const INT_EPS: usize,
+    const LEAF_EPS: usize,
+    const LEAF_BUFSIZE: usize,
+    const LEAF_FILL_DEC: u8,
+    const LEAF_SPLIT_DEC: u8,
+> {
     pub height: u32,
     pub internal_arena: Arena<GappedPGMNode<GappedIndex, INT_EPS, 0>>,
     pub leaf_arena: Arena<GappedPGMNode<V, LEAF_EPS, LEAF_BUFSIZE>>,
@@ -373,8 +380,14 @@ struct ConnLink {
     pub parent_ptr: Option<GappedIndex>,
     pub height: u32,
 }
-impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUFSIZE: usize>
-    GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>
+impl<
+        V: GappedValue,
+        const INT_EPS: usize,
+        const LEAF_EPS: usize,
+        const LEAF_BUFSIZE: usize,
+        const LEAF_FILL_DEC: u8,
+        const LEAF_SPLIT_DEC: u8,
+    > GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE, LEAF_FILL_DEC, LEAF_SPLIT_DEC>
 {
     pub fn to_string(&self) -> String {
         let cur_ptr = self.root_ptr.unwrap();
@@ -462,8 +475,8 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
             internal_arena: Arena::new(),
             leaf_arena: Arena::new(),
             root_ptr: None,
-            leaf_fill_density: 0.5,
-            leaf_split_density: 0.8,
+            leaf_fill_density: (LEAF_FILL_DEC as f32 / 10.0),
+            leaf_split_density: (LEAF_SPLIT_DEC as f32) / 10.0,
             internal_fill_density: 0.8,
             internal_split_density: 0.9,
             leaf_window_radius: 2,
@@ -802,7 +815,7 @@ mod gapped_pgm_tests {
         for seed in 0..10 {
             println!("seed: {:?}", seed);
             let entries = generate_random_entries(10_000_000, Some(seed), true);
-            let gapped_pgm: GappedPGM<i32, 4, 64, 4> = GappedPGM::build_from_slice(&entries);
+            let gapped_pgm: GappedPGM<i32, 4, 64, 4, 5, 8> = GappedPGM::build_from_slice(&entries);
             let mut pb = tqdm!(total = entries.len());
             for entry in entries {
                 let val = gapped_pgm.search(entry.key);
@@ -816,7 +829,7 @@ mod gapped_pgm_tests {
     fn test_gapped_pgm_parents() {
         let gen_seed = 1;
         let entries = generate_random_entries(100_000, Some(gen_seed), true);
-        let mut gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+        let mut gapped_pgm: GappedPGM<i32, 4, 4, 4, 5, 8> = GappedPGM::build_from_slice(&entries);
         for entry in entries {
             let mut ptr = gapped_pgm.root_ptr.unwrap();
             let mut height = gapped_pgm.height;
@@ -854,7 +867,7 @@ mod gapped_pgm_tests {
     fn test_gapped_pgm_update() {
         let gen_seed = 1;
         let entries = generate_random_entries(100_000, Some(gen_seed), true);
-        let mut gapped_pgm: GappedPGM<i32, 4, 64, 4> = GappedPGM::build_from_slice(&entries);
+        let mut gapped_pgm: GappedPGM<i32, 4, 64, 4, 5, 8> = GappedPGM::build_from_slice(&entries);
         for entry in entries.iter() {
             gapped_pgm.upsert(Entry::new(entry.key, entry.value + 1));
         }
@@ -868,7 +881,7 @@ mod gapped_pgm_tests {
     fn test_basic_gapped_pgm_insert() {
         let gen_seed = 1;
         let entries = generate_random_entries(1_000, Some(gen_seed), true);
-        let mut gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
+        let mut gapped_pgm: GappedPGM<i32, 4, 4, 4, 5, 8> = GappedPGM::build_from_slice(&entries);
         let ins_seed = 2;
         let additional = generate_random_entries(100_000, Some(ins_seed), false);
         println!("Inserting:");
@@ -898,18 +911,18 @@ mod gapped_pgm_tests {
         }
     }
 
-    #[test]
-    fn debug_gapped_pgm_insert() {
-        let gen_seed = 1;
-        let add_seed = 2;
-        let mut entries = generate_random_entries(32, Some(gen_seed), true);
-        let additional = generate_random_entries(100, Some(add_seed), false);
-        let mut gapped_pgm: GappedPGM<i32, 3, 3, 0> = GappedPGM::build_from_slice(&entries);
-        gapped_pgm.to_file("zDebug/_initial.out");
-        for i in 0..100 {
-            gapped_pgm.upsert(additional[i]);
-            let file_name = format!("{}{}.out", "zDebug/", i);
-            gapped_pgm.to_file(&file_name);
-        }
-    }
+    // #[test]
+    // fn debug_gapped_pgm_insert() {
+    //     let gen_seed = 1;
+    //     let add_seed = 2;
+    //     let mut entries = generate_random_entries(32, Some(gen_seed), true);
+    //     let additional = generate_random_entries(100, Some(add_seed), false);
+    //     let mut gapped_pgm: GappedPGM<i32, 3, 3, 0, 5, 8> = GappedPGM::build_from_slice(&entries);
+    //     gapped_pgm.to_file("zDebug/_initial.out");
+    //     for i in 0..100 {
+    //         gapped_pgm.upsert(additional[i]);
+    //         let file_name = format!("{}{}.out", "zDebug/", i);
+    //         gapped_pgm.to_file(&file_name);
+    //     }
+    // }
 }

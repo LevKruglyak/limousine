@@ -151,7 +151,10 @@ impl<
         const INT_EPS: usize,
         const LEAF_EPS: usize,
         const LEAF_BUFSIZE: usize,
-    > Executor<VERBOSE, VERIFY> for GappedPGM<BenchVal, INT_EPS, LEAF_EPS, LEAF_BUFSIZE>
+        const LEAF_FILL_DEC: u8,
+        const LEAF_SPLIT_DEC: u8,
+    > Executor<VERBOSE, VERIFY>
+    for GappedPGM<BenchVal, INT_EPS, LEAF_EPS, LEAF_BUFSIZE, LEAF_FILL_DEC, LEAF_SPLIT_DEC>
 {
     fn measure(wk: &Workload<VERBOSE, VERIFY>) -> ExecutionResult {
         let mut result = ExecutionResult::default();
