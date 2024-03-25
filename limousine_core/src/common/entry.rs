@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use crate::common::bounded::KeyBounded;
 use crate::{Key, Value};
 use std::borrow::Borrow;
 use std::fmt::Debug;
 
 /// Simple entry type containing a key and a value
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Entry<K, V> {
     /// Key field
     pub key: K,
