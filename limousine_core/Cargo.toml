@@ -25,4 +25,8 @@ standard = []
 
 [[bin]]
 name = "gapped-viz"
-path = "src/learned/pgm/gapped_viz.rs"
+path = "src/learned/pgm/gapped/gapped_viz.rs"
+
+[[bin]]
+name = "gapped-bench"
+path = "src/learned/pgm/gapped/gapped_bench.rs"

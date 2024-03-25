@@ -6,16 +6,17 @@
 use super::gapped_array::GappedKVArray;
 use crate::Entry;
 use generational_arena::{Arena, Index};
+use itertools::Itertools;
 use num::Float;
 use std::{fs, ops::Range};
 use trait_set::trait_set;
 
 pub type GappedKey = i32;
-#[derive(Copy, Debug)]
+#[derive(Copy, Debug, Ord, Eq)]
 pub struct GappedIndex(Index);
 trait_set! {
     /// General value type, thread-safe
-    pub trait GappedValue = Copy + Default + PartialOrd + std::fmt::Debug + 'static;
+    pub trait GappedValue = Copy + Default + PartialOrd + Ord + std::fmt::Debug + 'static;
 }
 
 #[derive(PartialEq, PartialOrd, Default)]
@@ -189,17 +190,12 @@ impl<V: GappedValue> Default for Entry<GappedKey, V> {
     }
 }
 
-impl<V: GappedValue> PartialOrd for Entry<GappedKey, V> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.key.partial_cmp(&other.key)
-    }
-}
-
 #[derive(Debug)]
 pub struct GappedPGMNode<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> {
     pub height: u32,
     pub ga: GappedKVArray<GappedKey, V>,
-    pub buffer: [Option<Entry<GappedKey, V>>; BUFSIZE],
+    pub buffer: [Entry<GappedKey, V>; BUFSIZE],
+    pub buff_ix: usize,
     pub model: LinearModel,
     pub split_density: f32,
     pub parent: Option<GappedIndex>,
@@ -247,9 +243,34 @@ impl<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<V
         if self.is_internal() && self.ga.is_full() {
             self.scale_up(2.0);
         }
+        // First we need to check if this key is in the buffer to perform an update there
+        for ix in 0..BUFSIZE {
+            if ix >= self.buff_ix {
+                break;
+            }
+            let buf_ent = self.buffer[ix];
+            if buf_ent.key == entry.key {
+                self.buffer[ix] = entry;
+                return Ok(());
+            }
+        }
         let guess = self.model.approximate(entry.key, Some(0..self.ga.len()));
         self.ga.upsert_with_hint((entry.key, entry.value), guess)?;
         Ok(())
+    }
+
+    pub fn is_buffer_full(&self) -> bool {
+        self.buff_ix >= BUFSIZE
+    }
+
+    pub fn insert_into_buffer(&mut self, entry: Entry<GappedKey, V>) -> Result<(), String> {
+        if self.buff_ix >= BUFSIZE {
+            Err("Buffer is full".to_string())
+        } else {
+            self.buffer[self.buff_ix] = entry;
+            self.buff_ix += 1;
+            Ok(())
+        }
     }
 
     pub fn trim_window(&mut self, key: GappedKey, window_radius: u32) -> Result<Vec<V>, String> {
@@ -294,7 +315,8 @@ pub fn build_layer_from_slice<V: GappedValue, const EPSILON: usize, const BUFSIZ
         let new_node = GappedPGMNode {
             height,
             ga,
-            buffer: [None; BUFSIZE],
+            buffer: [Entry::default(); BUFSIZE],
+            buff_ix: 0,
             model,
             split_density,
             parent: None,
@@ -550,7 +572,21 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
             Some(node) => {
                 let guess = node.model.approximate(needle, Some(0..node.ga.len()));
                 let got = node.ga.search_exact(&needle, Some(guess));
-                got
+                match got {
+                    Some(v) => Some(v),
+                    None => {
+                        let mut result = None;
+                        for ix in 0..LEAF_BUFSIZE {
+                            if ix >= node.buff_ix {
+                                break;
+                            }
+                            if node.buffer[ix].key == needle {
+                                result = Some(&node.buffer[ix].value);
+                            }
+                        }
+                        result
+                    }
+                }
             }
         }
     }
@@ -570,6 +606,8 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
                     match next_ptr_option {
                         None => {
                             // If price-is-right returns None, it means this is smaller than everythign
+                            // NOTE: We solved this by just adding a KEYMIN to every index, but this
+                            // should be reflected everywhere
                             let Some(ix) = node.ga.next_occupied_ix(0) else {
                                 return Err("Layer looks empty during insert".to_string());
                             };
@@ -587,11 +625,16 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
             None => Err("Bad leaf nodes".to_string()),
             Some(node) => {
                 // Can do a gapped insert
-                node.upsert(entry)?;
                 if node.ga.density() >= leaf_split_density {
-                    self.split_leaf(ptr)
+                    // Try to insert into the nodes buffer, only splitting if it's full
+                    node.insert_into_buffer(entry)?;
+                    if node.is_buffer_full() {
+                        self.split_leaf(ptr)
+                    } else {
+                        Ok(())
+                    }
                 } else {
-                    Ok(())
+                    node.upsert(entry)
                 }
             }
         }
@@ -615,7 +658,26 @@ impl<V: GappedValue, const INT_EPS: usize, const LEAF_EPS: usize, const LEAF_BUF
         for ptr in fell_ptrs {
             let killed_node = self.leaf_arena.remove(ptr.0).unwrap();
             let phoenix_entries = killed_node.to_entries();
-            entries.extend(phoenix_entries.into_iter());
+            if LEAF_BUFSIZE == 0 {
+                entries.extend(phoenix_entries.into_iter());
+            } else {
+                let mut buf_phoenix_entries = killed_node.buffer.into_iter().take(killed_node.buff_ix).collect_vec();
+                buf_phoenix_entries.sort();
+                // Sorted merge
+                let mut combined = Vec::with_capacity(phoenix_entries.len() + buf_phoenix_entries.len());
+                let mut core_val = phoenix_entries.into_iter().peekable();
+                let mut buf_val = buf_phoenix_entries.into_iter().peekable();
+                while let (Some(core), Some(buf)) = (core_val.peek(), buf_val.peek()) {
+                    if core < buf {
+                        combined.push(core_val.next().unwrap());
+                    } else {
+                        combined.push(buf_val.next().unwrap());
+                    }
+                }
+                combined.extend(core_val);
+                combined.extend(buf_val);
+                entries.extend(combined.into_iter());
+            }
         }
         let mut new_nodes = build_layer_from_slice(&entries, self.leaf_fill_density, self.leaf_split_density, 0);
         for node in new_nodes.iter_mut() {
@@ -648,21 +710,31 @@ mod gapped_pgm_tests {
     use super::*;
 
     /// Helper function to generate uniformly random inserts
-    fn generate_random_entries(size: usize, seed: Option<u64>) -> Vec<Entry<i32, i32>> {
+    fn generate_random_entries(size: usize, seed: Option<u64>, sorted: bool) -> Vec<Entry<i32, i32>> {
         let range = Uniform::from((GappedKey::MIN)..(GappedKey::MAX));
         let mut random_values: Vec<i32> = match seed {
             Some(val) => StdRng::seed_from_u64(val).sample_iter(&range).take(size).collect(),
             None => rand::thread_rng().sample_iter(&range).take(size).collect(),
         };
-        random_values.sort();
-        random_values.dedup();
+        let mut dehash = HashSet::new();
+        let mut deduped = vec![];
+        for v in random_values {
+            if !dehash.contains(&v) {
+                dehash.insert(v);
+                deduped.push(v);
+            }
+        }
+        let mut random_values = deduped;
+        if sorted {
+            random_values.sort();
+        }
         let mut entries: Vec<Entry<GappedKey, i32>> = random_values
             .into_iter()
             .enumerate()
-            .map(|(ix, key)| Entry::new(key, ix as i32))
+            .map(|(ix, key)| Entry::new(key, ix as i32 + 1))
             .collect();
         // TODO: Get rid of this quirk where we alwas need the key min
-        entries.insert(0, Entry::new(i32::MIN, i32::MIN));
+        entries.insert(0, Entry::new(i32::MIN, 0));
         entries
     }
 
@@ -681,7 +753,7 @@ mod gapped_pgm_tests {
             if verbose {
                 println!("Generating {} entries with eps={}", size, EPSILON);
             }
-            let entries = generate_random_entries(size, seed);
+            let entries = generate_random_entries(size, seed, true);
             Self {
                 entries,
                 verbose,
@@ -729,7 +801,7 @@ mod gapped_pgm_tests {
     fn test_gapped_pgm_build() {
         for seed in 0..10 {
             println!("seed: {:?}", seed);
-            let entries = generate_random_entries(10_000_000, Some(seed));
+            let entries = generate_random_entries(10_000_000, Some(seed), true);
             let gapped_pgm: GappedPGM<i32, 4, 64, 4> = GappedPGM::build_from_slice(&entries);
             let mut pb = tqdm!(total = entries.len());
             for entry in entries {
@@ -743,7 +815,7 @@ mod gapped_pgm_tests {
     #[test]
     fn test_gapped_pgm_parents() {
         let gen_seed = 1;
-        let entries = generate_random_entries(100_000, Some(gen_seed));
+        let entries = generate_random_entries(100_000, Some(gen_seed), true);
         let mut gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
         for entry in entries {
             let mut ptr = gapped_pgm.root_ptr.unwrap();
@@ -781,7 +853,7 @@ mod gapped_pgm_tests {
     #[test]
     fn test_gapped_pgm_update() {
         let gen_seed = 1;
-        let entries = generate_random_entries(100_000, Some(gen_seed));
+        let entries = generate_random_entries(100_000, Some(gen_seed), true);
         let mut gapped_pgm: GappedPGM<i32, 4, 64, 4> = GappedPGM::build_from_slice(&entries);
         for entry in entries.iter() {
             gapped_pgm.upsert(Entry::new(entry.key, entry.value + 1));
@@ -795,22 +867,29 @@ mod gapped_pgm_tests {
     #[test]
     fn test_basic_gapped_pgm_insert() {
         let gen_seed = 1;
-        let entries = generate_random_entries(1_000, Some(gen_seed));
+        let entries = generate_random_entries(1_000, Some(gen_seed), true);
         let mut gapped_pgm: GappedPGM<i32, 4, 4, 4> = GappedPGM::build_from_slice(&entries);
         let ins_seed = 2;
-        let additional = generate_random_entries(100_000, Some(ins_seed));
+        let additional = generate_random_entries(100_000, Some(ins_seed), false);
+        println!("Inserting:");
         let mut pb = tqdm!(total = additional.len());
         for entry in additional.iter() {
             gapped_pgm.upsert(entry.clone()).unwrap();
             pb.update(1);
         }
+        println!("Search additional:");
+        let mut pb = tqdm!(total = additional.len());
         let mut additional_set = HashSet::new();
         for entry in additional.iter() {
             additional_set.insert(entry.key);
             let val = gapped_pgm.search(entry.key);
             assert!(*val.unwrap() == entry.value);
+            pb.update(1);
         }
+        println!("Search original:");
+        let mut pb = tqdm!(total = entries.len());
         for entry in entries.iter() {
+            pb.update(1);
             if additional_set.contains(&entry.key) {
                 continue;
             }
@@ -823,9 +902,8 @@ mod gapped_pgm_tests {
     fn debug_gapped_pgm_insert() {
         let gen_seed = 1;
         let add_seed = 2;
-        let mut entries = generate_random_entries(32, Some(gen_seed));
-        entries.insert(0, Entry::new(i32::MIN, i32::MIN));
-        let additional = generate_random_entries(100, Some(add_seed));
+        let mut entries = generate_random_entries(32, Some(gen_seed), true);
+        let additional = generate_random_entries(100, Some(add_seed), false);
         let mut gapped_pgm: GappedPGM<i32, 3, 3, 0> = GappedPGM::build_from_slice(&entries);
         gapped_pgm.to_file("zDebug/_initial.out");
         for i in 0..100 {

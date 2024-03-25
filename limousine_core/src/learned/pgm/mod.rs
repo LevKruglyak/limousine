@@ -1,5 +1,4 @@
-pub mod gapped_array;
-pub mod gapped_pgm;
+pub mod gapped;
 pub mod pgm_component;
 pub mod pgm_inner;
 pub mod pgm_layer;

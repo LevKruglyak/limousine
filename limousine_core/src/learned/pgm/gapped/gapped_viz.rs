@@ -2,7 +2,7 @@
 
 use egui::plot::*;
 use limousine_core::{
-    learned::pgm::gapped_pgm::{GappedIndex, GappedKey, GappedPGM, GappedValue},
+    learned::pgm::gapped::gapped_pgm::{GappedIndex, GappedKey, GappedPGM, GappedValue},
     Entry,
 };
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};

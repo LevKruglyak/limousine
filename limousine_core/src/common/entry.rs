@@ -4,7 +4,7 @@ use std::borrow::Borrow;
 use std::fmt::Debug;
 
 /// Simple entry type containing a key and a value
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Entry<K, V> {
     /// Key field
     pub key: K,
