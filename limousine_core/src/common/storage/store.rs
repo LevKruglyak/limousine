@@ -164,8 +164,27 @@ where
         self.inner_ref_mut().catalog.ids.allocate()
     }
 
-    fn free_page(&mut self, id: StoreID) -> bool {
-        self.inner_ref_mut().catalog.ids.free(id)
+    fn free_page(&mut self, id: StoreID) -> crate::Result<bool> {
+        if self.inner_ref_mut().catalog.ids.free(id) {
+            let empty_page: Option<[u8; 1]> = None;
+            self.inner_ref_mut().store.write_batch([(id, empty_page)])?;
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    fn clear(&mut self) -> crate::Result<()> {
+        let mut clear_batch: Vec<(StoreID, Option<[u8; 1]>)> = vec![];
+
+        for id in self.inner_ref().catalog.ids.iter() {
+            clear_batch.push((id, None));
+        }
+
+        self.inner_ref_mut().store.write_batch(clear_batch)?;
+        self.inner_ref_mut().catalog.ids.clear();
+
+        Ok(())
     }
 
     fn write_page<P>(&self, page: &P, id: StoreID) -> crate::Result<()>
@@ -262,7 +281,7 @@ mod tests {
         let page_id = store.allocate_page();
         assert!(page_id > 0, "Expected a valid page ID greater than zero");
 
-        let freed = store.free_page(page_id);
+        let freed = store.free_page(page_id).unwrap();
         assert!(freed, "Expected the page to be freed successfully");
     }
 
@@ -290,7 +309,7 @@ mod tests {
         );
 
         // Clean up
-        store.free_page(page_id);
+        store.free_page(page_id).unwrap();
     }
 
     #[test]
@@ -313,12 +332,13 @@ mod tests {
 
         // Attempt to free a page that was never allocated
         let page_id = 9999; // Assume this page ID is not used
-        let freed = store.free_page(page_id);
+        let freed = store.free_page(page_id).unwrap();
         assert!(
             !freed,
             "Expected the page to not be freed since it was never allocated"
         );
     }
+
     #[test]
     fn load_local_store() {
         let dir = tempfile::tempdir().unwrap();

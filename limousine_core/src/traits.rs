@@ -33,6 +33,12 @@ macro_rules! impl_integer {
                     &MIN
                 }
             }
+
+            impl KeyBounded<$t> for $t {
+                fn lower_bound(&self) -> &$t {
+                    Self::min_ref()
+                }
+            }
         )*
     }
 }

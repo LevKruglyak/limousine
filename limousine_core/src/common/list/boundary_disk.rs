@@ -47,6 +47,7 @@ where
             store.write_page(&N::default(), ptr)?;
             store.catalog.first = ptr;
             store.catalog.last = ptr;
+            store.catalog.links.insert(ptr, Default::default());
         }
 
         Ok(Self {
@@ -62,6 +63,10 @@ where
 
     fn get_next(&self, ptr: StoreID) -> Option<StoreID> {
         self.store.catalog.links.get(&ptr).unwrap().next
+    }
+
+    fn get_prev(&self, ptr: StoreID) -> Option<StoreID> {
+        self.store.catalog.links.get(&ptr).unwrap().prev
     }
 
     pub fn insert_after(&mut self, inner: N, ptr: StoreID) -> crate::Result<StoreID> {
@@ -84,6 +89,18 @@ where
         }
 
         Ok(new_node_ptr)
+    }
+
+    pub fn clear(&mut self) -> crate::Result<StoreID> {
+        self.store.clear()?;
+
+        let ptr = self.store.allocate_page();
+        self.store.write_page(&N::default(), ptr)?;
+        self.store.catalog.first = ptr;
+        self.store.catalog.last = ptr;
+        self.store.catalog.links.insert(ptr, Default::default());
+
+        Ok(ptr)
     }
     //
     //     #[allow(unused)]
@@ -151,4 +168,71 @@ where
     fn next(&self, ptr: StoreID) -> Option<StoreID> {
         self.get_next(ptr)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_linked_list_new() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = GlobalStore::load(&dir).unwrap();
+        let list: BoundaryDiskList<i32, ()> = BoundaryDiskList::load(&mut store, "test").unwrap();
+
+        assert_eq!(
+            list.get_node(list.first()).unwrap(),
+            Some(Default::default())
+        );
+    }
+
+    #[test]
+    fn linked_list_insert_after() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = GlobalStore::load(&dir).unwrap();
+        let mut list: BoundaryDiskList<u32, ()> =
+            BoundaryDiskList::load(&mut store, "test").unwrap();
+
+        let first_ptr = list.first();
+        let second_ptr = list.insert_after(2, first_ptr).unwrap();
+
+        assert_eq!(list.get_next(first_ptr), Some(second_ptr));
+        assert_eq!(list.get_prev(second_ptr), Some(first_ptr));
+        assert_eq!(list.last(), second_ptr);
+    }
+    //
+    //     #[test]
+    //     fn linked_list_insert_before() {
+    //         let mut list: MemoryList<u32, ()> = MemoryList::new();
+    //
+    //         let first_ptr = list.first;
+    //         let zero_ptr = list.insert_before(0, first_ptr);
+    //
+    //         assert_eq!(list.arena[first_ptr].0.previous, Some(zero_ptr));
+    //         assert_eq!(list.arena[zero_ptr].0.next, Some(first_ptr));
+    //         assert_eq!(list.first, zero_ptr);
+    //     }
+    //
+    //     #[test]
+    //     fn test_linked_list_clear() {
+    //         let mut list: MemoryList<i32, ()> = MemoryList::new();
+    //         list.insert_after(2, list.first);
+    //
+    //         assert_eq!(list.arena.len(), 2);
+    //
+    //         list.clear(5);
+    //
+    //         assert_eq!(list.len(), 1);
+    //         assert_eq!(list[list.first], 5);
+    //         assert_eq!(list.first, list.last);
+    //     }
+    //
+    //     #[test]
+    //     fn linked_node_new() {
+    //         let node: MemoryNode<i32> = MemoryNode::new(10);
+    //
+    //         assert_eq!(node.inner, 10);
+    //         assert_eq!(node.next, None);
+    //         assert_eq!(node.previous, None);
+    //     }
 }

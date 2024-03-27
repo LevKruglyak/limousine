@@ -10,6 +10,8 @@ pub trait ID: Copy {
     /// Get the index as a usize.
     fn as_usize(self) -> usize;
 
+    fn from_usize(id: usize) -> Self;
+
     /// Increment the index and return the incremented value.
     fn increment(self) -> Self;
 }
@@ -25,6 +27,11 @@ macro_rules! impl_primitive_index {
             #[inline(always)]
             fn as_usize(self) -> usize {
                 self as usize
+            }
+
+            #[inline(always)]
+            fn from_usize(id: usize) -> Self {
+                id as Self
             }
 
             #[inline(always)]
@@ -62,6 +69,11 @@ where
         }
     }
 
+    pub fn clear(&mut self) {
+        self.data.clear();
+        self.next = I::initial();
+    }
+
     /// Allocate the next id.
     pub fn allocate(&mut self) -> I {
         let index = self.next;
@@ -95,6 +107,51 @@ where
         }
 
         false
+    }
+}
+
+pub struct IDAllocatorIterator<'a, I> {
+    allocator: &'a IDAllocator<I>,
+    current: usize,
+}
+
+// Step 2: Implement the iterator
+impl<'a, I> Iterator for IDAllocatorIterator<'a, I>
+where
+    I: ID,
+{
+    type Item = I;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.current < self.allocator.data.len() {
+            match self.allocator.data[self.current] {
+                Some(_) => {
+                    self.current += 1;
+                    continue;
+                }
+                None => {
+                    let id = I::from_usize(self.current);
+                    self.current += 1;
+                    return Some(id);
+                }
+            }
+        }
+
+        // If no more active allocations are found, return None
+        None
+    }
+}
+
+// Step 3: Add a method to IDAllocator to get an iterator
+impl<I> IDAllocator<I>
+where
+    I: ID,
+{
+    pub fn iter(&self) -> IDAllocatorIterator<I> {
+        IDAllocatorIterator {
+            allocator: self,
+            current: 0,
+        }
     }
 }
 

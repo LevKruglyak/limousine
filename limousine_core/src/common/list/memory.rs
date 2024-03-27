@@ -84,9 +84,11 @@ where
         new_node_ptr
     }
 
-    pub fn clear(&mut self, inner: N) -> ArenaID {
+    pub fn clear(&mut self) -> ArenaID {
         self.arena.clear();
-        let ptr = self.arena.insert((MemoryNode::new(inner), None));
+        let ptr = self
+            .arena
+            .insert((MemoryNode::new(Default::default()), None));
 
         self.first = ptr;
         self.last = ptr;
@@ -220,10 +222,10 @@ mod tests {
 
         assert_eq!(list.arena.len(), 2);
 
-        list.clear(5);
+        list.clear();
 
         assert_eq!(list.len(), 1);
-        assert_eq!(list[list.first], 5);
+        assert_eq!(list[list.first], Default::default());
         assert_eq!(list.first, list.last);
     }
 
