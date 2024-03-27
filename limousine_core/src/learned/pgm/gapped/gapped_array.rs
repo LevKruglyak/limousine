@@ -2,6 +2,8 @@
 //! ASSUMPTIONS:
 //! - Keys (T) are unique
 
+use std::mem::size_of;
+
 use num::iter::Range;
 
 #[derive(Debug)]
@@ -377,6 +379,10 @@ where
         }
         res += "  ]";
         res
+    }
+
+    pub fn size_in_bytes(&self) -> u128 {
+        (size_of::<Self>() + (size_of::<K>() + size_of::<V>() + 1) * self.len()) as u128
     }
 }
 

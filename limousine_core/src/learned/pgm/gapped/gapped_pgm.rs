@@ -5,10 +5,11 @@
 
 use super::gapped_array::GappedKVArray;
 use crate::Entry;
+use egui::epaint::ahash::HashMap;
 use generational_arena::{Arena, Index};
 use itertools::Itertools;
 use num::Float;
-use std::{fs, ops::Range};
+use std::{fs, mem::size_of, ops::Range};
 use trait_set::trait_set;
 
 pub type GappedKey = i32;
@@ -277,6 +278,10 @@ impl<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<V
         let guess = self.model.approximate(key, Some(0..self.ga.len()));
         self.ga.trim_window(key, window_radius, guess)
     }
+
+    pub fn size_in_bytes(&self) -> u128 {
+        (size_of::<Self>() as u128 + self.ga.size_in_bytes()) as u128
+    }
 }
 impl<const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<GappedIndex, EPSILON, BUFSIZE> {
     /// TODO: Make this an iterator!!!
@@ -357,6 +362,7 @@ pub fn build_layer_from_slice<V: GappedValue, const EPSILON: usize, const BUFSIZ
     }
 }
 
+#[derive(Default)]
 pub struct GappedPGM<
     V: GappedValue,
     const INT_EPS: usize,
@@ -389,6 +395,13 @@ impl<
         const LEAF_SPLIT_DEC: u8,
     > GappedPGM<V, INT_EPS, LEAF_EPS, LEAF_BUFSIZE, LEAF_FILL_DEC, LEAF_SPLIT_DEC>
 {
+    /// To be able to pass these objects into `Box<dyn Executor<_, _>>`, it needs to use
+    /// actual concrete values, not types. This creates a basic value, with nothing in it.
+    /// It will be overriden using *self in the executor method, just for type reasons.
+    pub fn blank() -> Self {
+        Self::default()
+    }
+
     pub fn to_string(&self) -> String {
         let cur_ptr = self.root_ptr.unwrap();
         if self.height < 1 {
@@ -710,6 +723,19 @@ impl<
             parent_node.upsert(Entry::new(key, ptr))?;
         }
         Ok(())
+    }
+
+    pub fn size_in_bytes(&self) -> u128 {
+        let mut size = size_of::<Self>() as u128;
+
+        for (_, node) in self.internal_arena.iter() {
+            size += node.size_in_bytes();
+        }
+        for (_, node) in self.leaf_arena.iter() {
+            size += node.size_in_bytes();
+        }
+
+        size as u128
     }
 }
 
