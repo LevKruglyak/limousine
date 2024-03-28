@@ -6,21 +6,22 @@ use crate::traits::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Default, Serialize, Deserialize, Clone)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Link {
     next: Option<StoreID>,
     prev: Option<StoreID>,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum BoundaryDiskListState {
+    // An invalid state only present when the catalog is initialized for the first time
     #[default]
     Empty,
-
+    Initialized,
     Loaded,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct BoundaryDiskListCatalogPage {
     first: StoreID,
     last: StoreID,
@@ -51,6 +52,7 @@ where
         let parents = HashMap::new();
 
         if store.catalog.state == BoundaryDiskListState::Empty {
+            store.catalog.state = BoundaryDiskListState::Initialized;
             let ptr = store.allocate_page();
             store.write_page(&N::default(), ptr)?;
             store.catalog.first = ptr;
@@ -166,7 +168,7 @@ where
 impl<K, N, PA> NodeLayer<K, StoreID, PA> for BoundaryDiskList<N, PA>
 where
     K: Copy,
-    N: KeyBounded<K> + Default + Serialize + for<'de> Deserialize<'de> + 'static,
+    N: KeyBounded<K> + Persisted,
     PA: Address,
 {
     fn first(&self) -> StoreID {

@@ -2,14 +2,6 @@
 
 use limousine_engine::prelude::*;
 
-create_hybrid_index! {
-    name: Index1,
-    layout: [
-        btree_top(),
-        btree(fanout = 8, persist),
-    ]
-}
-
 // create_hybrid_index! {
 //     name: Index2,
 //     path: "limousine_example/sample.layout"
@@ -41,14 +33,29 @@ create_hybrid_index! {
 //     println!("{} search took {:?} ms ", name, start.elapsed().as_millis());
 // }
 
-fn main() {
+create_hybrid_index! {
+    name: Index1,
+    layout: [
+        btree_top(),
+        btree(fanout = 8, persist),
+    ]
+}
+
+fn main() -> limousine_engine::Result<()> {
     let mut index: Index1<i32, i32> =
-        Index1::load("Index1.lim_idx").expect("Failed to load index!");
+        Index1::build((0..100).map(|i| (i, i * i)), "Index1.lim_idx")?;
 
     for i in 0..100 {
-        println!("Inserted {i:?}");
-        index.insert(i, i * i).expect("Failed to insert!");
+        let result = index.search(i)?;
+        println!("Search: {i:?} -> {result:?}");
     }
+
+    // for i in 0..100 {
+    //     println!("Insert: {i:?}");
+    //     index.insert(i, i * i).expect("Failed to insert!");
+    // }
+
+    Ok(())
 
     // let num = 50_000_000;
     // println!("Inserting {} entries:", num);

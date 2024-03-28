@@ -116,6 +116,11 @@ impl GlobalStore {
 
 impl Drop for GlobalStore {
     fn drop(&mut self) {
+        self.inner_ref_mut()
+            .store
+            .maintenance()
+            .expect("Defragmentation failed!");
+
         assert_eq!(
             Rc::strong_count(&self.inner),
             1,

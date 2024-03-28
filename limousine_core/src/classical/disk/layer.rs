@@ -1,7 +1,5 @@
 use std::ops::Bound;
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     classical::node::BTreeNode,
     common::{
@@ -165,8 +163,8 @@ where
 impl<K, V, const FANOUT: usize, PA> NodeLayer<K, StoreID, PA>
     for BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
 where
-    K: Copy + StaticBounded + Serialize + for<'de> Deserialize<'de> + 'static,
-    V: Serialize + for<'de> Deserialize<'de> + 'static,
+    K: Persisted + Key,
+    V: Persisted,
     PA: Address,
 {
     impl_node_layer!(StoreID, PA);

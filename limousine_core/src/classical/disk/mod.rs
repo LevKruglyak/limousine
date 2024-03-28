@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
-
 use crate::{
     common::storage::{GlobalStore, StoreID},
     impl_node_layer, Address, BoundaryDiskBaseComponent, BoundaryDiskInternalComponent, Key,
-    NodeLayer, Persisted, PropagateInsert, StaticBounded, Value,
+    NodeLayer, Persisted, PropagateInsert, Value,
 };
 
 use self::layer::BoundaryDiskBTreeLayer;
@@ -17,14 +15,14 @@ mod layer;
 pub type BoundaryDiskBTreeInternalAddress = StoreID;
 
 pub struct BoundaryDiskBTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA> {
-    inner: BoundaryDiskBTreeLayer<K, BA, FANOUT, PA>,
+    pub inner: BoundaryDiskBTreeLayer<K, BA, FANOUT, PA>,
     _ph: std::marker::PhantomData<X>,
 }
 
 impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, BoundaryDiskBTreeInternalAddress, PA>
     for BoundaryDiskBTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: StaticBounded + Serialize + for<'de> Deserialize<'de>,
+    K: Key + Persisted,
     BA: Persisted + Address,
     PA: Address,
 {
@@ -77,14 +75,14 @@ where
 pub type BoundaryDiskBTreeBaseAddress = StoreID;
 
 pub struct BoundaryDiskBTreeBaseComponent<K, V, const FANOUT: usize, PA> {
-    inner: BoundaryDiskBTreeLayer<K, V, FANOUT, PA>,
+    pub inner: BoundaryDiskBTreeLayer<K, V, FANOUT, PA>,
 }
 
 impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BoundaryDiskBTreeBaseAddress, PA>
     for BoundaryDiskBTreeBaseComponent<K, V, FANOUT, PA>
 where
-    K: StaticBounded + Serialize + for<'de> Deserialize<'de>,
-    V: 'static + Serialize + for<'de> Deserialize<'de>,
+    K: Key + Persisted,
+    V: Persisted,
     PA: Address,
 {
     impl_node_layer!(StoreID, PA);
