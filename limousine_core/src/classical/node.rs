@@ -8,7 +8,7 @@ use std::fmt::Debug;
 pub struct BTreeNode<K, V, const FANOUT: usize> {
     // Serde derive has some trouble introducing the right bounds here
     #[serde(bound(
-        deserialize = "K: Serialize + Deserialize<'de>, V: Serialize + Deserialize<'de>"
+        deserialize = "K: Serialize + Deserialize<'de> + Ord + Copy, V: Serialize + Deserialize<'de>"
     ))]
     inner: StackMap<K, V, FANOUT>,
 }

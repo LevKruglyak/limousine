@@ -36,37 +36,40 @@ struct StackMapDeserializer<K, V, const FANOUT: usize>(
     std::marker::PhantomData<(K, V, [(); FANOUT])>,
 );
 
-impl<'de, K, V, const FANOUT: usize> Visitor<'de> for StackMapDeserializer<K, V, FANOUT> {
+impl<'de, K, V, const FANOUT: usize> Visitor<'de> for StackMapDeserializer<K, V, FANOUT>
+where
+    K: Deserialize<'de> + Ord + Copy,
+    V: Deserialize<'de>,
+{
     type Value = StackMap<K, V, FANOUT>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("ArrayKeyedMap key value sequence.")
+        formatter.write_str("a sequence of entries for StackMap")
     }
 
-    fn visit_seq<A>(self, _: A) -> Result<Self::Value, A::Error>
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
     where
         A: SeqAccess<'de>,
     {
-        unimplemented!()
-        // let mut new_obj = ArrayKeyedMap::new();
-        // while let Some(key) = seq.next_element()? {
-        //     if let Some(value) = seq.next_element()? {
-        //         new_obj.the_map.insert(key, value);
-        //     } else {
-        //         return Err(de::Error::custom(format!(
-        //             "Didn't find the right sequence of values in ArrayKeyedMap."
-        //         )));
-        //     }
-        // }
-        //
-        // Ok(new_obj)
+        let mut map = StackMap::<K, V, FANOUT>::empty();
+
+        while let Some(entry) = seq.next_element::<Entry<K, V>>()? {
+            if map.len() >= FANOUT {
+                return Err(serde::de::Error::custom(
+                    "StackMap exceeded its capacity during deserialization",
+                ));
+            }
+            map.insert(entry.key, entry.value);
+        }
+
+        Ok(map)
     }
 }
 
 impl<'de, K, V, const FANOUT: usize> Deserialize<'de> for StackMap<K, V, FANOUT>
 where
-    K: Serialize,
-    V: Serialize,
+    K: Serialize + Deserialize<'de> + Ord + Copy,
+    V: Serialize + Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

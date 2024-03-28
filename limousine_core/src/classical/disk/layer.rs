@@ -17,7 +17,7 @@ pub struct BoundaryDiskBTreeLayer<K, V, const FANOUT: usize, PA> {
 
 impl<K, V, const FANOUT: usize, PA> BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
 where
-    K: Serialize + for<'de> Deserialize<'de>,
+    K: Serialize + for<'de> Deserialize<'de> + Ord + Copy,
     V: Serialize + for<'de> Deserialize<'de> + Clone,
 {
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {

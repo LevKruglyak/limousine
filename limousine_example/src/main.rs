@@ -7,7 +7,7 @@ create_hybrid_index! {
     layout: [
         btree_top(),
         btree(fanout = 64),
-        btree(fanout = 64, persist),
+        btree(fanout = 64),
         btree(fanout = 1024, persist),
     ]
 }
@@ -44,6 +44,14 @@ create_hybrid_index! {
 // }
 
 fn main() {
+    let mut index: Index1<i32, i32> =
+        Index1::load("Index1.lim_idx").expect("Failed to load index!");
+
+    for i in 0..100 {
+        println!("Inserted {i:?}");
+        index.insert(i, i * i).expect("Failed to insert!");
+    }
+
     // let num = 50_000_000;
     // println!("Inserting {} entries:", num);
     //

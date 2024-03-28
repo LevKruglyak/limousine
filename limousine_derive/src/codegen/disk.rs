@@ -228,8 +228,6 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
 }
 
 fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
-    eprintln!("layout: {:#?}\n", layout);
-
     let mut empty_body = TokenStream::new();
 
     // Add body as the first component
