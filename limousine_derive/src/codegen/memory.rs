@@ -56,9 +56,7 @@ pub fn create_index_impl(
             fn insert(&mut self, key: K, value: V) -> Option<V> {
                 #insert_body
             }
-        }
 
-        impl<K: Key, V: Value> IndexBuild<K, V> for #name<K, V> {
             fn empty() -> Self {
                 #empty_body
             }

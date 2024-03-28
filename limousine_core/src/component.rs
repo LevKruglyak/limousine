@@ -20,15 +20,7 @@ where
     fn search(&self, base: &Base, key: K) -> BA;
 
     fn insert(&mut self, base: &mut Base, prop: PropagateInsert<K, BA, SA>);
-}
 
-pub trait TopComponentBuild<K, Base, BA, SA>
-where
-    Base: NodeLayer<K, BA, SA>,
-    BA: Address,
-    SA: Address,
-    K: Copy,
-{
     fn build(base: &mut Base) -> Self;
 }
 
@@ -48,30 +40,46 @@ where
         base: &mut Base,
         prop: PropagateInsert<K, BA, SA>,
     ) -> Option<PropagateInsert<K, SA, PA>>;
-}
 
-pub trait InternalComponentBuild<K, Base, BA, SA, PA>
-where
-    Base: NodeLayer<K, BA, SA>,
-    BA: Address,
-    SA: Address,
-    PA: Address,
-    K: Copy,
-{
     fn build(base: &mut Base) -> Self;
 }
 
-pub trait InternalComponentBuildDisk<K, Base, BA, SA, PA>
+pub trait BoundaryDiskInternalComponent<K, Base, BA, SA, PA>
 where
+    Self: NodeLayer<K, SA, PA>,
     Base: NodeLayer<K, BA, SA>,
-    BA: Address,
-    SA: Address,
+    BA: DiskAddress,
+    SA: DiskAddress,
     PA: Address,
     K: Copy,
 {
-    fn load(base: &Base, store: &mut GlobalStore) -> Self;
+    fn search(&self, base: &Base, ptr: SA, key: K) -> crate::Result<BA>;
 
-    fn build(base: &Base, store: &mut GlobalStore) -> Self;
+    fn insert(
+        &mut self,
+        base: &mut Base,
+        prop: PropagateInsert<K, BA, SA>,
+    ) -> crate::Result<Option<PropagateInsert<K, SA, PA>>>;
+
+    fn load(base: &mut Base, store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self>;
+}
+
+pub trait DeepDiskInternalComponent<K, Base, BA, SA, PA>
+where
+    Self: NodeLayer<K, SA, PA>,
+    Base: NodeLayer<K, BA, SA>,
+    BA: DiskAddress,
+    SA: DiskAddress,
+    PA: DiskAddress,
+    K: Copy,
+{
+    fn search(&self, base: &Base, ptr: SA, key: K) -> crate::Result<BA>;
+
+    fn insert(
+        &mut self,
+        base: &mut Base,
+        prop: PropagateInsert<K, BA, SA>,
+    ) -> crate::Result<Option<PropagateInsert<K, SA, PA>>>;
 }
 
 pub trait BaseComponent<K, V, SA, PA>
@@ -84,16 +92,33 @@ where
     fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropagateInsert<K, SA, PA>>;
 
     fn search(&self, ptr: SA, key: K) -> Option<V>;
-}
 
-pub trait BaseComponentBuild<K, V> {
     fn empty() -> Self;
 
     fn build(iter: impl Iterator<Item = (K, V)>) -> Self;
 }
 
-pub trait BaseComponentBuildDisk<K, V> {
-    fn load(store: &mut GlobalStore) -> Self;
+pub trait BoundaryDiskBaseComponent<K, V, SA, PA>
+where
+    Self: NodeLayer<K, SA, PA>,
+    SA: DiskAddress,
+    PA: Address,
+    K: Copy,
+{
+    fn insert(
+        &mut self,
+        ptr: SA,
+        key: K,
+        value: V,
+    ) -> crate::Result<Option<PropagateInsert<K, SA, PA>>>;
 
-    fn build(iter: impl Iterator<Item = (K, V)>, store: &mut GlobalStore) -> Self;
+    fn search(&self, ptr: SA, key: K) -> crate::Result<Option<V>>;
+
+    fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self>;
+
+    fn build(
+        store: &mut GlobalStore,
+        ident: impl ToString,
+        iter: impl Iterator<Item = (K, V)>,
+    ) -> crate::Result<Self>;
 }

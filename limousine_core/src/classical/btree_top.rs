@@ -33,14 +33,7 @@ where
             }
         }
     }
-}
 
-impl<K, X, Base, BA> TopComponentBuild<K, Base, BA, ()> for BTreeTopComponent<K, X, BA>
-where
-    Base: NodeLayer<K, BA, ()>,
-    K: Ord + Copy,
-    BA: Address + Copy,
-{
     fn build(base: &mut Base) -> Self {
         let mut inner = BTreeMap::new();
         let mut iter = base.range_mut(Bound::Unbounded, Bound::Unbounded);

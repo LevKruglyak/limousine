@@ -18,7 +18,7 @@ create_hybrid_index! {
 type K = u128;
 type V = u128;
 
-fn test_index<T: Index<K, V> + IndexBuild<K, V>>(num: K) {
+fn test_index<T: Index<K, V>>(num: K) {
     let name_vec: Vec<&str> = core::any::type_name::<T>().split("::").collect();
     let name = name_vec.last().unwrap().split_once("<").unwrap().0;
 

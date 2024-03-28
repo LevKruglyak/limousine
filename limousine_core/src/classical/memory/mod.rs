@@ -54,16 +54,7 @@ where
             }
         }
     }
-}
 
-impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
-    InternalComponentBuild<K, B, BA, BTreeInternalAddress, PA>
-    for BTreeInternalComponent<K, X, FANOUT, BA, PA>
-where
-    K: StaticBounded,
-    BA: Address,
-    PA: Address,
-{
     fn build(base: &mut B) -> Self {
         let mut result = MemoryBTreeLayer::empty();
         result.fill_with_parent(base);
@@ -118,15 +109,7 @@ where
     fn search(&self, ptr: BTreeInternalAddress, key: K) -> Option<V> {
         self.inner[ptr].search_exact(&key).cloned()
     }
-}
 
-impl<K, V, const FANOUT: usize, PA> BaseComponentBuild<K, V>
-    for BTreeBaseComponent<K, V, FANOUT, PA>
-where
-    K: StaticBounded,
-    V: 'static,
-    PA: Address,
-{
     fn empty() -> Self {
         let result = MemoryBTreeLayer::empty();
 

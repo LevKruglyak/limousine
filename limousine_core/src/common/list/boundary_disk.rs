@@ -12,6 +12,14 @@ pub struct Link {
     prev: Option<StoreID>,
 }
 
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub enum BoundaryDiskListState {
+    #[default]
+    Empty,
+
+    Loaded,
+}
+
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct BoundaryDiskListCatalogPage {
     first: StoreID,
@@ -20,8 +28,8 @@ pub struct BoundaryDiskListCatalogPage {
     // Maps node to next and previous links
     links: HashMap<StoreID, Link>,
 
-    // Simple flag to mark this catalog initialized
-    uninit: u8,
+    // Simple flag to mark the state of this list
+    state: BoundaryDiskListState,
 }
 
 pub struct BoundaryDiskList<N, PA> {
@@ -42,7 +50,7 @@ where
         let mut store: LocalStore<BoundaryDiskListCatalogPage> = store.load_local_store(ident)?;
         let parents = HashMap::new();
 
-        if store.catalog.uninit == 0 {
+        if store.catalog.state == BoundaryDiskListState::Empty {
             let ptr = store.allocate_page();
             store.write_page(&N::default(), ptr)?;
             store.catalog.first = ptr;
@@ -57,7 +65,23 @@ where
         })
     }
 
-    fn get_node(&self, ptr: StoreID) -> crate::Result<Option<N>> {
+    pub fn get_state(&mut self) -> &mut BoundaryDiskListState {
+        &mut self.store.catalog.state
+    }
+
+    pub fn transform_node<T>(
+        &mut self,
+        ptr: StoreID,
+        closure: impl Fn(&mut N) -> T,
+    ) -> crate::Result<T> {
+        let mut node = self.get_node(ptr)?.unwrap();
+        let result = closure(&mut node);
+        self.store.write_page(&node, ptr)?;
+
+        Ok(result)
+    }
+
+    pub fn get_node(&self, ptr: StoreID) -> crate::Result<Option<N>> {
         self.store.read_page(ptr)
     }
 

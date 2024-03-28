@@ -50,8 +50,7 @@ pub mod prelude {
     pub use limousine_derive::create_hybrid_index;
 
     pub use limousine_core::Index;
-    pub use limousine_core::IndexBuild;
-    pub use limousine_core::IndexBuildDisk;
+    pub use limousine_core::IndexDisk;
 }
 
 #[doc(hidden)]

@@ -2,7 +2,6 @@ use crate::classical::node::BTreeNode;
 use crate::common::list::memory::*;
 use crate::node_layer::{impl_node_layer, NodeLayer};
 use crate::traits::{Address, KeyBounded, StaticBounded};
-use generational_arena::Index;
 use std::ops::Bound;
 
 // ----------------------------------------
@@ -41,7 +40,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     where
         K: Copy + Ord,
         V: Address,
-        B: NodeLayer<K, V, Index>,
+        B: NodeLayer<K, V, ArenaID>,
     {
         // Add empty cap node
         let mut ptr = self.inner.clear();
@@ -58,7 +57,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         }
     }
 
-    pub fn insert(&mut self, key: K, value: V, ptr: Index) -> Option<(K, Index, PA)>
+    pub fn insert(&mut self, key: K, value: V, ptr: ArenaID) -> Option<(K, ArenaID, PA)>
     where
         K: Copy + Ord + StaticBounded,
         V: 'static,
@@ -95,13 +94,13 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         key: K,
         value: V,
         base: &mut B,
-        ptr: Index,
-    ) -> Option<(K, Index, PA)>
+        ptr: ArenaID,
+    ) -> Option<(K, ArenaID, PA)>
     where
         K: Copy + Ord + StaticBounded,
         V: Address,
         PA: Address,
-        B: NodeLayer<K, V, Index>,
+        B: NodeLayer<K, V, ArenaID>,
     {
         if self.inner[ptr].is_full() {
             let parent = self.inner.parent(ptr).unwrap();
@@ -138,19 +137,21 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     }
 }
 
-impl<K, V, const FANOUT: usize, PA> core::ops::Index<Index> for MemoryBTreeLayer<K, V, FANOUT, PA> {
+impl<K, V, const FANOUT: usize, PA> core::ops::Index<ArenaID>
+    for MemoryBTreeLayer<K, V, FANOUT, PA>
+{
     type Output = BTreeNode<K, V, FANOUT>;
 
-    fn index(&self, index: Index) -> &Self::Output {
+    fn index(&self, index: ArenaID) -> &Self::Output {
         &self.inner[index]
     }
 }
 
-impl<K, V, const FANOUT: usize, PA> NodeLayer<K, Index, PA> for MemoryBTreeLayer<K, V, FANOUT, PA>
+impl<K, V, const FANOUT: usize, PA> NodeLayer<K, ArenaID, PA> for MemoryBTreeLayer<K, V, FANOUT, PA>
 where
     K: Copy + StaticBounded + 'static,
     V: 'static,
     PA: Address,
 {
-    impl_node_layer!(Index, PA);
+    impl_node_layer!(ArenaID, PA);
 }

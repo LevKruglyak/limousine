@@ -1,77 +1,134 @@
-// use crate::classical::node::BTreeNode;
-// use crate::common::bounded::*;
-// use crate::{Address, BaseComponentBuildDisk, IndexStore, NodeLayer, StoreId};
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    common::storage::{GlobalStore, StoreID},
+    impl_node_layer, Address, BoundaryDiskBaseComponent, BoundaryDiskInternalComponent,
+    DiskAddress, NodeLayer, PropagateInsert, StaticBounded,
+};
+
+use self::layer::BoundaryDiskBTreeLayer;
+
+mod layer;
 
 // -------------------------------------------------------
-//                  Base Component
+//                 Boundary Internal Component
 // -------------------------------------------------------
 
-// pub type BTreeBaseAddressDisk = StoreId;
-//
-// pub struct BTreeBaseComponentDisk<K, V, const FANOUT: usize, PA> {
-//     store: IndexStore,
-//     _ph: std::marker::PhantomData<(K, V, PA)>,
-// }
+pub type BoundaryDiskBTreeInternalAddress = StoreID;
 
-// impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddressDisk, PA>
-//     for BTreeBaseComponentDisk<K, V, FANOUT, PA>
-// where
-//     K: StaticBounded,
-//     V: 'static,
-//     PA: Address,
-// {
-//     type Node = BTreeNode<K, V, FANOUT>;
-//
-//     fn deref(&self, ptr: BTreeBaseAddressDisk) -> &Self::Node {
-//         todo!()
-//     }
-// }
-//
-//
-// impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>
-//     for BTreeBaseComponent<K, V, FANOUT, PA>
-// where
-//     K: StaticBounded,
-//     V: 'static,
-//     PA: Address,
-// {
-//     fn insert(
-//         &mut self,
-//         ptr: BTreeInternalAddress,
-//         key: K,
-//         value: V,
-//     ) -> Option<PropogateInsert<K, BTreeBaseAddress, PA>> {
-//         if let Some((key, address, parent)) = self.inner.insert(key, value, ptr) {
-//             Some(PropogateInsert::Single(key, address, parent))
-//         } else {
-//             None
-//         }
-//     }
-//
-//     fn search(&self, ptr: BTreeInternalAddress, key: &K) -> Option<&V> {
-//         let node = self.inner.deref(ptr);
-//         node.inner.search_exact(key)
-//     }
-// }
-//
-// impl<K, V, const FANOUT: usize, PA> BaseComponentBuildDisk<K, V>
-//     for BTreeBaseComponentDisk<K, V, FANOUT, PA>
-// where
-//     K: StaticBounded,
-//     V: 'static,
-//     PA: Address,
-// {
-//     fn load(store: IndexStore) -> Self {
-//         Self {
-//             store,
-//             _ph: std::marker::PhantomData,
-//         }
-//     }
-//
-//     fn build(iter: impl Iterator<Item = (K, V)>, store: IndexStore) -> Self {
-//         Self {
-//             store,
-//             _ph: std::marker::PhantomData,
-//         }
-//     }
-// }
+pub struct BoundaryDiskBTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA> {
+    inner: BoundaryDiskBTreeLayer<K, BA, FANOUT, PA>,
+    _ph: std::marker::PhantomData<X>,
+}
+
+impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, BoundaryDiskBTreeInternalAddress, PA>
+    for BoundaryDiskBTreeInternalComponent<K, X, FANOUT, BA, PA>
+where
+    K: StaticBounded + Serialize + for<'de> Deserialize<'de>,
+    BA: DiskAddress,
+    PA: Address,
+{
+    impl_node_layer!(StoreID, PA);
+}
+
+impl<K, X, BA, PA, B: NodeLayer<K, BA, BoundaryDiskBTreeInternalAddress>, const FANOUT: usize>
+    BoundaryDiskInternalComponent<K, B, BA, BoundaryDiskBTreeInternalAddress, PA>
+    for BoundaryDiskBTreeInternalComponent<K, X, FANOUT, BA, PA>
+where
+    K: StaticBounded + Serialize + for<'de> Deserialize<'de>,
+    BA: DiskAddress,
+    PA: Address,
+{
+    fn search(&self, _: &B, ptr: BoundaryDiskBTreeInternalAddress, key: K) -> crate::Result<BA> {
+        Ok(self.inner.get_node(ptr)?.search_lub(&key).clone())
+    }
+
+    fn insert(
+        &mut self,
+        base: &mut B,
+        prop: PropagateInsert<K, BA, BoundaryDiskBTreeInternalAddress>,
+    ) -> crate::Result<Option<PropagateInsert<K, BoundaryDiskBTreeInternalAddress, PA>>> {
+        Ok(match prop {
+            PropagateInsert::Single(key, address, ptr) => self
+                .inner
+                .insert_with_parent(key, address, base, ptr)?
+                .map(|(key, address, parent)| PropagateInsert::Single(key, address, parent)),
+            PropagateInsert::Replace { .. } => {
+                unimplemented!()
+            }
+        })
+    }
+
+    fn load(base: &mut B, store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
+        let mut result = BoundaryDiskBTreeLayer::load(store, ident)?;
+        result.fill_with_parent(base)?;
+
+        Ok(Self {
+            inner: result,
+            _ph: std::marker::PhantomData,
+        })
+    }
+}
+
+// -------------------------------------------------------
+//                 Boundary Base Component
+// -------------------------------------------------------
+
+pub type BoundaryDiskBTreeBaseAddress = StoreID;
+
+pub struct BoundaryDiskBTreeBaseComponent<K, V, const FANOUT: usize, PA> {
+    inner: BoundaryDiskBTreeLayer<K, V, FANOUT, PA>,
+}
+
+impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BoundaryDiskBTreeBaseAddress, PA>
+    for BoundaryDiskBTreeBaseComponent<K, V, FANOUT, PA>
+where
+    K: StaticBounded + Serialize + for<'de> Deserialize<'de>,
+    V: 'static + Serialize + for<'de> Deserialize<'de>,
+    PA: Address,
+{
+    impl_node_layer!(StoreID, PA);
+}
+
+impl<K, V, const FANOUT: usize, PA: 'static>
+    BoundaryDiskBaseComponent<K, V, BoundaryDiskBTreeBaseAddress, PA>
+    for BoundaryDiskBTreeBaseComponent<K, V, FANOUT, PA>
+where
+    K: StaticBounded + Serialize + for<'de> Deserialize<'de>,
+    V: 'static + Clone + Serialize + for<'de> Deserialize<'de>,
+    PA: Address,
+{
+    fn insert(
+        &mut self,
+        ptr: BoundaryDiskBTreeInternalAddress,
+        key: K,
+        value: V,
+    ) -> crate::Result<Option<PropagateInsert<K, BoundaryDiskBTreeBaseAddress, PA>>> {
+        if let Some((key, address, parent)) = self.inner.insert(key, value, ptr)? {
+            Ok(Some(PropagateInsert::Single(key, address, parent)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn search(&self, ptr: BoundaryDiskBTreeInternalAddress, key: K) -> crate::Result<Option<V>> {
+        Ok(self.inner.get_node(ptr)?.search_exact(&key).cloned())
+    }
+
+    fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
+        Ok(Self {
+            inner: BoundaryDiskBTreeLayer::load(store, ident)?,
+        })
+    }
+
+    fn build(
+        store: &mut GlobalStore,
+        ident: impl ToString,
+        iter: impl Iterator<Item = (K, V)>,
+    ) -> crate::Result<Self> {
+        let mut inner = BoundaryDiskBTreeLayer::load(store, ident)?;
+        inner.fill(iter)?;
+
+        Ok(Self { inner })
+    }
+}
