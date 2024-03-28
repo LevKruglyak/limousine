@@ -8,7 +8,7 @@ use crate::{
         list::boundary_disk::{BoundaryDiskList, BoundaryDiskListState},
         storage::{GlobalStore, StoreID},
     },
-    impl_node_layer, Address, KeyBounded, NodeLayer, StaticBounded,
+    impl_node_layer, Address, Key, KeyBounded, NodeLayer, Persisted, StaticBounded,
 };
 
 pub struct BoundaryDiskBTreeLayer<K, V, const FANOUT: usize, PA> {
@@ -17,8 +17,9 @@ pub struct BoundaryDiskBTreeLayer<K, V, const FANOUT: usize, PA> {
 
 impl<K, V, const FANOUT: usize, PA> BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
 where
-    K: Serialize + for<'de> Deserialize<'de> + Ord + Copy,
-    V: Serialize + for<'de> Deserialize<'de> + Clone,
+    K: Persisted + Key,
+    V: Persisted,
+    PA: Address,
 {
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
         Ok(Self {
@@ -72,11 +73,7 @@ where
         Ok(())
     }
 
-    fn insert_into_node(&mut self, key: K, value: &V, ptr: StoreID) -> crate::Result<Option<V>>
-    where
-        K: Copy + Ord,
-        V: Clone,
-    {
+    fn insert_into_node(&mut self, key: K, value: &V, ptr: StoreID) -> crate::Result<Option<V>> {
         self.inner
             .transform_node(ptr, |node| node.insert(key, value.clone()))
     }
@@ -90,12 +87,7 @@ where
         key: K,
         value: V,
         ptr: StoreID,
-    ) -> crate::Result<Option<(K, StoreID, PA)>>
-    where
-        K: Copy + Ord + StaticBounded,
-        V: 'static + Clone,
-        PA: Address,
-    {
+    ) -> crate::Result<Option<(K, StoreID, PA)>> {
         if self.inner.get_node(ptr)?.unwrap().is_full() {
             let parent = self.inner.parent(ptr).unwrap();
 

@@ -7,15 +7,17 @@ trait_set! {
     /// A simple address trait,
     pub trait Address = Eq + Clone + 'static;
 
-    pub trait Persisted = Serialize + for<'de> Deserialize<'de>;
+    pub trait Persisted = Serialize + for<'de> Deserialize<'de> + Clone + 'static;
 
-    pub trait DiskAddress = Address + Default + Persisted;
+    pub trait PersistedAddress = Address + Default + Persisted;
 
     /// General value type, thread-safe
     pub trait Value = Send + Sync + Default + Copy + 'static;
 
-    /// General key type, thread safe, and primitive integer type
-    pub trait Key = Value + PrimInt + StaticBounded;
+    /// General key type, thread safe
+    pub trait Key = Value + StaticBounded;
+
+    pub trait NumKey = Key + PrimInt;
 }
 
 pub trait KeyBounded<K> {

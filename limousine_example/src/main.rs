@@ -6,9 +6,7 @@ create_hybrid_index! {
     name: Index1,
     layout: [
         btree_top(),
-        btree(fanout = 64),
-        btree(fanout = 64),
-        btree(fanout = 1024, persist),
+        btree(fanout = 8, persist),
     ]
 }
 
