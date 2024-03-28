@@ -48,8 +48,8 @@ pub trait BoundaryDiskInternalComponent<K, Base, BA, SA, PA>
 where
     Self: NodeLayer<K, SA, PA>,
     Base: NodeLayer<K, BA, SA>,
-    BA: PersistedAddress,
-    SA: PersistedAddress,
+    BA: Persisted + Address,
+    SA: Persisted + Address,
     PA: Address,
     K: Copy,
 {
@@ -68,9 +68,9 @@ pub trait DeepDiskInternalComponent<K, Base, BA, SA, PA>
 where
     Self: NodeLayer<K, SA, PA>,
     Base: NodeLayer<K, BA, SA>,
-    BA: PersistedAddress,
-    SA: PersistedAddress,
-    PA: PersistedAddress,
+    BA: Persisted + Address,
+    SA: Persisted + Address,
+    PA: Persisted + Address,
     K: Copy,
 {
     fn search(&self, base: &Base, ptr: SA, key: K) -> crate::Result<BA>;
@@ -101,7 +101,7 @@ where
 pub trait BoundaryDiskBaseComponent<K, V, SA, PA>
 where
     Self: NodeLayer<K, SA, PA>,
-    SA: PersistedAddress,
+    SA: Persisted + Address,
     PA: Address,
     K: Copy,
 {

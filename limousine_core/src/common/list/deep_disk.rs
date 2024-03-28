@@ -24,7 +24,7 @@ pub struct DeepDiskListCatalogPage<PA> {
 
 pub struct DeepDiskList<N, PA>
 where
-    PA: PersistedAddress,
+    PA: Persisted + Address,
 {
     store: LocalStore<DeepDiskListCatalogPage<PA>>,
     _ph: std::marker::PhantomData<N>,
@@ -33,7 +33,7 @@ where
 impl<N, PA> DeepDiskList<N, PA>
 where
     N: Serialize + for<'de> Deserialize<'de>,
-    PA: PersistedAddress,
+    PA: Persisted + Address,
 {
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
         let store = store.load_local_store(ident)?;
@@ -53,7 +53,7 @@ impl<K, N, PA> NodeLayer<K, StoreID, PA> for DeepDiskList<N, PA>
 where
     K: Copy,
     N: KeyBounded<K> + Serialize + for<'de> Deserialize<'de> + 'static,
-    PA: PersistedAddress,
+    PA: Persisted + Address,
 {
     fn first(&self) -> StoreID {
         self.store.catalog.first
