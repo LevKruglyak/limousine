@@ -7,7 +7,9 @@ trait_set! {
     /// A simple address trait,
     pub trait Address = Eq + Clone + 'static;
 
-    pub trait DiskAddress = Address + Default + Serialize + for<'de> Deserialize<'de>;
+    pub trait Persisted = Serialize + for<'de> Deserialize<'de>;
+
+    pub trait DiskAddress = Address + Default + Persisted;
 
     /// General value type, thread-safe
     pub trait Value = Send + Sync + Default + Copy + 'static;

@@ -28,6 +28,8 @@ pub use classical::BTreeInternalComponent;
 
 pub use classical::BTreeTopComponent;
 
+pub use common::storage::GlobalStore;
+
 pub use component::*;
 pub use index::*;
 pub use node_layer::*;

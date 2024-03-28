@@ -30,7 +30,7 @@ pub fn create_index_struct(
     let body = quote! {
         pub struct #name<K: Key, V: Value> {
             #(#field_bodies)*
-            store: IndexStore,
+            store: GlobalStore,
         }
     };
 
@@ -49,22 +49,24 @@ pub fn create_index_impl(
     let build_body = create_build_body(layout, aliases, fields);
 
     let body = quote! {
-        impl<K: Key, V: Value> Index<K, V> for #name<K, V> {
-            fn search(&self, key: &K) -> Option<&V> {
+        impl<K: Key, V: Value> PersistedIndex<K, V> for #name<K, V>
+        where
+            K: limousine_engine::private::Persisted,
+            V: limousine_engine::private::Persisted,
+        {
+            fn search(&self, key: K) -> limousine_engine::Result<Option<V>> {
                 #search_body
             }
 
-            fn insert(&mut self, key: K, value: V) -> Option<V> {
+            fn insert(&mut self, key: K, value: V) -> limousine_engine::Result<Option<V>> {
                 #insert_body
             }
-        }
 
-        impl<K: Key, V: Value> IndexBuildDisk<K, V> for #name<K, V> {
-            fn load(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            fn load(path: impl AsRef<Path>) -> limousine_engine::Result<Self> {
                 #load_body
             }
 
-            fn build(iter: impl Iterator<Item = (K, V)>, path: impl AsRef<Path>) -> std::io::Result<Self> {
+            fn build(iter: impl Iterator<Item = (K, V)>, path: impl AsRef<Path>) -> limousine_engine::Result<Self> {
                 #build_body
             }
         }
@@ -87,7 +89,7 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = component_vars[0].clone();
     let next = component_vars[1].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(&self.#next, &key);});
+    search_body.extend(quote! { let #search = self.#field.search(&self.#next, key);});
 
     // Internal components
     for index in 1..=layout.internal.len() {
@@ -96,8 +98,15 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         let field = component_vars[index].clone();
         let next = component_vars[index + 1].clone();
 
-        search_body
-            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+        if layout.internal[index - 1].is_persisted() {
+            search_body.extend(
+                quote! { let #search = self.#field.search(&self.#next, #prev_search, key)?;},
+            );
+        } else {
+            search_body.extend(
+                quote! { let #search = self.#field.search(&self.#next, #prev_search, key);},
+            );
+        }
     }
 
     // Base component
@@ -106,8 +115,8 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let prev_search = search_vars[index - 1].clone();
     let field = component_vars[index].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(#prev_search, &key);});
-    search_body.extend(quote! { #search });
+    search_body.extend(quote! { let #search = self.#field.search(#prev_search, key)?;});
+    search_body.extend(quote! { Ok(#search) });
 
     search_body
 }
@@ -119,14 +128,14 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         .collect();
 
     let component_vars: Vec<Ident> = fields.iter().cloned().rev().collect();
-    let mut search_body = TokenStream::new();
+    let mut insert_body = TokenStream::new();
 
     // Top component
     let search = search_vars[0].clone();
     let field = component_vars[0].clone();
     let next = component_vars[1].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(&self.#next, &key);});
+    insert_body.extend(quote! { let #search = self.#field.search(&self.#next, key);});
 
     // Internal components
     for index in 1..=layout.internal.len() {
@@ -135,8 +144,15 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         let field = component_vars[index].clone();
         let next = component_vars[index + 1].clone();
 
-        search_body
-            .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);});
+        if layout.internal[index - 1].is_persisted() {
+            insert_body.extend(
+                quote! { let #search = self.#field.search(&self.#next, #prev_search, key)?;},
+            );
+        } else {
+            insert_body.extend(
+                quote! { let #search = self.#field.search(&self.#next, #prev_search, key);},
+            );
+        }
     }
 
     // Base component
@@ -145,9 +161,9 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let prev_search = search_vars[index - 1].clone();
     let field = component_vars[index].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(#prev_search, &key);});
+    insert_body.extend(quote! { let #search = self.#field.search(#prev_search, key)?;});
 
-    search_body.extend(quote! { let result = s0.copied(); });
+    insert_body.extend(quote! { let result = s0; });
 
     // Insert stage
     let insert_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
@@ -158,12 +174,12 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = fields[0].clone();
     let search = search_vars[search_vars.len() - 2].clone();
 
-    search_body.extend(quote! {
+    insert_body.extend(quote! {
         let #var;
-        if let Some(x) = self.#field.insert(#search, key, value) {
+        if let Some(x) = self.#field.insert(#search, key, value)? {
             #var = x;
         } else {
-            return result;
+            return Ok(result);
         }
     });
 
@@ -174,14 +190,25 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         let field = fields[index].clone();
         let prev_field = fields[index - 1].clone();
 
-        search_body.extend(quote! {
-            let #var;
-            if let Some(x) = self.#field.insert(&mut self.#prev_field, #prev_var) {
-                #var = x;
-            } else {
-                return result;
-            }
-        });
+        if layout.internal[index - 1].is_persisted() {
+            insert_body.extend(quote! {
+                let #var;
+                if let Some(x) = self.#field.insert(&mut self.#prev_field, #prev_var)? {
+                    #var = x;
+                } else {
+                    return Ok(result);
+                }
+            });
+        } else {
+            insert_body.extend(quote! {
+                let #var;
+                if let Some(x) = self.#field.insert(&mut self.#prev_field, #prev_var) {
+                    #var = x;
+                } else {
+                    return Ok(result);
+                }
+            });
+        }
     }
 
     let index = layout.internal.len() + 1;
@@ -192,12 +219,12 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = fields[index].clone();
     let prev_field = fields[index - 1].clone();
 
-    search_body.extend(quote! {
+    insert_body.extend(quote! {
         let #var = self.#field.insert(&mut self.#prev_field, #prev_var);
     });
 
-    search_body.extend(quote! { result });
-    search_body
+    insert_body.extend(quote! { Ok(result) });
+    insert_body
 }
 
 fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
@@ -211,13 +238,14 @@ fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) 
 
     empty_body.extend(quote! {
         // Load the store
-        let mut store = IndexStore::load(path)?;
+        let mut store = GlobalStore::load(path)?;
     });
 
     // Base layer is guaranteed to be a disk component
+    let alias_name = alias.to_string();
     empty_body.extend(quote! {
         // Load the store
-        let mut #var = #alias::load(store.new_local_store());
+        let mut #var = #alias::load(&mut store, #alias_name)?;
     });
 
     // Add internal components
@@ -226,9 +254,10 @@ fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) 
         let var = fields[index].clone();
         let prev_var = fields[index - 1].clone();
 
+        let alias_name = alias.to_string();
         if layout.internal[index - 1].is_persisted() {
             empty_body.extend(quote! {
-                let mut #var = #alias::load(store.clone());
+                let mut #var = #alias::load(&mut store, #alias_name)?;
             });
         } else {
             empty_body.extend(quote! {
@@ -259,12 +288,18 @@ fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) 
 fn create_build_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
     let mut build_body = TokenStream::new();
 
+    build_body.extend(quote! {
+        // Load the store
+        let mut store = GlobalStore::load(path)?;
+    });
+
     // Add body as the first component
     let alias = aliases[0].clone();
     let var = fields[0].clone();
 
+    let alias_name = alias.to_string();
     build_body.extend(quote! {
-        let mut #var = #alias::build(iter);
+        let mut #var = #alias::build(&mut store, #alias_name, iter)?;
     });
 
     // Add internal components
@@ -273,9 +308,16 @@ fn create_build_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident])
         let var = fields[index].clone();
         let prev_var = fields[index - 1].clone();
 
-        build_body.extend(quote! {
-            let mut #var = #alias::build(&mut #prev_var);
-        });
+        let alias_name = alias.to_string();
+        if layout.internal[index - 1].is_persisted() {
+            build_body.extend(quote! {
+                let mut #var = #alias::build(&mut store, #alias_name)?;
+            });
+        } else {
+            build_body.extend(quote! {
+                let mut #var = #alias::build(&mut #prev_var);
+            });
+        }
     }
 
     let index = layout.internal.len() + 1;
@@ -290,7 +332,7 @@ fn create_build_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident])
     build_body.extend(quote! {
         Ok(Self {
             #(#fields,)*
-            store: IndexStore::load(path)?,
+            store,
         })
     });
 

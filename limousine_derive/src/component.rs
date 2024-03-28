@@ -93,14 +93,50 @@ impl TopComponent {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum PersistType {
+    InMemory,
+    BoundaryDisk,
+    DeepDisk,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InternalComponent {
-    BTree { fanout: usize, persist: bool },
+    BTree { fanout: usize, persist: PersistType },
 }
 
 impl InternalComponent {
-    pub fn try_new(component: Component) -> Option<Self> {
-        match component {
-            Component::BTree { fanout, persist } => Some(Self::BTree { fanout, persist }),
+    pub fn try_new(component: Component, is_parent_persisted: bool) -> Option<Self> {
+        match (component, is_parent_persisted) {
+            (
+                Component::BTree {
+                    fanout,
+                    persist: false,
+                },
+                false,
+            ) => Some(Self::BTree {
+                fanout,
+                persist: PersistType::InMemory,
+            }),
+            (
+                Component::BTree {
+                    fanout,
+                    persist: true,
+                },
+                false,
+            ) => Some(Self::BTree {
+                fanout,
+                persist: PersistType::BoundaryDisk,
+            }),
+            (
+                Component::BTree {
+                    fanout,
+                    persist: true,
+                },
+                true,
+            ) => Some(Self::BTree {
+                fanout,
+                persist: PersistType::DeepDisk,
+            }),
             _ => None,
         }
     }
@@ -113,46 +149,85 @@ impl InternalComponent {
         match *self {
             InternalComponent::BTree {
                 fanout,
-                persist: false,
+                persist: PersistType::InMemory,
             } => quote!(BTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>)
                 .to_token_stream(),
 
             InternalComponent::BTree {
                 fanout,
-                persist: true,
-            } => quote!(BTreeInternalComponentDisk<K, V, #fanout, #base_address, #parent_address>)
+                persist: PersistType::BoundaryDisk,
+            } => quote!(BoundaryDiskBTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>)
+                .to_token_stream(),
+                
+            InternalComponent::BTree {
+                fanout,
+                persist: PersistType::DeepDisk,
+            } => quote!(DeepDiskBTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>)
                 .to_token_stream(),
         }
     }
 
     pub fn address_type(&self) -> TokenStream {
         match *self {
-            InternalComponent::BTree { persist: false, .. } => {
+            InternalComponent::BTree { persist: PersistType::InMemory, .. } => {
                 quote!(BTreeInternalAddress).to_token_stream()
             }
 
-            InternalComponent::BTree { persist: true, .. } => {
-                quote!(BTreeInternalAddressDisk).to_token_stream()
+            InternalComponent::BTree { persist: PersistType::BoundaryDisk, .. } => {
+                quote!(BoundaryDiskBTreeInternalAddress).to_token_stream()
+            }
+
+            InternalComponent::BTree { persist: PersistType::DeepDisk, .. } => {
+                quote!(DeepDiskBTreeInternalAddress).to_token_stream()
             }
         }
     }
 
     pub fn is_persisted(&self) -> bool {
         match *self {
-            InternalComponent::BTree { persist, .. } => persist,
+            InternalComponent::BTree { persist, .. } => persist != PersistType::InMemory,
         }
     }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BaseComponent {
-    BTree { fanout: usize, persist: bool },
+    BTree { fanout: usize, persist: PersistType },
 }
 
 impl BaseComponent {
-    pub fn try_new(component: Component) -> Option<Self> {
-        match component {
-            Component::BTree { fanout, persist } => Some(Self::BTree { fanout, persist }),
+    pub fn try_new(component: Component, is_parent_persisted: bool) -> Option<Self> {
+        match (component, is_parent_persisted) {
+            (
+                Component::BTree {
+                    fanout,
+                    persist: false,
+                },
+                false,
+            ) => Some(Self::BTree {
+                fanout,
+                persist: PersistType::InMemory,
+            }),
+            (
+                Component::BTree {
+                    fanout,
+                    persist: true,
+                },
+                false,
+            ) => Some(Self::BTree {
+                fanout,
+                persist: PersistType::BoundaryDisk,
+            }),
+            (
+                Component::BTree {
+                    fanout,
+                    persist: true,
+                },
+                true,
+            ) => Some(Self::BTree {
+                fanout,
+                persist: PersistType::DeepDisk,
+            }),
             _ => None,
         }
     }
@@ -161,31 +236,45 @@ impl BaseComponent {
         match *self {
             BaseComponent::BTree {
                 fanout,
-                persist: false,
+                persist: PersistType::InMemory,
             } => quote!(BTreeBaseComponent<K, V, #fanout, #base_address>).to_token_stream(),
 
             BaseComponent::BTree {
                 fanout,
-                persist: true,
-            } => quote!(BTreeBaseComponentDisk<K, V, #fanout, #base_address>).to_token_stream(),
+                persist: PersistType::BoundaryDisk,
+            } => quote!(BoundaryDiskBTreeBaseComponent<K, V, #fanout, #base_address>)
+                .to_token_stream(),
+
+            BaseComponent::BTree {
+                fanout,
+                persist: PersistType::DeepDisk,
+            } => quote!(BoundaryDiskBTreeBaseComponent<K, V, #fanout, #base_address>)
+                .to_token_stream(),
         }
     }
 
     pub fn address_type(&self) -> TokenStream {
         match *self {
-            BaseComponent::BTree { persist: false, .. } => {
-                quote!(BTreeBaseAddress).to_token_stream()
-            }
+            BaseComponent::BTree {
+                persist: PersistType::InMemory,
+                ..
+            } => quote!(BTreeBaseAddress).to_token_stream(),
 
-            BaseComponent::BTree { persist: true, .. } => {
-                quote!(BTreeBaseAddressDisk).to_token_stream()
-            }
+            BaseComponent::BTree {
+                persist: PersistType::BoundaryDisk,
+                ..
+            } => quote!(BoundaryDiskBTreeBaseAddress).to_token_stream(),
+
+            BaseComponent::BTree {
+                persist: PersistType::DeepDisk,
+                ..
+            } => quote!(DeepDiskDiskBTreeBaseAddress).to_token_stream(),
         }
     }
 
     pub fn is_persisted(&self) -> bool {
         match *self {
-            BaseComponent::BTree { persist, .. } => persist,
+            BaseComponent::BTree { persist, .. } => persist != PersistType::InMemory,
         }
     }
 }

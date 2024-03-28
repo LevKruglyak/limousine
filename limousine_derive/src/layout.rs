@@ -56,9 +56,12 @@ impl Parse for HybridLayout {
                 );
             }
 
+            let is_parent_persisted = parsed.is_persisted() && !in_persisted_region;
             in_persisted_region |= parsed.is_persisted();
 
-            if let Some(internal_component) = InternalComponent::try_new(parsed.into()) {
+            if let Some(internal_component) =
+                InternalComponent::try_new(parsed.into(), is_parent_persisted)
+            {
                 internal.push(internal_component);
             } else {
                 bail!(parsed.ident(), "Invalid internal component type!");
@@ -67,7 +70,9 @@ impl Parse for HybridLayout {
 
         // Parse base components
         let base;
-        if let Some(base_component) = BaseComponent::try_new(components.last().unwrap().into()) {
+        if let Some(base_component) =
+            BaseComponent::try_new(components.last().unwrap().into(), in_persisted_region)
+        {
             base = base_component;
         } else {
             bail!("Invalid base component type!")

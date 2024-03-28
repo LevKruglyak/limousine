@@ -128,6 +128,7 @@ impl Parse for MacroInput {
         }
 
         let layout = syn::parse(layout_stream)?;
+        eprintln!("{:?}", layout);
 
         Ok(Self {
             name: name_ident,

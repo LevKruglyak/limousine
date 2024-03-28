@@ -25,6 +25,8 @@ pub fn create_implementation(name: Ident, layout: HybridLayout) -> proc_macro::T
         memory::create_index_impl(&name, &layout, &alias, &index_fields)
     };
 
+    eprintln!("{:#?}", alias);
+
     let mut implementation = proc_macro2::TokenStream::new();
     implementation.extend(quote! {
         pub mod #mod_name {

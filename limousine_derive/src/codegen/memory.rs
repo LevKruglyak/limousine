@@ -116,14 +116,14 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         .collect();
 
     let component_vars: Vec<Ident> = fields.iter().cloned().rev().collect();
-    let mut search_body = TokenStream::new();
+    let mut insert_body = TokenStream::new();
 
     // Top component
     let search = search_vars[0].clone();
     let field = component_vars[0].clone();
     let next = component_vars[1].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(&self.#next, key);});
+    insert_body.extend(quote! { let #search = self.#field.search(&self.#next, key);});
 
     // Internal components
     for index in 1..=layout.internal.len() {
@@ -132,7 +132,7 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         let field = component_vars[index].clone();
         let next = component_vars[index + 1].clone();
 
-        search_body
+        insert_body
             .extend(quote! { let #search = self.#field.search(&self.#next, #prev_search, key);});
     }
 
@@ -142,9 +142,9 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let prev_search = search_vars[index - 1].clone();
     let field = component_vars[index].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(#prev_search, key);});
+    insert_body.extend(quote! { let #search = self.#field.search(#prev_search, key);});
 
-    search_body.extend(quote! { let result = s0; });
+    insert_body.extend(quote! { let result = s0; });
 
     // Insert stage
     let insert_vars: Vec<Ident> = (0..=layout.internal.len() + 1)
@@ -155,7 +155,7 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = fields[0].clone();
     let search = search_vars[search_vars.len() - 2].clone();
 
-    search_body.extend(quote! {
+    insert_body.extend(quote! {
         let #var;
         if let Some(x) = self.#field.insert(#search, key, value) {
             #var = x;
@@ -171,7 +171,7 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         let field = fields[index].clone();
         let prev_field = fields[index - 1].clone();
 
-        search_body.extend(quote! {
+        insert_body.extend(quote! {
             let #var;
             if let Some(x) = self.#field.insert(&mut self.#prev_field, #prev_var) {
                 #var = x;
@@ -189,12 +189,12 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = fields[index].clone();
     let prev_field = fields[index - 1].clone();
 
-    search_body.extend(quote! {
+    insert_body.extend(quote! {
         let #var = self.#field.insert(&mut self.#prev_field, #prev_var);
     });
 
-    search_body.extend(quote! { result });
-    search_body
+    insert_body.extend(quote! { result });
+    insert_body
 }
 
 fn create_empty_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
