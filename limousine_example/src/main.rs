@@ -7,7 +7,7 @@ create_hybrid_index! {
     layout: [
         btree_top(),
         btree(fanout = 64),
-        btree(fanout = 64),
+        btree(fanout = 64, persist),
         btree(fanout = 1024, persist),
     ]
 }

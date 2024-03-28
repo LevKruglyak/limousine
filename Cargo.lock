@@ -256,14 +256,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "limousine_debug"
-version = "0.1.0"
-dependencies = [
- "limousine_core",
- "limousine_engine",
-]
-
-[[package]]
 name = "limousine_derive"
 version = "0.1.0"
 dependencies = [

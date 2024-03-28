@@ -56,7 +56,7 @@ impl Parse for HybridLayout {
                 );
             }
 
-            let is_parent_persisted = parsed.is_persisted() && !in_persisted_region;
+            let is_parent_persisted = parsed.is_persisted() && in_persisted_region;
             in_persisted_region |= parsed.is_persisted();
 
             if let Some(internal_component) =
