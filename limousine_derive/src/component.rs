@@ -104,6 +104,14 @@ pub enum InternalComponent {
     BTree { fanout: usize, persist: PersistType },
 }
 
+impl ToString for InternalComponent {
+    fn to_string(&self) -> String {
+        match self {
+            Self::BTree { fanout, persist } => format!("{persist:?}BTreeInternal{fanout:?}").to_string()
+        }
+    }
+}
+
 impl InternalComponent {
     pub fn try_new(component: Component, is_parent_persisted: bool) -> Option<Self> {
         match (component, is_parent_persisted) {
@@ -193,6 +201,14 @@ impl InternalComponent {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BaseComponent {
     BTree { fanout: usize, persist: PersistType },
+}
+
+impl ToString for BaseComponent {
+    fn to_string(&self) -> String {
+        match self {
+            Self::BTree { fanout, persist } => format!("{persist:?}BTreeBase{fanout:?}").to_string()
+        }
+    }
 }
 
 impl BaseComponent {

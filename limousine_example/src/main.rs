@@ -1,59 +1,51 @@
 #![allow(unused)]
 
-use limousine_engine::prelude::*;
+use std::time::Instant;
 
-// create_hybrid_index! {
-//     name: Index2,
-//     path: "limousine_example/sample.layout"
-// }
-//
-// type K = u128;
-// type V = u128;
-//
-// fn test_index<T: Index<K, V>>(num: K) {
-//     let name_vec: Vec<&str> = core::any::type_name::<T>().split("::").collect();
-//     let name = name_vec.last().unwrap().split_once("<").unwrap().0;
-//
-//     let mut index: T = T::empty();
-//
-//     let start = std::time::Instant::now();
-//     for i in 0..num {
-//         index.insert(i, i * i);
-//     }
-//     println!(
-//         "{} insertion took {:?} ms ",
-//         name,
-//         start.elapsed().as_millis()
-//     );
-//
-//     let start = std::time::Instant::now();
-//     for i in 0..num {
-//         assert_eq!(index.search(i), Some(i * i));
-//     }
-//     println!("{} search took {:?} ms ", name, start.elapsed().as_millis());
-// }
+use limousine_core::Path;
+use limousine_engine::prelude::*;
+use rand::{thread_rng, Rng};
+use rand_distr::Uniform;
 
 create_hybrid_index! {
-    name: Index1,
+    name: CustomIndex,
     layout: [
         btree_top(),
-        btree(fanout = 8, persist),
+        btree(fanout = 8),
+        btree(fanout = 32, persist),
     ]
 }
 
 fn main() -> limousine_engine::Result<()> {
-    let mut index: Index1<i32, i32> =
-        Index1::build((0..100).map(|i| (i, i * i)), "Index1.lim_idx")?;
+    let mut custom_index: CustomIndex<i32, i32> = CustomIndex::load("data/custom_index")?;
+    let mut sled_index = sled::open("data/sled")?;
 
-    for i in 0..100 {
-        let result = index.search(i)?;
-        println!("Search: {i:?} -> {result:?}");
+    let mut rng = thread_rng();
+    let uniform = Uniform::new(0, i32::MAX);
+
+    let start = Instant::now();
+    for i in 0..100_000 {
+        let key = rng.sample(uniform);
+        let value = rng.sample(uniform);
+
+        custom_index.insert(key, value)?;
     }
+    println!("time to insert into `CustomIndex`: {:?}", start.elapsed());
 
-    // for i in 0..100 {
-    //     println!("Insert: {i:?}");
-    //     index.insert(i, i * i).expect("Failed to insert!");
-    // }
+    let start = Instant::now();
+    for i in 0..100_000 {
+        let key = rng.sample(uniform);
+        let value = rng.sample(uniform);
+
+        sled_index.insert(&key.to_le_bytes(), &value.to_le_bytes())?;
+    }
+    println!("time to insert into `sled`: {:?}", start.elapsed());
+
+    let start = Instant::now();
+    println!("search: {:?}", custom_index.search(60_000_000)?);
+    println!("elapsed: {:?}", start.elapsed());
+
+    println!("{:#?}", custom_index.store.stats());
 
     Ok(())
 

@@ -10,7 +10,7 @@ trait_set! {
     pub trait Persisted = Serialize + for<'de> Deserialize<'de> + Clone + Default + 'static;
 
     /// General key type, thread safe
-    pub trait Key = Send + Sync + Default + Copy + 'static + StaticBounded;
+    pub trait Key = Send + Sync + Default + Copy + 'static + StaticBounded + std::fmt::Debug;
 
     /// General value type, thread-safe
     pub trait Value = Send + Sync + Default + Copy + 'static + std::fmt::Debug;

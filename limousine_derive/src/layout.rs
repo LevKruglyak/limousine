@@ -17,6 +17,20 @@ impl HybridLayout {
             .any(|component| component.is_persisted())
             || self.base.is_persisted()
     }
+
+    pub fn persist_checksum(&self) -> String {
+        let mut feed = self.base.to_string();
+        for component in self
+            .internal
+            .iter()
+            .filter(|component| component.is_persisted())
+        {
+            feed += &component.to_string();
+        }
+
+        use base64::prelude::*;
+        BASE64_URL_SAFE.encode(md5::compute(feed).to_vec())
+    }
 }
 
 impl Parse for HybridLayout {

@@ -14,6 +14,8 @@ struct GlobalStoreCatalog {
     registry: HashMap<String, StoreID>,
 }
 
+const CACHE_SIZE: usize = 10_000;
+
 const GLOBAL_STORE_CATALOG_ID: StoreID = 0;
 
 impl Default for GlobalStoreCatalog {
@@ -36,8 +38,26 @@ pub struct GlobalStore {
 
 struct GlobalStoreInner {
     store: marble::Marble,
+    cache: HashMap<StoreID, Vec<u8>>,
+
     active_stores: HashSet<String>,
     catalog: GlobalStoreCatalog,
+}
+
+impl GlobalStoreInner {
+    pub fn flush_cache(&mut self) -> crate::Result<()> {
+        let mut batch = Vec::new();
+        {
+            for (&id, data) in self.cache.iter() {
+                batch.push((id, Some(data.clone())));
+            }
+        }
+
+        self.store.write_batch(batch)?;
+        self.cache.clear();
+
+        Ok(())
+    }
 }
 
 impl GlobalStore {
@@ -59,6 +79,7 @@ impl GlobalStore {
         Ok(GlobalStore {
             inner: Rc::new(RefCell::new(GlobalStoreInner {
                 store,
+                cache: HashMap::new(),
                 catalog,
                 active_stores: HashSet::new(),
             })),
@@ -110,17 +131,19 @@ impl GlobalStore {
 
     pub fn flush(&mut self) -> crate::Result<()> {
         let catalog = self.inner_ref_mut().catalog.clone();
-        self.write_page(&catalog, GLOBAL_STORE_CATALOG_ID)
+        self.write_page(&catalog, GLOBAL_STORE_CATALOG_ID)?;
+        self.inner_ref_mut().flush_cache()?;
+
+        Ok(())
+    }
+
+    pub fn stats(&self) -> marble::Stats {
+        self.inner_ref().store.stats()
     }
 }
 
 impl Drop for GlobalStore {
     fn drop(&mut self) {
-        self.inner_ref_mut()
-            .store
-            .maintenance()
-            .expect("Defragmentation failed!");
-
         assert_eq!(
             Rc::strong_count(&self.inner),
             1,
@@ -128,6 +151,11 @@ impl Drop for GlobalStore {
         );
 
         self.flush().expect("Failed to flush GlobalStore to disk!");
+
+        self.inner_ref_mut()
+            .store
+            .maintenance()
+            .expect("Defragmentation failed!");
     }
 }
 
@@ -173,6 +201,7 @@ where
         if self.inner_ref_mut().catalog.ids.free(id) {
             let empty_page: Option<[u8; 1]> = None;
             self.inner_ref_mut().store.write_batch([(id, empty_page)])?;
+            self.inner_ref_mut().cache.remove(&id);
             return Ok(true);
         }
 
@@ -186,6 +215,11 @@ where
             clear_batch.push((id, None));
         }
 
+        for (&id, _) in self.inner_ref().cache.iter() {
+            clear_batch.push((id, None));
+        }
+
+        self.inner_ref_mut().cache.clear();
         self.inner_ref_mut().store.write_batch(clear_batch)?;
         self.inner_ref_mut().catalog.ids.clear();
 
@@ -197,7 +231,12 @@ where
         P: Serialize,
     {
         let data = bincode::serialize(page)?;
-        self.inner_ref().store.write_batch([(id, Some(&data))])?;
+        self.inner_ref_mut().cache.insert(id, data);
+
+        // Periodically flush the cache when writing
+        if self.inner_ref_mut().cache.len() > CACHE_SIZE {
+            self.inner_ref_mut().flush_cache()?;
+        }
 
         Ok(())
     }
@@ -206,6 +245,10 @@ where
     where
         for<'de> P: Deserialize<'de>,
     {
+        if let Some(data) = self.inner_ref().cache.get(&id) {
+            return Ok(Some(bincode::deserialize(data.as_ref())?));
+        }
+
         if let Some(data) = self.inner_ref().store.read(id)? {
             return Ok(Some(bincode::deserialize(data.as_ref())?));
         }

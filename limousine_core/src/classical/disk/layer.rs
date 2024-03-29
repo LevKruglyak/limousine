@@ -1,4 +1,4 @@
-use std::ops::Bound;
+use std::{fmt::Debug, ops::Bound};
 
 use crate::{
     classical::node::BTreeNode,
@@ -11,6 +11,21 @@ use crate::{
 
 pub struct BoundaryDiskBTreeLayer<K, V, const FANOUT: usize, PA> {
     inner: BoundaryDiskList<BTreeNode<K, V, FANOUT>, PA>,
+}
+
+impl<K: Debug, V: Debug, const FANOUT: usize, PA> Debug for BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
+where
+    K: Persisted + Key,
+    V: Persisted,
+    PA: Address,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (node, ptr) in self.inner.range(Bound::Unbounded, Bound::Unbounded) {
+            write!(f, "node: [0x{ptr:?}]: {node:?}\n")?;
+        }
+
+        write!(f, "")
+    }
 }
 
 impl<K, V, const FANOUT: usize, PA> BoundaryDiskBTreeLayer<K, V, FANOUT, PA>

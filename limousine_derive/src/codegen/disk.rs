@@ -30,7 +30,7 @@ pub fn create_index_struct(
     let body = quote! {
         pub struct #name<K: Key, V: Value> {
             #(#field_bodies)*
-            store: GlobalStore,
+            pub store: GlobalStore,
         }
     };
 
@@ -48,6 +48,8 @@ pub fn create_index_impl(
     let load_body = create_load_body(layout, aliases, fields);
     let build_body = create_build_body(layout, aliases, fields);
 
+    let checksum = layout.persist_checksum();
+
     let body = quote! {
         impl<K: Key, V: Value> PersistedIndex<K, V> for #name<K, V>
         where
@@ -63,10 +65,12 @@ pub fn create_index_impl(
             }
 
             fn load(path: impl AsRef<Path>) -> limousine_engine::Result<Self> {
+                let path = limousine_engine::private::add_prefix_to_path(path, #checksum.to_string())?;
                 #load_body
             }
 
             fn build(iter: impl Iterator<Item = (K, V)>, path: impl AsRef<Path>) -> limousine_engine::Result<Self> {
+                let path = limousine_engine::private::add_prefix_to_path(path, #checksum.to_string())?;
                 #build_body
             }
         }

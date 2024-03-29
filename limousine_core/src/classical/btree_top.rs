@@ -1,24 +1,29 @@
-use crate::component::*;
 use crate::node_layer::NodeLayer;
 use crate::traits::Address;
+use crate::{component::*, Key};
 use std::collections::BTreeMap;
 use std::ops::Bound;
 
 /// A `TopComponent` implementation built around the BTreeMap implementation in the Rust standard
 /// library.
 pub struct BTreeTopComponent<K, X, A> {
-    inner: BTreeMap<K, A>,
+    pub inner: BTreeMap<K, A>,
     _ph: std::marker::PhantomData<X>,
 }
 
 impl<K, X, Base, BA: Copy> TopComponent<K, Base, BA, ()> for BTreeTopComponent<K, X, BA>
 where
     Base: NodeLayer<K, BA, ()>,
-    K: Ord + Copy,
-    BA: Address,
+    K: Key,
+    BA: Address + std::fmt::Debug,
 {
     fn search(&self, _: &Base, key: K) -> BA {
-        *self.inner.range(..=key).next_back().unwrap().1
+        *self
+            .inner
+            .range(..=key)
+            .next_back()
+            .unwrap_or(self.inner.range(..).next().unwrap())
+            .1
     }
 
     fn insert(&mut self, base: &mut Base, prop: PropagateInsert<K, BA, ()>) {

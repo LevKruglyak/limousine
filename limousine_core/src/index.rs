@@ -1,7 +1,11 @@
-use crate::Persisted;
+use crate::{Key, Persisted, Value};
 use std::path::Path;
 
-pub trait Index<K, V> {
+pub trait Index<K, V>
+where
+    K: Key,
+    V: Value,
+{
     fn search(&self, key: K) -> Option<V>;
 
     fn insert(&mut self, key: K, value: V) -> Option<V>;
@@ -14,8 +18,8 @@ pub trait Index<K, V> {
 pub trait PersistedIndex<K, V>
 where
     Self: Sized,
-    K: Persisted,
-    V: Persisted,
+    K: Persisted + Key,
+    V: Persisted + Value,
 {
     fn search(&self, key: K) -> crate::Result<Option<V>>;
 
