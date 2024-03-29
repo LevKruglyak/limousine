@@ -13,3 +13,5 @@ sys-info = "0.9.1"
 limousine_core = { path = "../limousine_core" }
 limousine_engine = { path = "../limousine_engine" }
 sled = "0.34.7"
+tempdir = "0.3.7"
+tempfile = "3.10.1"
