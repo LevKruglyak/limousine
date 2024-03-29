@@ -25,7 +25,7 @@ where
 
     fn insert(&mut self, key: K, value: V) -> crate::Result<Option<V>>;
 
-    fn load(path: impl AsRef<Path>) -> crate::Result<Self>;
+    fn open(path: impl AsRef<Path>) -> crate::Result<Self>;
 
     fn build(iter: impl Iterator<Item = (K, V)>, path: impl AsRef<Path>) -> crate::Result<Self>;
 }

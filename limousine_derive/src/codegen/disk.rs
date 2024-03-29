@@ -64,7 +64,7 @@ pub fn create_index_impl(
                 #insert_body
             }
 
-            fn load(path: impl AsRef<Path>) -> limousine_engine::Result<Self> {
+            fn open(path: impl AsRef<Path>) -> limousine_engine::Result<Self> {
                 let path = limousine_engine::private::add_prefix_to_path(path, #checksum.to_string())?;
                 #load_body
             }
