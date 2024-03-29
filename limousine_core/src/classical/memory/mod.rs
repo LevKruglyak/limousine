@@ -1,17 +1,16 @@
 mod layer;
 
-use crate::common::bounded::StaticBounded;
-use crate::common::linked_list::Index;
-use crate::common::macros::impl_node_layer;
+use crate::common::list::memory::ArenaID;
 use crate::component::*;
+use crate::node_layer::{impl_node_layer, NodeLayer};
+use crate::traits::{Address, StaticBounded};
 use layer::*;
-
 
 // -------------------------------------------------------
 //                  Internal Component
 // -------------------------------------------------------
 
-pub type BTreeInternalAddress = generational_arena::Index;
+pub type BTreeInternalAddress = ArenaID;
 
 pub struct BTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA> {
     inner: MemoryBTreeLayer<K, BA, FANOUT, PA>,
@@ -25,10 +24,7 @@ where
     BA: Address,
     PA: Address,
 {
-    type Node =
-        <MemoryBTreeLayer<K, BA, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
-
-    impl_node_layer!(Index);
+    impl_node_layer!(ArenaID, PA);
 }
 
 impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
@@ -39,37 +35,26 @@ where
     BA: Address,
     PA: Address,
 {
-    fn search(&self, _: &B, ptr: BTreeInternalAddress, key: &K) -> BA {
-        let node = self.inner.deref(ptr);
-
-        node.inner.search_lub(key).clone()
+    fn search(&self, _: &B, ptr: BTreeInternalAddress, key: K) -> BA {
+        self.inner[ptr].search_lub(&key).clone()
     }
 
     fn insert(
         &mut self,
         base: &mut B,
-        prop: PropogateInsert<K, BA, BTreeInternalAddress>,
-    ) -> Option<PropogateInsert<K, BTreeInternalAddress, PA>> {
+        prop: PropagateInsert<K, BA, BTreeInternalAddress>,
+    ) -> Option<PropagateInsert<K, BTreeInternalAddress, PA>> {
         match prop {
-            PropogateInsert::Single(key, address, ptr) => self
+            PropagateInsert::Single(key, address, ptr) => self
                 .inner
                 .insert_with_parent(key, address, base, ptr)
-                .map(|(key, address, parent)| PropogateInsert::Single(key, address, parent)),
-            PropogateInsert::Replace { .. } => {
+                .map(|(key, address, parent)| PropagateInsert::Single(key, address, parent)),
+            PropagateInsert::Replace { .. } => {
                 unimplemented!()
             }
         }
     }
-}
 
-impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usize>
-    InternalComponentInMemoryBuild<K, B, BA, BTreeInternalAddress, PA>
-    for BTreeInternalComponent<K, X, FANOUT, BA, PA>
-where
-    K: StaticBounded,
-    BA: Address,
-    PA: Address,
-{
     fn build(base: &mut B) -> Self {
         let mut result = MemoryBTreeLayer::empty();
         result.fill_with_parent(base);
@@ -98,17 +83,14 @@ where
     V: 'static,
     PA: Address,
 {
-    type Node =
-        <MemoryBTreeLayer<K, V, FANOUT, PA> as NodeLayer<K, BTreeInternalAddress, PA>>::Node;
-
-    impl_node_layer!(Index);
+    impl_node_layer!(ArenaID, PA);
 }
 
 impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>
     for BTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: StaticBounded,
-    V: 'static,
+    V: 'static + Clone,
     PA: Address,
 {
     fn insert(
@@ -116,27 +98,18 @@ where
         ptr: BTreeInternalAddress,
         key: K,
         value: V,
-    ) -> Option<PropogateInsert<K, BTreeBaseAddress, PA>> {
+    ) -> Option<PropagateInsert<K, BTreeBaseAddress, PA>> {
         if let Some((key, address, parent)) = self.inner.insert(key, value, ptr) {
-            Some(PropogateInsert::Single(key, address, parent))
+            Some(PropagateInsert::Single(key, address, parent))
         } else {
             None
         }
     }
 
-    fn search(&self, ptr: BTreeInternalAddress, key: &K) -> Option<&V> {
-        let node = self.inner.deref(ptr);
-        node.inner.search_exact(key)
+    fn search(&self, ptr: BTreeInternalAddress, key: K) -> Option<V> {
+        self.inner[ptr].search_exact(&key).cloned()
     }
-}
 
-impl<K, V, const FANOUT: usize, PA> BaseComponentInMemoryBuild<K, V>
-    for BTreeBaseComponent<K, V, FANOUT, PA>
-where
-    K: StaticBounded,
-    V: 'static,
-    PA: Address,
-{
     fn empty() -> Self {
         let result = MemoryBTreeLayer::empty();
 

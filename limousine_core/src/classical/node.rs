@@ -1,11 +1,15 @@
-use crate::common::bounded::KeyBounded;
-use crate::common::bounded::StaticBounded;
-use crate::common::entry::Entry;
 use crate::common::stack_map::StackMap;
+use crate::traits::KeyBounded;
+use crate::{common::entry::Entry, traits::StaticBounded};
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BTreeNode<K, V, const FANOUT: usize> {
+    // Serde derive has some trouble introducing the right bounds here
+    #[serde(bound(
+        deserialize = "K: Serialize + Deserialize<'de> + Ord + Copy, V: Serialize + Deserialize<'de>"
+    ))]
     inner: StackMap<K, V, FANOUT>,
 }
 

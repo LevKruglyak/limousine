@@ -1,4 +1,4 @@
-# Limousine
+# Limousine &emsp; 
 [![Rust](https://github.com/LevKruglyak/limousine/actions/workflows/rust.yml/badge.svg)](https://github.com/LevKruglyak/limousine/actions/workflows/rust.yml)
 [![Latest Version](https://img.shields.io/crates/v/limousine_engine.svg)](https://crates.io/crates/limousine_engine)
 
@@ -10,7 +10,7 @@ Most of our work with learned indexes was inspired by [PGM Index](https://github
 
 # Overview
 
-**limousine_engine** offers a procedural macro that auto-generates a hybrid index design:
+***limousine_engine*** offers a procedural macro that auto-generates a hybrid index design:
 
 ```rust
 use limousine_engine::prelude::*;

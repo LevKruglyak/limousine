@@ -5,7 +5,7 @@ members = [
   "limousine_core",
   "limousine_example",
   "limousine_derive",
-  "limousine_engine"
+  "limousine_engine",
 ]
 
 [profile.release]

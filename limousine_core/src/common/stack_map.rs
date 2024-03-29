@@ -2,6 +2,9 @@
 
 use crate::common::entry::Entry;
 use crate::common::search::*;
+use serde::de::{SeqAccess, Visitor};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::mem::MaybeUninit;
 
@@ -10,6 +13,70 @@ use std::mem::MaybeUninit;
 pub struct StackMap<K, V, const FANOUT: usize> {
     inner: [MaybeUninit<Entry<K, V>>; FANOUT],
     len: usize,
+}
+
+impl<K, V, const FANOUT: usize> Serialize for StackMap<K, V, FANOUT>
+where
+    K: Serialize,
+    V: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.len))?;
+        for entry in self.entries() {
+            seq.serialize_element(entry)?;
+        }
+        seq.end()
+    }
+}
+
+struct StackMapDeserializer<K, V, const FANOUT: usize>(
+    std::marker::PhantomData<(K, V, [(); FANOUT])>,
+);
+
+impl<'de, K, V, const FANOUT: usize> Visitor<'de> for StackMapDeserializer<K, V, FANOUT>
+where
+    K: Deserialize<'de> + Ord + Copy,
+    V: Deserialize<'de>,
+{
+    type Value = StackMap<K, V, FANOUT>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a sequence of entries for StackMap")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut map = StackMap::<K, V, FANOUT>::empty();
+
+        while let Some(entry) = seq.next_element::<Entry<K, V>>()? {
+            if map.len() >= FANOUT {
+                return Err(serde::de::Error::custom(
+                    "StackMap exceeded its capacity during deserialization",
+                ));
+            }
+            map.insert(entry.key, entry.value);
+        }
+
+        Ok(map)
+    }
+}
+
+impl<'de, K, V, const FANOUT: usize> Deserialize<'de> for StackMap<K, V, FANOUT>
+where
+    K: Serialize + Deserialize<'de> + Ord + Copy,
+    V: Serialize + Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_seq(StackMapDeserializer(std::marker::PhantomData))
+    }
 }
 
 impl<K: Debug, V: Debug, const FANOUT: usize> Debug for StackMap<K, V, FANOUT> {
@@ -32,19 +99,6 @@ impl<K: Ord + PartialEq, V: PartialEq, const FANOUT: usize> PartialEq for StackM
 
             other_iter.next().is_none()
         }
-    }
-}
-
-impl<K, V, const FANOUT: usize> Drop for StackMap<K, V, FANOUT> {
-    fn drop(&mut self) {
-        for i in 0..self.len() {
-            let ptr = self.inner[i].as_mut_ptr();
-            unsafe {
-                std::ptr::drop_in_place(ptr);
-            }
-        }
-
-        self.len = 0;
     }
 }
 

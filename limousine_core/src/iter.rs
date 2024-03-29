@@ -1,6 +1,6 @@
-use crate::{Address, Model, NodeLayer};
+use std::ops::Bound;
 
-use std::ops::{Bound};
+use crate::{node_layer::NodeLayer, traits::Address};
 
 // ----------------------------------------
 // Iterator Type
@@ -23,7 +23,7 @@ where
         match start {
             Bound::Excluded(start) => Self {
                 layer,
-                current: layer.deref(start).next(),
+                current: layer.next(start),
                 end,
                 _ph: std::marker::PhantomData,
             },
@@ -74,118 +74,64 @@ where
 
         // Advance pointer
         if let Some(current) = self.current.clone() {
-            self.current = self.layer.deref(current).next();
+            self.current = self.layer.next(current);
         }
 
-        return Some(((*self.layer.lower_bound(current.clone())), current.clone()));
+        return Some(((self.layer.lower_bound(current.clone())), current.clone()));
     }
 }
 
-pub struct MutNodeView<'n, K, N, SA, PA> {
-    layer: &'n N,
-    current: Option<SA>,
-    _ph: std::marker::PhantomData<(K, PA)>,
-}
-
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Clone for MutNodeView<'n, K, N, SA, PA>
-where
-    N: NodeLayer<K, SA, PA>,
-    SA: Address + Clone,
-    PA: Address,
-    K: Copy,
-{
-    fn clone(&self) -> Self {
-        Self {
-            layer: self.layer,
-            current: self.current.clone(),
-            _ph: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> MutNodeView<'n, K, N, SA, PA>
-where
-    K: Copy,
-    N: NodeLayer<K, SA, PA>,
-    SA: Address,
-    PA: Address,
-{
-    #[allow(clippy::needless_pass_by_ref_mut)]
-    fn new(layer: &'n mut N) -> Self {
-        Self {
-            layer,
-            current: None,
-            _ph: std::marker::PhantomData,
-        }
-    }
-
-    fn set_current(&mut self, current: SA) {
-        self.current = Some(current);
-    }
-
-    pub fn key(&self) -> K {
-        let current = self.current.clone().unwrap();
-        *self.layer.lower_bound(current)
-    }
-
-    pub fn address(&self) -> SA {
-        self.current.clone().unwrap()
-    }
-
-    pub fn set_parent(&self, parent: PA) {
-        let current = self.current.clone().unwrap();
-        unsafe { self.layer.deref_unsafe(current).as_mut().unwrap() }.set_parent(parent)
-    }
-}
-
-pub struct MutIter<'n, K, N, SA, PA> {
-    view: MutNodeView<'n, K, N, SA, PA>,
+// ----------------------------------------
+// Mutable Iterator Type
+// ----------------------------------------
+//
+pub struct IterMut<'n, K, N, SA, PA> {
+    layer: &'n mut N,
     current: Option<SA>,
     end: Bound<SA>,
     _ph: std::marker::PhantomData<(K, PA)>,
 }
 
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> MutIter<'n, K, N, SA, PA>
+impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> IterMut<'n, K, N, SA, PA>
 where
-    K: Copy,
     SA: Address,
     PA: Address,
+    K: Copy,
 {
     pub fn range(layer: &'n mut N, start: Bound<SA>, end: Bound<SA>) -> Self {
         match start {
-            Bound::Excluded(start) => Self {
-                current: layer.deref(start).next(),
-                view: MutNodeView::new(layer),
-                end,
-                _ph: std::marker::PhantomData,
-            },
+            Bound::Excluded(start) => {
+                let current = layer.next(start);
+
+                Self {
+                    layer,
+                    current,
+                    end,
+                    _ph: std::marker::PhantomData,
+                }
+            }
 
             Bound::Included(start) => Self {
-                view: MutNodeView::new(layer),
+                layer,
                 current: Some(start.clone()),
                 end,
                 _ph: std::marker::PhantomData,
             },
 
-            Bound::Unbounded => Self {
-                current: Some(layer.first()),
-                view: MutNodeView::new(layer),
-                end,
-                _ph: std::marker::PhantomData,
-            },
+            Bound::Unbounded => {
+                let current = Some(layer.first());
+
+                Self {
+                    layer,
+                    current,
+                    end,
+                    _ph: std::marker::PhantomData,
+                }
+            }
         }
     }
-}
 
-impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Iterator for MutIter<'n, K, N, SA, PA>
-where
-    K: Copy + 'n,
-    SA: Address,
-    PA: Address,
-{
-    type Item = MutNodeView<'n, K, N, SA, PA>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn next<'a>(&'a mut self) -> Option<(K, SA, IterMutParentView<'a, K, N, SA, PA>)> {
         let current = self.current.clone()?;
 
         match self.end.clone() {
@@ -206,10 +152,34 @@ where
 
         // Advance pointer
         if let Some(current) = self.current.clone() {
-            self.current = self.view.layer.deref(current).next();
+            self.current = self.layer.next(current);
         }
 
-        self.view.set_current(current);
-        Some(self.view.clone())
+        let key = self.layer.lower_bound(current.clone());
+        let current = current.clone();
+        let parent = IterMutParentView {
+            layer: self.layer,
+            address: current.clone(),
+            _ph: std::marker::PhantomData,
+        };
+
+        return Some((key, current, parent));
+    }
+}
+
+pub struct IterMutParentView<'n, K, N, SA, PA> {
+    layer: &'n mut N,
+    address: SA,
+    _ph: std::marker::PhantomData<(K, PA)>,
+}
+
+impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> IterMutParentView<'n, K, N, SA, PA>
+where
+    K: Copy,
+    SA: Address,
+    PA: Address,
+{
+    pub fn set(self, parent: PA) {
+        self.layer.set_parent(self.address.clone(), parent);
     }
 }
