@@ -50,7 +50,7 @@ pub fn create_index_impl(
     let checksum = layout.persist_checksum();
 
     let body = quote! {
-        impl<K: Key, V: Value> PersistedIndex<K, V> for #name<K, V>
+        impl<K: Key, V: Value> PersistedKVStore<K, V> for #name<K, V>
         where
             K: limousine_engine::private::Persisted,
             V: limousine_engine::private::Persisted,

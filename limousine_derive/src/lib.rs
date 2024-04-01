@@ -5,7 +5,7 @@ use syn::parse_macro_input;
 use syn::{LitStr, Token};
 
 #[proc_macro]
-pub fn create_hybrid_index(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn create_kv_store(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as MacroInput);
 
     codegen::create_implementation(input.name, input.layout)

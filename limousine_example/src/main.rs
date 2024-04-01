@@ -3,8 +3,8 @@
 use limousine_engine::prelude::*;
 
 // Example of a persisted key-value store
-create_hybrid_index! {
-    name: Index1Disk,
+create_kv_store! {
+    name: PersistedKVStore1,
     layout: [
         btree_top(),
         btree(fanout = 8),
@@ -14,8 +14,8 @@ create_hybrid_index! {
 }
 
 // Example of an in-memory key-value store
-create_hybrid_index! {
-    name: Index1,
+create_kv_store! {
+    name: KVStore1,
     layout: [
         btree_top(),
         btree(fanout = 4),
@@ -26,8 +26,8 @@ create_hybrid_index! {
 }
 
 // Example of an in-memory key-value store, with layout provided in a file
-create_hybrid_index! {
-    name: Index2,
+create_kv_store! {
+    name: KVStore2,
     path: "limousine_example/sample.layout"
 }
 
@@ -38,36 +38,36 @@ fn main() -> limousine_engine::Result<()> {
     let num = 1_000_000;
     println!("Inserting {} entries:", num);
 
-    let mut index: Index1Disk<u128, u128> = Index1Disk::open("data/index1")?;
+    let mut index: PersistedKVStore1<u128, u128> = PersistedKVStore1::open("data/index1")?;
 
     let start = std::time::Instant::now();
     for i in 0..num {
         index.insert(i, i * i)?;
     }
     println!(
-        "[Persisted] Index1 took {:?} ms",
+        "[Persisted] KVStore1 took {:?} ms",
         start.elapsed().as_millis()
     );
 
-    let mut index: Index1<u128, u128> = Index1::empty();
+    let mut index: KVStore1<u128, u128> = KVStore1::empty();
 
     let start = std::time::Instant::now();
     for i in 0..num {
         index.insert(i, i * i);
     }
     println!(
-        "[In Memory] Index1 took {:?} ms",
+        "[In Memory] KVStore1 took {:?} ms",
         start.elapsed().as_millis()
     );
 
-    let mut index: Index2<u128, u128> = Index2::empty();
+    let mut index: KVStore2<u128, u128> = KVStore2::empty();
 
     let start = std::time::Instant::now();
     for i in 0..num {
         index.insert(i, i * i);
     }
     println!(
-        "[In Memory] Index2 took {:?} ms",
+        "[In Memory] KVStore2 took {:?} ms",
         start.elapsed().as_millis()
     );
 

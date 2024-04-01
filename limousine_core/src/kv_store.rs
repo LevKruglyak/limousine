@@ -1,7 +1,7 @@
 use crate::{Key, Persisted, Value};
 use std::path::Path;
 
-pub trait Index<K, V>
+pub trait KVStore<K, V>
 where
     K: Key,
     V: Value,
@@ -15,7 +15,7 @@ where
     fn build(iter: impl Iterator<Item = (K, V)>) -> Self;
 }
 
-pub trait PersistedIndex<K, V>
+pub trait PersistedKVStore<K, V>
 where
     Self: Sized,
     K: Persisted + Key,

@@ -47,10 +47,10 @@
 
 /// Include this at the top of the file when materializing a hybrid index or using a hybrid index.
 pub mod prelude {
-    pub use limousine_derive::create_hybrid_index;
+    pub use limousine_derive::create_kv_store;
 
-    pub use limousine_core::Index;
-    pub use limousine_core::PersistedIndex;
+    pub use limousine_core::KVStore;
+    pub use limousine_core::PersistedKVStore;
 }
 
 pub use limousine_core::Result;

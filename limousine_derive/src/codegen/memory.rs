@@ -48,7 +48,7 @@ pub fn create_index_impl(
     let build_body = create_build_body(layout, aliases, fields);
 
     let body = quote! {
-        impl<K: Key, V: Value> Index<K, V> for #name<K, V> {
+        impl<K: Key, V: Value> KVStore<K, V> for #name<K, V> {
             fn search(&self, key: K) -> Option<V> {
                 #search_body
             }

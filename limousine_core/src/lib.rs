@@ -2,8 +2,8 @@
 
 pub mod classical;
 pub mod component;
-pub mod index;
 pub mod iter;
+pub mod kv_store;
 
 // pub mod learned;
 
@@ -37,7 +37,7 @@ pub use classical::BTreeTopComponent;
 pub use common::storage::GlobalStore;
 
 pub use component::*;
-pub use index::*;
+pub use kv_store::*;
 pub use node_layer::*;
 pub use traits::*;
 
