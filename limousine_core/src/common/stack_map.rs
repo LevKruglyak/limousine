@@ -15,6 +15,28 @@ pub struct StackMap<K, V, const FANOUT: usize> {
     len: usize,
 }
 
+impl<K, V, const FANOUT: usize> PartialEq for StackMap<K, V, FANOUT>
+where
+    K: PartialEq,
+    V: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        // TODO: check if this ``optimization'' is necessary
+        if self.len == other.len {
+            return self.entries().eq(other.entries());
+        }
+
+        false
+    }
+}
+
+impl<K, V, const FANOUT: usize> Eq for StackMap<K, V, FANOUT>
+where
+    K: PartialEq,
+    V: PartialEq,
+{
+}
+
 impl<K, V, const FANOUT: usize> Serialize for StackMap<K, V, FANOUT>
 where
     K: Serialize,
@@ -82,23 +104,6 @@ where
 impl<K: Debug, V: Debug, const FANOUT: usize> Debug for StackMap<K, V, FANOUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.entries().iter()).finish()
-    }
-}
-
-impl<K: Ord + PartialEq, V: PartialEq, const FANOUT: usize> PartialEq for StackMap<K, V, FANOUT> {
-    fn eq(&self, other: &Self) -> bool {
-        self.len == other.len && {
-            let self_iter = self.iter();
-            let mut other_iter = other.iter();
-
-            for self_kv in self_iter {
-                if !Some(self_kv).eq(&other_iter.next()) {
-                    return false;
-                }
-            }
-
-            other_iter.next().is_none()
-        }
     }
 }
 

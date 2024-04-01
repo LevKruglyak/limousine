@@ -14,6 +14,12 @@ mod traits;
 // Used by proc_macro
 pub use anyhow::Result;
 
+pub use classical::DeepDiskBTreeInternalAddress;
+pub use classical::DeepDiskBTreeInternalComponent;
+
+pub use classical::DeepDiskBTreeBaseAddress;
+pub use classical::DeepDiskBTreeBaseComponent;
+
 pub use classical::BoundaryDiskBTreeInternalAddress;
 pub use classical::BoundaryDiskBTreeInternalComponent;
 

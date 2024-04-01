@@ -46,7 +46,6 @@ pub fn create_index_impl(
     let search_body = create_search_body(layout, aliases, fields);
     let insert_body = create_insert_body(layout, aliases, fields);
     let load_body = create_load_body(layout, aliases, fields);
-    let build_body = create_build_body(layout, aliases, fields);
 
     let checksum = layout.persist_checksum();
 
@@ -67,11 +66,6 @@ pub fn create_index_impl(
             fn open(path: impl AsRef<Path>) -> limousine_engine::Result<Self> {
                 let path = limousine_engine::private::add_prefix_to_path(path, #checksum.to_string())?;
                 #load_body
-            }
-
-            fn build(iter: impl Iterator<Item = (K, V)>, path: impl AsRef<Path>) -> limousine_engine::Result<Self> {
-                let path = limousine_engine::private::add_prefix_to_path(path, #checksum.to_string())?;
-                #build_body
             }
         }
     };
@@ -194,7 +188,7 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
         let field = fields[index].clone();
         let prev_field = fields[index - 1].clone();
 
-        if layout.internal[index - 1].is_persisted() {
+        if layout.internal[layout.internal.len() - index].is_persisted() {
             insert_body.extend(quote! {
                 let #var;
                 if let Some(x) = self.#field.insert(&mut self.#prev_field, #prev_var)? {
@@ -257,9 +251,9 @@ fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) 
         let prev_var = fields[index - 1].clone();
 
         let alias_name = alias.to_string();
-        if layout.internal[index - 1].is_persisted() {
+        if layout.internal[layout.internal.len() - index].is_persisted() {
             empty_body.extend(quote! {
-                let mut #var = #alias::load(&mut store, #alias_name)?;
+                let mut #var = #alias::load(&mut #prev_var, &mut store, #alias_name)?;
             });
         } else {
             empty_body.extend(quote! {
@@ -285,58 +279,4 @@ fn create_load_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) 
     });
 
     empty_body
-}
-
-fn create_build_body(layout: &HybridLayout, aliases: &[Ident], fields: &[Ident]) -> TokenStream {
-    let mut build_body = TokenStream::new();
-
-    build_body.extend(quote! {
-        // Load the store
-        let mut store = GlobalStore::load(path)?;
-    });
-
-    // Add body as the first component
-    let alias = aliases[0].clone();
-    let var = fields[0].clone();
-
-    let alias_name = alias.to_string();
-    build_body.extend(quote! {
-        let mut #var = #alias::build(&mut store, #alias_name, iter)?;
-    });
-
-    // Add internal components
-    for index in 1..=layout.internal.len() {
-        let alias = aliases[index].clone();
-        let var = fields[index].clone();
-        let prev_var = fields[index - 1].clone();
-
-        let alias_name = alias.to_string();
-        if layout.internal[index - 1].is_persisted() {
-            build_body.extend(quote! {
-                let mut #var = #alias::build(&mut store, #alias_name)?;
-            });
-        } else {
-            build_body.extend(quote! {
-                let mut #var = #alias::build(&mut #prev_var);
-            });
-        }
-    }
-
-    let index = layout.internal.len() + 1;
-    let alias = aliases[index].clone();
-    let var = fields[index].clone();
-    let prev_var = fields[index - 1].clone();
-
-    build_body.extend(quote! {
-        let mut #var = #alias::build(&mut #prev_var);
-    });
-
-    build_body.extend(quote! {
-        Ok(Self {
-            #(#fields,)*
-            store,
-        })
-    });
-
-    build_body
 }

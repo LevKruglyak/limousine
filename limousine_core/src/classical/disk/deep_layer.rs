@@ -3,21 +3,24 @@ use std::{fmt::Debug, ops::Bound};
 use crate::{
     classical::node::BTreeNode,
     common::{
-        list::boundary_disk::{BoundaryDiskList, BoundaryDiskListState},
+        list::deep_disk::DeepDiskList,
         storage::{GlobalStore, StoreID},
     },
     impl_node_layer, Address, Key, KeyBounded, NodeLayer, Persisted, StaticBounded,
 };
 
-pub struct BoundaryDiskBTreeLayer<K, V, const FANOUT: usize, PA> {
-    inner: BoundaryDiskList<BTreeNode<K, V, FANOUT>, PA>,
+pub struct DeepDiskBTreeLayer<K, V, const FANOUT: usize, PA>
+where
+    PA: Persisted + Address,
+{
+    inner: DeepDiskList<BTreeNode<K, V, FANOUT>, PA>,
 }
 
-impl<K: Debug, V: Debug, const FANOUT: usize, PA> Debug for BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
+impl<K: Debug, V: Debug, const FANOUT: usize, PA> Debug for DeepDiskBTreeLayer<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
     V: Persisted,
-    PA: Address,
+    PA: Persisted + Address,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (node, ptr) in self.inner.range(Bound::Unbounded, Bound::Unbounded) {
@@ -28,15 +31,15 @@ where
     }
 }
 
-impl<K, V, const FANOUT: usize, PA> BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
+impl<K, V, const FANOUT: usize, PA> DeepDiskBTreeLayer<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
     V: Persisted,
-    PA: Address,
+    PA: Persisted + Address,
 {
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
         Ok(Self {
-            inner: BoundaryDiskList::load(store, ident)?,
+            inner: DeepDiskList::load(store, ident)?,
         })
     }
 
@@ -65,11 +68,7 @@ where
         V: Address,
         B: NodeLayer<K, V, StoreID>,
     {
-        if *self.inner.get_state() == BoundaryDiskListState::Empty {
-            *self.inner.get_state() = BoundaryDiskListState::Loaded;
-
-            // Add empty cap node
-            let mut ptr = self.inner.clear()?;
+        if let Some(mut ptr) = self.inner.is_empty()? {
             let mut iter = base.range_mut(Bound::Unbounded, Bound::Unbounded);
 
             while let Some((key, address, parent)) = iter.next() {
@@ -176,11 +175,11 @@ where
 }
 
 impl<K, V, const FANOUT: usize, PA> NodeLayer<K, StoreID, PA>
-    for BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
+    for DeepDiskBTreeLayer<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
     V: Persisted,
-    PA: Address,
+    PA: Persisted + Address,
 {
     impl_node_layer!(StoreID, PA);
 }

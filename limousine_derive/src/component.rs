@@ -264,7 +264,7 @@ impl BaseComponent {
             BaseComponent::BTree {
                 fanout,
                 persist: PersistType::DeepDisk,
-            } => quote!(BoundaryDiskBTreeBaseComponent<K, V, #fanout, #base_address>)
+            } => quote!(DeepDiskBTreeBaseComponent<K, V, #fanout, #base_address>)
                 .to_token_stream(),
         }
     }
@@ -284,7 +284,7 @@ impl BaseComponent {
             BaseComponent::BTree {
                 persist: PersistType::DeepDisk,
                 ..
-            } => quote!(DeepDiskDiskBTreeBaseAddress).to_token_stream(),
+            } => quote!(DeepDiskBTreeBaseAddress).to_token_stream(),
         }
     }
 

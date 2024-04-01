@@ -5,6 +5,7 @@ members = [
   "limousine_core",
   "limousine_example",
   "limousine_derive",
+  "limousine_tests",
   "limousine_engine",
 ]
 

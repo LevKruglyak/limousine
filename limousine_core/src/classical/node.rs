@@ -4,7 +4,7 @@ use crate::{common::entry::Entry, traits::StaticBounded};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BTreeNode<K, V, const FANOUT: usize> {
     // Serde derive has some trouble introducing the right bounds here
     #[serde(bound(

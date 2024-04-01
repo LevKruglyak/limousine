@@ -14,11 +14,9 @@ pub struct Link {
 
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum BoundaryDiskListState {
-    // An invalid state only present when the catalog is initialized for the first time
     #[default]
-    Empty,
+    Uninitialized,
     Initialized,
-    Loaded,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
@@ -45,13 +43,13 @@ pub struct BoundaryDiskList<N, PA> {
 
 impl<N, PA> BoundaryDiskList<N, PA>
 where
-    N: Serialize + for<'de> Deserialize<'de> + Default,
+    N: Persisted + Default + Eq,
 {
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
         let mut store: LocalStore<BoundaryDiskListCatalogPage> = store.load_local_store(ident)?;
         let parents = HashMap::new();
 
-        if store.catalog.state == BoundaryDiskListState::Empty {
+        if store.catalog.state == BoundaryDiskListState::Uninitialized {
             store.catalog.state = BoundaryDiskListState::Initialized;
             let ptr = store.allocate_page();
             store.write_page(&N::default(), ptr)?;
@@ -67,8 +65,14 @@ where
         })
     }
 
-    pub fn get_state(&mut self) -> &mut BoundaryDiskListState {
-        &mut self.store.catalog.state
+    pub fn is_empty(&self) -> crate::Result<Option<StoreID>> {
+        if self.store.catalog.first == self.store.catalog.last {
+            if self.get_node(self.store.catalog.first)?.unwrap() == N::default() {
+                return Ok(Some(self.store.catalog.first));
+            }
+        }
+
+        return Ok(None);
     }
 
     pub fn transform_node<T>(
@@ -168,7 +172,7 @@ where
 impl<K, N, PA> NodeLayer<K, StoreID, PA> for BoundaryDiskList<N, PA>
 where
     K: Copy,
-    N: KeyBounded<K> + Persisted,
+    N: KeyBounded<K> + Persisted + Eq,
     PA: Address,
 {
     fn first(&self) -> StoreID {

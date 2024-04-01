@@ -7,9 +7,8 @@ create_hybrid_index! {
     name: Index1Disk,
     layout: [
         btree_top(),
-        btree(fanout = 4),
-        btree(fanout = 4),
-        btree(fanout = 4),
+        btree(fanout = 8),
+        btree(fanout = 8, persist),
         btree(fanout = 64, persist),
     ]
 }
@@ -33,6 +32,9 @@ create_hybrid_index! {
 }
 
 fn main() -> limousine_engine::Result<()> {
+    // Clear data directory
+    std::fs::remove_dir_all("data")?;
+
     let num = 1_000_000;
     println!("Inserting {} entries:", num);
 

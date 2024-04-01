@@ -80,6 +80,8 @@ where
         base: &mut Base,
         prop: PropagateInsert<K, BA, SA>,
     ) -> crate::Result<Option<PropagateInsert<K, SA, PA>>>;
+
+    fn load(base: &mut Base, store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self>;
 }
 
 pub trait BaseComponent<K, V, SA, PA>
@@ -115,10 +117,23 @@ where
     fn search(&self, ptr: SA, key: K) -> crate::Result<Option<V>>;
 
     fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self>;
+}
 
-    fn build(
-        store: &mut GlobalStore,
-        ident: impl ToString,
-        iter: impl Iterator<Item = (K, V)>,
-    ) -> crate::Result<Self>;
+pub trait DeepDiskBaseComponent<K, V, SA, PA>
+where
+    Self: NodeLayer<K, SA, PA>,
+    SA: Persisted + Address,
+    PA: Persisted + Address,
+    K: Copy,
+{
+    fn insert(
+        &mut self,
+        ptr: SA,
+        key: K,
+        value: V,
+    ) -> crate::Result<Option<PropagateInsert<K, SA, PA>>>;
+
+    fn search(&self, ptr: SA, key: K) -> crate::Result<Option<V>>;
+
+    fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self>;
 }

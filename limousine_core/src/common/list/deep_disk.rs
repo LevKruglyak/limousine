@@ -6,9 +6,7 @@ use crate::traits::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::boundary_disk::BoundaryDiskListState;
-
-#[derive(Default, Serialize, Deserialize, Clone)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Link<PA> {
     next: Option<StoreID>,
     prev: Option<StoreID>,
@@ -19,12 +17,11 @@ pub struct Link<PA> {
 pub enum DeepDiskListState {
     // An invalid state only present when the catalog is initialized for the first time
     #[default]
-    Empty,
+    Uninitialized,
     Initialized,
-    Loaded,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct DeepDiskListCatalogPage<PA> {
     first: StoreID,
     last: StoreID,
@@ -33,7 +30,7 @@ pub struct DeepDiskListCatalogPage<PA> {
     links: HashMap<StoreID, Link<PA>>,
 
     // Simple flag to mark the state of this list
-    state: BoundaryDiskListState,
+    state: DeepDiskListState,
 }
 
 pub struct DeepDiskList<N, PA>
@@ -52,8 +49,8 @@ where
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
         let mut store: LocalStore<DeepDiskListCatalogPage<PA>> = store.load_local_store(ident)?;
 
-        if store.catalog.state == BoundaryDiskListState::Empty {
-            store.catalog.state = BoundaryDiskListState::Initialized;
+        if store.catalog.state == DeepDiskListState::Uninitialized {
+            store.catalog.state = DeepDiskListState::Initialized;
             let ptr = store.allocate_page();
             store.write_page(&N::default(), ptr)?;
             store.catalog.first = ptr;
@@ -67,8 +64,14 @@ where
         })
     }
 
-    pub fn get_state(&mut self) -> &mut BoundaryDiskListState {
-        &mut self.store.catalog.state
+    pub fn is_empty(&self) -> crate::Result<Option<StoreID>> {
+        if self.store.catalog.first == self.store.catalog.last {
+            if self.get_node(self.store.catalog.first)?.unwrap() == N::default() {
+                return Ok(Some(self.store.catalog.first));
+            }
+        }
+
+        return Ok(None);
     }
 
     pub fn transform_node<T>(
