@@ -185,7 +185,7 @@ impl Search for OptimalSearch {
 }
 
 #[cfg(test)]
-mod search_tests {
+mod tests {
     use super::*;
 
     #[test]
