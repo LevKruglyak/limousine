@@ -1,6 +1,6 @@
 [package]
 name = "sorted_array"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A sorted array data structure adapted from [StackMap](https://github.com/komora-io/stack-map)"
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
@@ -10,7 +10,7 @@ repository = "https://github.com/LevKruglyak/limousine"
 
 
 [dependencies]
-slice_search = { path = "../slice_search", version = "0.1.0" }
+slice_search = { path = "../slice_search", version = "0.1.1" }
 serde = { version = "1.0.197", features = ["derive"], optional = true}
 
 [features]
