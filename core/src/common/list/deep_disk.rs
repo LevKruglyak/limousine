@@ -65,13 +65,11 @@ where
     }
 
     pub fn is_empty(&self) -> crate::Result<Option<StoreID>> {
-        if self.store.catalog.first == self.store.catalog.last {
-            if self.get_node(self.store.catalog.first)?.unwrap() == N::default() {
-                return Ok(Some(self.store.catalog.first));
-            }
+        if self.store.catalog.first == self.store.catalog.last && self.get_node(self.store.catalog.first)?.unwrap() == N::default() {
+            return Ok(Some(self.store.catalog.first));
         }
 
-        return Ok(None);
+        Ok(None)
     }
 
     pub fn transform_node<T>(

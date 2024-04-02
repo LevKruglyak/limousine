@@ -21,7 +21,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (node, ptr) in self.inner.range(Bound::Unbounded, Bound::Unbounded) {
-            write!(f, "node: [0x{ptr:?}]: {node:?}\n")?;
+            writeln!(f, "node: [0x{ptr:?}]: {node:?}")?;
         }
 
         write!(f, "")

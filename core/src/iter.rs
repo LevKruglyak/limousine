@@ -77,7 +77,7 @@ where
             self.current = self.layer.next(current);
         }
 
-        return Some(((self.layer.lower_bound(current.clone())), current.clone()));
+        Some(((self.layer.lower_bound(current.clone())), current.clone()))
     }
 }
 
@@ -131,7 +131,9 @@ where
         }
     }
 
-    pub fn next<'a>(&'a mut self) -> Option<(K, SA, IterMutParentView<'a, K, N, SA, PA>)> {
+    #[allow(clippy::type_complexity)]
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> Option<(K, SA, IterMutParentView<'_, K, N, SA, PA>)> {
         let current = self.current.clone()?;
 
         match self.end.clone() {
@@ -163,7 +165,7 @@ where
             _ph: std::marker::PhantomData,
         };
 
-        return Some((key, current, parent));
+        Some((key, current, parent))
     }
 }
 
