@@ -179,6 +179,7 @@ dependencies = [
  "sorted_array",
  "tempfile",
  "trait-set",
+ "zstd-sys",
 ]
 
 [[package]]

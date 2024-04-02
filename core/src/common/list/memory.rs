@@ -156,6 +156,10 @@ where
         self.arena[ptr].0.next
     }
 
+    fn prev(&self, ptr: ArenaID) -> Option<ArenaID> {
+        self.arena[ptr].0.previous
+    }
+
     fn first(&self) -> ArenaID {
         self.first
     }

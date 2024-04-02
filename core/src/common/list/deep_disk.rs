@@ -65,7 +65,9 @@ where
     }
 
     pub fn is_empty(&self) -> crate::Result<Option<StoreID>> {
-        if self.store.catalog.first == self.store.catalog.last && self.get_node(self.store.catalog.first)?.unwrap() == N::default() {
+        if self.store.catalog.first == self.store.catalog.last
+            && self.get_node(self.store.catalog.first)?.unwrap() == N::default()
+        {
             return Ok(Some(self.store.catalog.first));
         }
 
@@ -159,7 +161,11 @@ where
     }
 
     fn next(&self, ptr: StoreID) -> Option<StoreID> {
-        self.store.catalog.links.get(&ptr).unwrap().next
+        self.get_next(ptr)
+    }
+
+    fn prev(&self, ptr: StoreID) -> Option<StoreID> {
+        self.get_prev(ptr)
     }
 }
 

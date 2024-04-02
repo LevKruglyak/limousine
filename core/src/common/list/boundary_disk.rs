@@ -66,7 +66,9 @@ where
     }
 
     pub fn is_empty(&self) -> crate::Result<Option<StoreID>> {
-        if self.store.catalog.first == self.store.catalog.last && self.get_node(self.store.catalog.first)?.unwrap() == N::default() {
+        if self.store.catalog.first == self.store.catalog.last
+            && self.get_node(self.store.catalog.first)?.unwrap() == N::default()
+        {
             return Ok(Some(self.store.catalog.first));
         }
 
@@ -119,6 +121,7 @@ where
         Ok(new_node_ptr)
     }
 
+    #[allow(unused)]
     pub fn clear(&mut self) -> crate::Result<StoreID> {
         self.store.clear()?;
 
@@ -195,6 +198,10 @@ where
 
     fn next(&self, ptr: StoreID) -> Option<StoreID> {
         self.get_next(ptr)
+    }
+
+    fn prev(&self, ptr: StoreID) -> Option<StoreID> {
+        self.get_prev(ptr)
     }
 }
 

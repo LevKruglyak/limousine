@@ -24,6 +24,8 @@ where
 
     fn next(&self, ptr: SA) -> Option<SA>;
 
+    fn prev(&self, ptr: SA) -> Option<SA>;
+
     /// First node in the current node layer
     fn first(&self) -> SA;
 
@@ -58,6 +60,10 @@ macro_rules! impl_node_layer {
 
         fn next(&self, ptr: $SA) -> Option<$SA> {
             self.inner.next(ptr)
+        }
+
+        fn prev(&self, ptr: $SA) -> Option<$SA> {
+            self.inner.prev(ptr)
         }
 
         fn first(&self) -> $SA {

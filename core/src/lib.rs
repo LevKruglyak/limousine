@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod classical;
 pub mod component;
 pub mod iter;
