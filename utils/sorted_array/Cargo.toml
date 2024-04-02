@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "A sorted array data structure adapted from [StackMap](https://github.com/komora-io/stack-map)"
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
-keywords = ["contained", "sorted array", "stack map", "no_std"]
+keywords = ["contained", "sorted-array", "stack-map", "no_std"]
 license = "Apache-2.0"
 repository = "https://github.com/LevKruglyak/limousine"
 
