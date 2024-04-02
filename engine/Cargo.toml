@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2021"
 description = "limousine_engine can reason about a large design continuum of hybrid key-value store designs and materialize an optimal implementation using procedural macros."
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
-keywords = ["btree", "pgm", "database", "key-value store", "proc_macro", "limousine"]
+keywords = ["btree", "pgm", "database", "kv-store", "limousine"]
 license = "Apache-2.0"
 repository = "https://github.com/LevKruglyak/limousine"
 
