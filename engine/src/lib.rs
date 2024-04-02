@@ -46,14 +46,32 @@
 #![deny(missing_docs)]
 
 /// Include this at the top of the file when materializing a hybrid index or using a hybrid index.
+#[cfg(not(feature = "dev"))]
 pub mod prelude {
-    pub use limousine_derive::create_kv_store;
+    pub use limousine_derive::create_immutable_hybrid_index;
 
-    pub use limousine_core::KVStore;
-    pub use limousine_core::PersistedKVStore;
+    pub use limousine_core::HybridIndex;
 }
 
+#[cfg(not(feature = "dev"))]
 pub use limousine_core::Result;
 
 #[doc(hidden)]
+#[cfg(not(feature = "dev"))]
 pub use limousine_core as private;
+
+/// Include this at the top of the file when materializing a hybrid index or using a hybrid index.
+#[cfg(feature = "dev")]
+pub mod prelude {
+    pub use dev_limousine_derive::create_kv_store;
+
+    pub use dev_limousine_core::KVStore;
+    pub use dev_limousine_core::PersistedKVStore;
+}
+
+#[cfg(feature = "dev")]
+pub use dev_limousine_core::Result;
+
+#[doc(hidden)]
+#[cfg(feature = "dev")]
+pub use dev_limousine_core as private;

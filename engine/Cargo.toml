@@ -9,12 +9,11 @@ license = "Apache-2.0"
 repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
-limousine_derive = { path = "../limousine_derive"}
-limousine_core = { path = "../limousine_core", optional = true}
+dev_limousine_derive = { package = "limousine_derive", path = "../derive", optional = true}
+dev_limousine_core = { package = "limousine_core", path = "../core", optional = true}
 
-# limousine_derive = { version = "0.1.0" }
-# limousine_core = { version = "0.1.0", optional = true }
+limousine_derive = { version = "0.1.0" }
+limousine_core = { version = "0.1.0" }
 
 [features]
-default = ["dep:limousine_core"]
-standard = ["limousine_core?/standard"]
+dev = ["dev_limousine_core", "dev_limousine_derive"]

@@ -2,11 +2,10 @@
 resolver = "2"
 
 members = [
-  "limousine_core",
-  "limousine_example",
-  "limousine_derive",
-  "limousine_tests",
-  "limousine_engine",
+  "core",
+  "derive",
+  "tests",
+  "engine",
 ]
 
 [profile.release]

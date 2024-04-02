@@ -25,5 +25,3 @@ smallvec = { version = "1.13.2", features = ["const_generics"] }
 tempfile = "3.0"
 
 [features]
-default = []
-standard = []

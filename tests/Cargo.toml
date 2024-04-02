@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-limousine_engine = { path = "../limousine_engine" }
+limousine_engine = { path = "../engine", features = ["dev"] }
 
 [dev-dependencies]
 rand = "0.8.5"
