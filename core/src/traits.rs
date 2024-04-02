@@ -1,4 +1,3 @@
-use num::PrimInt;
 use serde::{Deserialize, Serialize};
 use trait_set::trait_set;
 
@@ -7,15 +6,13 @@ trait_set! {
     /// A simple address trait,
     pub trait Address = Eq + Clone + 'static;
 
-    pub trait Persisted = Serialize + for<'de> Deserialize<'de> + Clone + Default +  Eq + 'static + std::fmt::Debug;
+    pub trait Persisted = Serialize + for<'de> Deserialize<'de> + Clone + Default + Eq + 'static;
 
     /// General key type, thread safe
-    pub trait Key = Send + Sync + Default + Copy + 'static + StaticBounded + std::fmt::Debug;
+    pub trait Key = Send + Sync + Default + StaticBounded + 'static;
 
     /// General value type, thread-safe
-    pub trait Value = Send + Sync + Default + Copy + 'static + std::fmt::Debug;
-
-    pub trait NumKey = Key + PrimInt;
+    pub trait Value = Send + Sync + Default + Clone + 'static;
 }
 
 pub trait KeyBounded<K> {

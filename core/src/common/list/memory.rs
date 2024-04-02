@@ -1,7 +1,7 @@
 use generational_arena::Arena;
 
 use crate::{
-    node_layer::{Node, NodeLayer},
+    node_layer::NodeLayer,
     traits::{Address, KeyBounded},
 };
 
@@ -117,19 +117,6 @@ where
 impl<N> AsRef<MemoryNode<N>> for &MemoryNode<N> {
     fn as_ref(&self) -> &MemoryNode<N> {
         self
-    }
-}
-
-impl<K, N> Node<K, ArenaID> for MemoryNode<N>
-where
-    N: KeyBounded<K> + 'static,
-{
-    fn next(&self) -> Option<ArenaID> {
-        self.next
-    }
-
-    fn previous(&self) -> Option<ArenaID> {
-        self.previous
     }
 }
 

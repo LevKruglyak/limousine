@@ -5,27 +5,6 @@ use std::ops::Bound;
 use crate::iter::{Iter, IterMut};
 use crate::traits::*;
 
-/// A `LinkedNode` is a model in a `NodeLayer`, representing a set of entries above a
-/// lower bound. In addition to storing a pointer to its neighbor, it also stores a
-/// pointer to its parent, which is in a different layer.
-///
-/// In order to avoid circular type dependencies during composition, it is generic over
-/// its own address type, as well as its parent type. (SA, PA respectively)
-pub trait Node<K, SA>: 'static + KeyBounded<K>
-where
-    SA: Address,
-{
-    // Address to the next node in the current component
-    fn next(&self) -> Option<SA>;
-
-    fn previous(&self) -> Option<SA>;
-
-    // // Address to the parent node in the above component
-    // fn parent(&self) -> Option<PA>;
-    //
-    // fn set_parent(&mut self, parent: PA);
-}
-
 /// A `NodeLayer` is has the interface of a linked list of key-bounded nodes which implement the
 /// `Model` trait. It's assumed that a `NodeLayer` is always non-empty, and thus should always have
 /// a `first` and `last` node.
