@@ -18,8 +18,8 @@ generational-arena = "0.2.9"
 serde = { version = "1.0.197", features = ["derive"] }
 bincode = { version = "1.3.3" }
 anyhow = "1.0.79"
-caches = "0.2.8"
-smallvec = { version = "1.13.2", features = ["const_generics"] }
+
+sorted_array = { path = "../utils/sorted_array", version = "0.1.0", features = ["serde"] }
 
 [dev-dependencies]
 tempfile = "3.0"

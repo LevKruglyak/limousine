@@ -1,140 +1,76 @@
 // Adapted from: [StackMap](https://github.com/komora-io/stack-map)
+#![no_std]
 
-use crate::common::entry::Entry;
-use crate::common::search::*;
-use serde::de::{SeqAccess, Visitor};
-use serde::ser::SerializeSeq;
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-use std::mem::MaybeUninit;
+mod entry;
 
-/// `StackMap` is a constant-size, zero-allocation associative container
+#[cfg(feature = "serde")]
+mod serde;
+
+use core::fmt::Debug;
+use core::mem::MaybeUninit;
+
+pub use entry::SortedArrayEntry;
+use slice_search::*;
+
+/// `SortedArray` is a constant-size, zero-allocation associative container
 /// backed by an array.
-pub struct StackMap<K, V, const FANOUT: usize> {
-    inner: [MaybeUninit<Entry<K, V>>; FANOUT],
+pub struct SortedArray<K, V, const FANOUT: usize> {
+    inner: [MaybeUninit<SortedArrayEntry<K, V>>; FANOUT],
     len: usize,
 }
 
-impl<K, V, const FANOUT: usize> PartialEq for StackMap<K, V, FANOUT>
+impl<K, V, const FANOUT: usize> PartialEq for SortedArray<K, V, FANOUT>
 where
     K: PartialEq,
     V: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        // TODO: check if this ``optimization'' is necessary
-        if self.len == other.len {
-            return self.entries().eq(other.entries());
-        }
-
-        false
+        self.entries().eq(other.entries())
     }
 }
 
-impl<K, V, const FANOUT: usize> Eq for StackMap<K, V, FANOUT>
+impl<K, V, const FANOUT: usize> Eq for SortedArray<K, V, FANOUT>
 where
     K: PartialEq,
     V: PartialEq,
 {
 }
 
-impl<K, V, const FANOUT: usize> Serialize for StackMap<K, V, FANOUT>
-where
-    K: Serialize,
-    V: Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(self.len))?;
-        for entry in self.entries() {
-            seq.serialize_element(entry)?;
-        }
-        seq.end()
-    }
-}
-
-struct StackMapDeserializer<K, V, const FANOUT: usize>(
-    std::marker::PhantomData<(K, V, [(); FANOUT])>,
-);
-
-impl<'de, K, V, const FANOUT: usize> Visitor<'de> for StackMapDeserializer<K, V, FANOUT>
-where
-    K: Deserialize<'de> + Ord + Copy,
-    V: Deserialize<'de>,
-{
-    type Value = StackMap<K, V, FANOUT>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("a sequence of entries for StackMap")
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: SeqAccess<'de>,
-    {
-        let mut map = StackMap::<K, V, FANOUT>::empty();
-
-        while let Some(entry) = seq.next_element::<Entry<K, V>>()? {
-            if map.len() >= FANOUT {
-                return Err(serde::de::Error::custom(
-                    "StackMap exceeded its capacity during deserialization",
-                ));
-            }
-            map.insert(entry.key, entry.value);
-        }
-
-        Ok(map)
-    }
-}
-
-impl<'de, K, V, const FANOUT: usize> Deserialize<'de> for StackMap<K, V, FANOUT>
-where
-    K: Serialize + Deserialize<'de> + Ord + Copy,
-    V: Serialize + Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_seq(StackMapDeserializer(std::marker::PhantomData))
-    }
-}
-
-impl<K: Debug, V: Debug, const FANOUT: usize> Debug for StackMap<K, V, FANOUT> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<K: Debug, V: Debug, const FANOUT: usize> Debug for SortedArray<K, V, FANOUT> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_list().entries(self.entries().iter()).finish()
     }
 }
 
-impl<K: Clone, V: Clone, const FANOUT: usize> Clone for StackMap<K, V, FANOUT> {
+impl<K: Clone, V: Clone, const FANOUT: usize> Clone for SortedArray<K, V, FANOUT> {
     fn clone(&self) -> Self {
-        let mut inner: [MaybeUninit<Entry<K, V>>; FANOUT] =
-            unsafe { MaybeUninit::<[MaybeUninit<Entry<K, V>>; FANOUT]>::uninit().assume_init() };
+        let mut inner: [MaybeUninit<SortedArrayEntry<K, V>>; FANOUT] = unsafe {
+            MaybeUninit::<[MaybeUninit<SortedArrayEntry<K, V>>; FANOUT]>::uninit().assume_init()
+        };
 
         for (i, item) in self.iter().cloned().enumerate() {
             inner[i].write(item);
         }
 
-        StackMap {
+        SortedArray {
             inner,
             len: self.len,
         }
     }
 }
 
-impl<K, V, const FANOUT: usize> Default for StackMap<K, V, FANOUT> {
+impl<K, V, const FANOUT: usize> Default for SortedArray<K, V, FANOUT> {
     fn default() -> Self {
         Self::empty()
     }
 }
 
 #[allow(unused)]
-impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
+impl<K, V, const FANOUT: usize> SortedArray<K, V, FANOUT> {
     pub fn empty() -> Self {
-        StackMap {
+        SortedArray {
             inner: unsafe {
-                MaybeUninit::<[MaybeUninit<Entry<K, V>>; FANOUT]>::uninit().assume_init()
+                MaybeUninit::<[MaybeUninit<SortedArrayEntry<K, V>>; FANOUT]>::uninit().assume_init()
             },
             len: 0,
         }
@@ -144,12 +80,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     where
         K: Ord + Copy,
     {
-        // TODO: Experimentally determine
-        if std::mem::size_of::<Entry<K, V>>() * FANOUT > 8 * 64 {
-            BinarySearch::search_by_key(self.entries(), key)
-        } else {
-            LinearSearch::search_by_key(self.entries(), key)
-        }
+        OptimalSearch::search_by_key(self.entries(), key)
     }
 
     pub fn get(&self, key: &K) -> Option<&V>
@@ -170,7 +101,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     /// This method will panic if called with a new key-value pair when
     /// already full.
     ///
-    /// The `StackMap` should be checked to ensure that it is not already
+    /// The `SortedArray` should be checked to ensure that it is not already
     /// full before calling this method. It is full when the `self.is_full()`
     /// method returns `true`, which happens when `self.len() == FANOUT`.
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
@@ -181,7 +112,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
             Ok(index) => {
                 let slot =
                     unsafe { &mut self.inner.get_unchecked_mut(index).assume_init_mut().value };
-                Some(std::mem::replace(slot, value))
+                Some(core::mem::replace(slot, value))
             }
             Err(index) => {
                 assert!(self.len() < FANOUT);
@@ -191,14 +122,14 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
                         let src = self.inner.get_unchecked(index).as_ptr();
                         let dst = self.inner.get_unchecked_mut(index + 1).as_mut_ptr();
 
-                        std::ptr::copy(src, dst, self.len() - index);
+                        core::ptr::copy(src, dst, self.len() - index);
                     }
 
                     self.len += 1;
 
                     self.inner
                         .get_unchecked_mut(index)
-                        .write(Entry::new(key, value));
+                        .write(SortedArrayEntry::new(key, value));
                 }
                 None
             }
@@ -212,13 +143,13 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
         // TODO: fix undefined behavior here
         if let Ok(index) = self.search(key) {
             unsafe {
-                let ret = std::ptr::read(self.inner.get_unchecked(index).as_ptr()).value;
+                let ret = core::ptr::read(self.inner.get_unchecked(index).as_ptr()).value;
 
                 if index + 1 < self.len() {
                     let dst = self.inner.get_unchecked_mut(index).as_mut_ptr();
                     let src = self.inner.get_unchecked(index + 1).as_ptr();
 
-                    std::ptr::copy(src, dst, self.len() - index);
+                    core::ptr::copy(src, dst, self.len() - index);
                 }
 
                 self.len -= 1;
@@ -237,15 +168,15 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
         self.search(key).is_ok()
     }
 
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &Entry<K, V>> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &SortedArrayEntry<K, V>> {
         self.inner[..self.len()]
             .iter()
             .map(|slot| unsafe { slot.assume_init_ref() })
     }
 
-    /// Splits this `StackMap` into two. `self` will retain
+    /// Splits this `SortedArray` into two. `self` will retain
     /// all key-value pairs before the provided split index.
-    /// Returns a new `StackMap` created out of all key-value pairs
+    /// Returns a new `SortedArray` created out of all key-value pairs
     /// at or after the provided split index.
     pub fn split_off(&mut self, split_idx: usize) -> Self {
         assert!(split_idx < self.len());
@@ -257,7 +188,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
             let src = self.inner[i].as_ptr();
             let dst = rhs.inner[i - split_idx].as_mut_ptr();
             unsafe {
-                std::ptr::copy_nonoverlapping(src, dst, 1);
+                core::ptr::copy_nonoverlapping(src, dst, 1);
             }
         }
 
@@ -285,7 +216,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     /// key is suffixed by a version or an internal b-tree
     /// index lookup where you are looking for the next
     /// node based on a node's low key.
-    pub fn get_less_than_or_equal(&self, key: &K) -> Option<&Entry<K, V>>
+    pub fn get_less_than_or_equal(&self, key: &K) -> Option<&SortedArrayEntry<K, V>>
     where
         K: Ord + Copy,
     {
@@ -300,7 +231,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
     }
 
     /// Gets a kv pair that has a key that is less than the provided key.
-    pub fn get_less_than(&self, key: &K) -> Option<&Entry<K, V>>
+    pub fn get_less_than(&self, key: &K) -> Option<&SortedArrayEntry<K, V>>
     where
         K: Ord + Copy,
     {
@@ -330,20 +261,23 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
 }
 
 #[allow(unused)]
-impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
-    /// Borrow a slice view into the entries stored in the `StackMap`
-    pub fn entries(&self) -> &[Entry<K, V>] {
+impl<K, V, const FANOUT: usize> SortedArray<K, V, FANOUT> {
+    /// Borrow a slice view into the entries stored in the `SortedArray`
+    pub fn entries(&self) -> &[SortedArrayEntry<K, V>] {
         // SAFETY: `len` must be strictly less than `F`
         debug_assert!(self.len <= FANOUT);
         let slice = unsafe { self.inner.get_unchecked(..self.len) };
 
         // SAFETY: feature `maybe_uninit_slice`
-        unsafe { &*(slice as *const [MaybeUninit<Entry<K, V>>] as *const [Entry<K, V>]) }
+        unsafe {
+            &*(slice as *const [MaybeUninit<SortedArrayEntry<K, V>>]
+                as *const [SortedArrayEntry<K, V>])
+        }
     }
 
     /// Get a key-value pair based on its internal relative
     /// index in the backing array.
-    pub fn get_index(&self, index: usize) -> Option<&Entry<K, V>> {
+    pub fn get_index(&self, index: usize) -> Option<&SortedArrayEntry<K, V>> {
         if index < self.len() {
             Some(unsafe { self.inner.get_unchecked(index).assume_init_ref() })
         } else {
@@ -351,13 +285,13 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
         }
     }
 
-    /// Returns the first kv pair in the StackMap, if any exists
-    pub fn first(&self) -> Option<&Entry<K, V>> {
+    /// Returns the first kv pair in the SortedArray, if any exists
+    pub fn first(&self) -> Option<&SortedArrayEntry<K, V>> {
         self.get_index(0)
     }
 
-    /// Returns the last kv pair in the StackMap, if any exists
-    pub fn last(&self) -> Option<&Entry<K, V>> {
+    /// Returns the last kv pair in the SortedArray, if any exists
+    pub fn last(&self) -> Option<&SortedArrayEntry<K, V>> {
         if self.is_empty() {
             None
         } else {
@@ -365,7 +299,7 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
         }
     }
 
-    /// Returns `true` if this `StackMap` is at its maximum capacity and
+    /// Returns `true` if this `SortedArray` is at its maximum capacity and
     /// unable to receive additional data.
     pub const fn is_full(&self) -> bool {
         self.len == FANOUT
@@ -382,12 +316,12 @@ impl<K, V, const FANOUT: usize> StackMap<K, V, FANOUT> {
 
 #[cfg(test)]
 mod tests {
-    use super::StackMap;
-    use crate::common::entry::Entry;
+    use crate::entry::SortedArrayEntry;
+    use crate::SortedArray;
 
     #[test]
     fn test_insert_and_get() {
-        let mut stack_map: StackMap<u32, &str, 3> = StackMap::empty();
+        let mut stack_map: SortedArray<u32, &str, 3> = SortedArray::empty();
         assert!(stack_map.insert(1, "one").is_none());
         assert!(stack_map.insert(2, "two").is_none());
         assert!(stack_map.insert(3, "three").is_none());
@@ -400,7 +334,7 @@ mod tests {
 
     #[test]
     fn test_remove() {
-        let mut stack_map: StackMap<u32, &str, 3> = StackMap::empty();
+        let mut stack_map: SortedArray<u32, &str, 3> = SortedArray::empty();
         stack_map.insert(1, "one");
         stack_map.insert(2, "two");
         stack_map.insert(3, "three");
@@ -412,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_contains_key() {
-        let mut stack_map: StackMap<u32, &str, 3> = StackMap::empty();
+        let mut stack_map: SortedArray<u32, &str, 3> = SortedArray::empty();
         stack_map.insert(1, "one");
         stack_map.insert(2, "two");
 
@@ -423,21 +357,21 @@ mod tests {
 
     #[test]
     fn test_iter() {
-        let mut stack_map: StackMap<u32, &str, 3> = StackMap::empty();
+        let mut stack_map: SortedArray<u32, &str, 3> = SortedArray::empty();
         stack_map.insert(1, "one");
         stack_map.insert(2, "two");
         stack_map.insert(3, "three");
 
         let mut iter = stack_map.iter();
-        assert_eq!(iter.next(), Some(&Entry::new(1, "one")));
-        assert_eq!(iter.next_back(), Some(&Entry::new(3, "three")));
-        assert_eq!(iter.next(), Some(&Entry::new(2, "two")));
+        assert_eq!(iter.next(), Some(&SortedArrayEntry::new(1, "one")));
+        assert_eq!(iter.next_back(), Some(&SortedArrayEntry::new(3, "three")));
+        assert_eq!(iter.next(), Some(&SortedArrayEntry::new(2, "two")));
         assert_eq!(iter.next_back(), None);
     }
 
     #[test]
     fn test_split_off() {
-        let mut stack_map: StackMap<u32, &str, 4> = StackMap::empty();
+        let mut stack_map: SortedArray<u32, &str, 4> = SortedArray::empty();
         stack_map.insert(1, "one");
         stack_map.insert(2, "two");
         stack_map.insert(3, "three");
@@ -454,16 +388,28 @@ mod tests {
 
     #[test]
     fn test_get_less_than() {
-        let mut stack_map: StackMap<u32, &str, 4> = StackMap::empty();
+        let mut stack_map: SortedArray<u32, &str, 4> = SortedArray::empty();
         stack_map.insert(1, "one");
         stack_map.insert(3, "three");
         stack_map.insert(5, "five");
         stack_map.insert(7, "seven");
 
-        assert_eq!(stack_map.get_less_than(&2), Some(&Entry::new(1, "one")));
-        assert_eq!(stack_map.get_less_than(&4), Some(&Entry::new(3, "three")));
-        assert_eq!(stack_map.get_less_than(&6), Some(&Entry::new(5, "five")));
-        assert_eq!(stack_map.get_less_than(&8), Some(&Entry::new(7, "seven")));
+        assert_eq!(
+            stack_map.get_less_than(&2),
+            Some(&SortedArrayEntry::new(1, "one"))
+        );
+        assert_eq!(
+            stack_map.get_less_than(&4),
+            Some(&SortedArrayEntry::new(3, "three"))
+        );
+        assert_eq!(
+            stack_map.get_less_than(&6),
+            Some(&SortedArrayEntry::new(5, "five"))
+        );
+        assert_eq!(
+            stack_map.get_less_than(&8),
+            Some(&SortedArrayEntry::new(7, "seven"))
+        );
         assert_eq!(stack_map.get_less_than(&0), None);
     }
 }

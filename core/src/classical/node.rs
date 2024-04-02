@@ -1,7 +1,10 @@
-use crate::common::stack_map::StackMap;
 use crate::traits::KeyBounded;
-use crate::{common::entry::Entry, traits::StaticBounded};
+use crate::traits::StaticBounded;
 use serde::{Deserialize, Serialize};
+
+use sorted_array::SortedArray;
+use sorted_array::SortedArrayEntry;
+
 use std::fmt::Debug;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -10,7 +13,7 @@ pub struct BTreeNode<K, V, const FANOUT: usize> {
     #[serde(bound(
         deserialize = "K: Serialize + Deserialize<'de> + Ord + Copy, V: Serialize + Deserialize<'de>"
     ))]
-    inner: StackMap<K, V, FANOUT>,
+    inner: SortedArray<K, V, FANOUT>,
 }
 
 impl<K: Debug, V: Debug, const FANOUT: usize> Debug for BTreeNode<K, V, FANOUT> {
@@ -28,11 +31,11 @@ impl<K, V, const FANOUT: usize> Default for BTreeNode<K, V, FANOUT> {
 impl<K, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
     pub fn empty() -> Self {
         Self {
-            inner: StackMap::empty(),
+            inner: SortedArray::empty(),
         }
     }
 
-    pub fn entries(&self) -> &[Entry<K, V>] {
+    pub fn entries(&self) -> &[SortedArrayEntry<K, V>] {
         self.inner.entries()
     }
 

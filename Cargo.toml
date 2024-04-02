@@ -2,10 +2,13 @@
 resolver = "2"
 
 members = [
-  "core",
-  "derive",
-  "tests",
-  "engine",
+  "core", 
+  "derive", 
+  "tests", 
+  "engine", 
+  "utils/slice_search", 
+  "utils/sorted_array", 
+  "utils/id_allocator",
 ]
 
 [profile.release]

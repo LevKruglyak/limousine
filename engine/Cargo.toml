@@ -2,19 +2,14 @@
 name = "limousine_engine"
 version = "0.1.2"
 edition = "2021"
-description = "limousine_engine can reason about a large design continuum of hybrid index designs and materialize an optimal implementation using procedural macros."
+description = "limousine_engine can reason about a large design continuum of hybrid key-value store designs and materialize an optimal implementation using procedural macros."
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
 keywords = ["btree", "pgm", "database", "proc_macro", "limousine"]
 license = "Apache-2.0"
 repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
-dev_limousine_derive = { package = "limousine_derive", path = "../derive", optional = true}
-dev_limousine_core = { package = "limousine_core", path = "../core", optional = true}
-
-limousine_derive = { version = "0.1.0" }
-limousine_core = { version = "0.1.0" }
+limousine_derive = { path = "../derive", version = "0.1.0" }
+limousine_core = { path = "../core", version = "0.1.0" }
 
 [features]
-default = []
-dev = ["dev_limousine_core", "dev_limousine_derive"]
