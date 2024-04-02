@@ -1,5 +1,6 @@
-use super::{id_alloc::IDAllocator, ObjectStore, StoreID};
+use super::{ObjectStore, StoreID};
 use core::panic;
+use id_allocator::IDAllocator;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::{Ref, RefCell, RefMut},

@@ -172,6 +172,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "generational-arena",
+ "id_allocator",
  "marble",
  "num",
  "serde",

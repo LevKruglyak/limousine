@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 mod cached_store;
-mod id_alloc;
 mod store;
 
 pub use store::GlobalStore;
