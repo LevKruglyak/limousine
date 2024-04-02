@@ -16,4 +16,5 @@ limousine_derive = { version = "0.1.0" }
 limousine_core = { version = "0.1.0" }
 
 [features]
+default = []
 dev = ["dev_limousine_core", "dev_limousine_derive"]
