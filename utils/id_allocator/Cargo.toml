@@ -1,0 +1,15 @@
+[package]
+name = "id_allocator"
+version = "0.1.0"
+edition = "2021"
+description = "A simple ID allocator adapted from. [idalloc](https://github.com/udoprog/idalloc)"
+authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
+keywords = ["id", "allocator"]
+license = "Apache-2.0"
+repository = "https://github.com/LevKruglyak/limousine"
+
+[dependencies]
+serde = { version = "1.0.197", features = ["derive"], optional = true}
+
+[features]
+serde = ["dep:serde"]
