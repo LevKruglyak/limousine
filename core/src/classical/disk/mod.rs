@@ -41,7 +41,11 @@ where
     PA: Address,
 {
     fn search(&self, _: &B, ptr: BoundaryDiskBTreeInternalAddress, key: K) -> crate::Result<BA> {
-        Ok(self.inner.get_node(ptr)?.search_lub(&key).clone())
+        Ok(self
+            .inner
+            .get_node(ptr)?
+            .get_lower_bound_always(&key)
+            .clone())
     }
 
     fn insert(
@@ -113,7 +117,7 @@ where
     }
 
     fn search(&self, ptr: BoundaryDiskBTreeInternalAddress, key: K) -> crate::Result<Option<V>> {
-        Ok(self.inner.get_node(ptr)?.search_exact(&key).cloned())
+        Ok(self.inner.get_node(ptr)?.get_exact(&key).cloned())
     }
 
     fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
@@ -156,7 +160,11 @@ where
     PA: Persisted + Address,
 {
     fn search(&self, _: &B, ptr: DeepDiskBTreeInternalAddress, key: K) -> crate::Result<BA> {
-        Ok(self.inner.get_node(ptr)?.search_lub(&key).clone())
+        Ok(self
+            .inner
+            .get_node(ptr)?
+            .get_lower_bound_always(&key)
+            .clone())
     }
 
     fn insert(
@@ -231,7 +239,7 @@ where
     }
 
     fn search(&self, ptr: BoundaryDiskBTreeInternalAddress, key: K) -> crate::Result<Option<V>> {
-        Ok(self.inner.get_node(ptr)?.search_exact(&key).cloned())
+        Ok(self.inner.get_node(ptr)?.get_exact(&key).cloned())
     }
 
     fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {

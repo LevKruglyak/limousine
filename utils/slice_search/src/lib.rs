@@ -17,16 +17,28 @@
 /// let array = [0, 1, 2, 3, 4, 6];
 ///
 /// let search_result = BinarySearch::search(&array[..], &5);
-/// assert_eq!(upper_bound(search_result, 6), 5);
+/// assert_eq!(upper_bound(search_result, 6), Some(5));
 ///
 /// let search_result = BinarySearch::search(&array[..], &10);
-/// assert_eq!(upper_bound(search_result, 6), 6);
+/// assert_eq!(upper_bound(search_result, 6), None);
 /// ```
-pub fn upper_bound(search: Result<usize, usize>, cap: usize) -> usize {
+pub fn upper_bound(search: Result<usize, usize>, cap: usize) -> Option<usize> {
     match search {
-        Ok(index) => index,
-        Err(index) => index.min(cap),
+        Ok(index) => Some(index),
+        Err(index) => {
+            if index < cap {
+                Some(index)
+            } else {
+                None
+            }
+        }
     }
+}
+
+/// Returns the index of the smallest element greater than or equal to the search
+/// key, or the last index.
+pub fn upper_bound_always(search: Result<usize, usize>, cap: usize) -> usize {
+    upper_bound(search, cap).unwrap_or(cap - 1)
 }
 
 /// Returns the index of the largest element less than or equal to the search
@@ -40,34 +52,22 @@ pub fn upper_bound(search: Result<usize, usize>, cap: usize) -> usize {
 ///
 /// let search_result = BinarySearch::search(&array[..], &5);
 ///
-/// assert_eq!(lower_bound(search_result), 4);
+/// assert_eq!(lower_bound(search_result), Some(4));
 /// ```
-pub fn lower_bound(search: Result<usize, usize>) -> usize {
+#[inline(always)]
+pub fn lower_bound(search: Result<usize, usize>) -> Option<usize> {
     match search {
-        Ok(index) => index,
-        Err(index) => index.saturating_sub(1),
+        Ok(index) => Some(index),
+        Err(0) => None,
+        Err(index) => Some(index - 1),
     }
 }
 
-/// Offsets a search result by a constant factor. This is useful when searching
-/// on a slice which is a sub-slice of a larger slice.
-///
-/// # Example
-/// ```
-/// use slice_search::*;
-///
-/// let array = [0, 1, 2, 3, 4, 6];
-///
-/// let search_result = BinarySearch::search(&array[2..5], &5);
-///
-/// assert_eq!(lower_bound(offset(search_result, 2)), 4);
-/// assert_eq!(upper_bound(offset(search_result, 2), 6), 5);
-/// ```
-pub fn offset(search: Result<usize, usize>, offset: usize) -> Result<usize, usize> {
-    match search {
-        Ok(index) => Ok(index + offset),
-        Err(index) => Err(index + offset),
-    }
+/// Returns the index of the biggest element less than or equal to the search
+/// key, or the first index.
+#[inline(always)]
+pub fn lower_bound_always(search: Result<usize, usize>) -> usize {
+    lower_bound(search).unwrap_or(0)
 }
 
 use core::borrow::Borrow;
@@ -190,16 +190,26 @@ mod tests {
 
     #[test]
     fn test_upper_bound() {
-        assert_eq!(upper_bound(Ok(3), 5), 3);
-        assert_eq!(upper_bound(Err(3), 5), 3);
-        assert_eq!(upper_bound(Err(7), 5), 5);
+        assert_eq!(upper_bound(Ok(3), 5), Some(3));
+        assert_eq!(upper_bound(Err(3), 5), Some(3));
+        assert_eq!(upper_bound(Err(5), 5), None);
+        assert_eq!(upper_bound(Err(7), 5), None);
+
+        assert_eq!(upper_bound_always(Ok(3), 5), 3);
+        assert_eq!(upper_bound_always(Err(3), 5), 3);
+        assert_eq!(upper_bound_always(Err(5), 5), 4);
+        assert_eq!(upper_bound_always(Err(7), 5), 4);
     }
 
     #[test]
     fn test_lower_bound() {
-        assert_eq!(lower_bound(Ok(3)), 3);
-        assert_eq!(lower_bound(Err(3)), 2);
-        assert_eq!(lower_bound(Err(0)), 0);
+        assert_eq!(lower_bound(Ok(3)), Some(3));
+        assert_eq!(lower_bound(Err(3)), Some(2));
+        assert_eq!(lower_bound(Err(0)), None);
+
+        assert_eq!(lower_bound_always(Ok(3)), 3);
+        assert_eq!(lower_bound_always(Err(3)), 2);
+        assert_eq!(lower_bound_always(Err(0)), 0);
     }
 
     #[test]

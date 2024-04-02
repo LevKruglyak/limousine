@@ -36,7 +36,7 @@ where
     PA: Address,
 {
     fn search(&self, _: &B, ptr: BTreeInternalAddress, key: K) -> BA {
-        self.inner[ptr].search_lub(&key).clone()
+        self.inner[ptr].get_lower_bound_always(&key).clone()
     }
 
     fn insert(
@@ -107,7 +107,7 @@ where
     }
 
     fn search(&self, ptr: BTreeInternalAddress, key: K) -> Option<V> {
-        self.inner[ptr].search_exact(&key).cloned()
+        self.inner[ptr].get_exact(&key).cloned()
     }
 
     fn empty() -> Self {

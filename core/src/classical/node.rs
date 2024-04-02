@@ -62,18 +62,18 @@ impl<K, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
         }
     }
 
-    pub fn search_lub(&self, key: &K) -> &V
+    pub fn get_lower_bound_always(&self, key: &K) -> &V
     where
         K: Ord + Copy,
     {
-        self.inner.get_always(key)
+        self.inner.get_lower_bound_always(key)
     }
 
-    pub fn search_exact(&self, key: &K) -> Option<&V>
+    pub fn get_exact(&self, key: &K) -> Option<&V>
     where
         K: Ord + Copy,
     {
-        self.inner.get(key)
+        self.inner.get_exact(key)
     }
 
     /// Inserts an item and return the previous value if it exists.
@@ -89,7 +89,11 @@ impl<K, V, const FANOUT: usize> BTreeNode<K, V, FANOUT> {
     where
         K: Clone,
     {
-        let (key, map) = self.inner.split();
+        let split_idx = FANOUT / 2;
+
+        let key = self.inner.entries()[split_idx].key.clone();
+        let map = self.inner.split_off(split_idx);
+
         (key, Self { inner: map })
     }
 }
