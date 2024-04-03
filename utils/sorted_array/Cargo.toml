@@ -10,7 +10,7 @@ repository = "https://github.com/LevKruglyak/limousine"
 
 
 [dependencies]
-slice_search = { path = "../slice_search", version = "0.1" }
+slice_search = { path = "../slice_search", version = "0.1.2" }
 serde = { version = "1.0.197", features = ["derive"], optional = true}
 
 [features]

@@ -1,6 +1,6 @@
 [package]
 name = "limousine_engine"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 description = "limousine_engine can reason about a large design continuum of hybrid key-value store designs and materialize an optimal implementation using procedural macros."
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
@@ -10,7 +10,7 @@ repository = "https://github.com/LevKruglyak/limousine"
 readme = "../README.md"
 
 [dependencies]
-limousine_derive = { path = "../derive", version = "0.3" }
-limousine_core = { path = "../core", version = "0.3" }
+limousine_derive = { path = "../derive", version = "0.3.4" }
+limousine_core = { path = "../core", version = "0.3.4" }
 
 [features]

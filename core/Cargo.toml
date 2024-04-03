@@ -1,7 +1,7 @@
 [package]
 name = "limousine_core"
 description = "Building blocks for hybrid index data structures."
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 authors = ["Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
 keywords = ["btree", "pgm", "database", "proc_macro", "limousine"]
@@ -22,8 +22,8 @@ bincode = { version = "1.3.3" }
 
 anyhow = "1.0.79"
 
-sorted_array = { path = "../utils/sorted_array", version = "0.1", features = ["serde"] }
-id_allocator = { path = "../utils/id_allocator", version = "0.1", features = ["serde"] }
+sorted_array = { path = "../utils/sorted_array", version = "0.1.2", features = ["serde"] }
+id_allocator = { path = "../utils/id_allocator", version = "0.1.0", features = ["serde"] }
 lazy_static = "1.4.0"
 
 [dev-dependencies]
