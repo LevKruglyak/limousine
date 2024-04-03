@@ -8,7 +8,7 @@ use crate::traits::*;
 /// A `NodeLayer` is has the interface of a linked list of key-bounded nodes which implement the
 /// `Model` trait. It's assumed that a `NodeLayer` is always non-empty, and thus should always have
 /// a `first` and `last` node.
-pub trait NodeLayer<K, SA, PA>
+pub trait NodeLayer<K, SA, PA>: Sized
 where
     SA: Address,
     PA: Address,
@@ -30,10 +30,7 @@ where
     fn last(&self) -> SA;
 
     /// An immutable iterator over the layer, returning (Key, Address) pairs
-    fn range(&self, start: Bound<SA>, end: Bound<SA>) -> Iter<'_, K, Self, SA, PA>
-    where
-        Self: Sized,
-    {
+    fn range(&self, start: Bound<SA>, end: Bound<SA>) -> Iter<'_, K, Self, SA, PA> {
         Iter::range(self, start, end)
     }
 
@@ -42,7 +39,6 @@ where
     fn range_mut(&mut self, start: Bound<SA>, end: Bound<SA>) -> IterMut<'_, K, Self, SA, PA>
     where
         K: Clone,
-        Self: Sized,
     {
         IterMut::range(self, start, end)
     }

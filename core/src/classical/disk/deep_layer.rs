@@ -6,7 +6,7 @@ use crate::{
         list::deep_disk::DeepDiskList,
         storage::{GlobalStore, StoreID},
     },
-    impl_node_layer, Address, KeyBounded, NodeLayer, Persisted, StaticBounded,
+    impl_node_layer, Address, Key, KeyBounded, NodeLayer, Persisted,
 };
 
 pub struct DeepDiskBTreeLayer<K: Ord, V, const FANOUT: usize, PA: Persisted> {
@@ -15,7 +15,7 @@ pub struct DeepDiskBTreeLayer<K: Ord, V, const FANOUT: usize, PA: Persisted> {
 
 impl<K, V, const FANOUT: usize, PA> DeepDiskBTreeLayer<K, V, FANOUT, PA>
 where
-    K: Persisted + Clone + Ord + StaticBounded,
+    K: Persisted + Key,
     V: Persisted,
     PA: Persisted + Address,
 {
@@ -41,10 +41,10 @@ where
         Ok(())
     }
 
-    pub fn fill_with_parent<B>(&mut self, base: &mut B) -> crate::Result<()>
-    where
-        B: NodeLayer<K, V, StoreID>,
-    {
+    pub fn fill_with_parent<B: NodeLayer<K, V, StoreID>>(
+        &mut self,
+        base: &mut B,
+    ) -> crate::Result<()> {
         if let Some(mut ptr) = self.inner.is_empty()? {
             let mut iter = base.range_mut(Bound::Unbounded, Bound::Unbounded);
 
@@ -107,19 +107,13 @@ where
         Ok(None)
     }
 
-    pub fn insert_with_parent<B>(
+    pub fn insert_with_parent<B: NodeLayer<K, V, StoreID>>(
         &mut self,
         key: K,
         value: V,
         base: &mut B,
         ptr: StoreID,
-    ) -> crate::Result<Option<(K, StoreID, PA)>>
-    where
-        K: Clone + Ord + StaticBounded,
-        V: Address,
-        PA: Address,
-        B: NodeLayer<K, V, StoreID>,
-    {
+    ) -> crate::Result<Option<(K, StoreID, PA)>> {
         if self.inner.get_node(ptr)?.unwrap().is_full() {
             let parent = self.inner.parent(ptr).unwrap();
 
@@ -162,7 +156,7 @@ where
 impl<K, V, const FANOUT: usize, PA> NodeLayer<K, StoreID, PA>
     for DeepDiskBTreeLayer<K, V, FANOUT, PA>
 where
-    K: Persisted + StaticBounded,
+    K: Persisted + Key,
     V: Persisted,
     PA: Persisted + Address,
 {

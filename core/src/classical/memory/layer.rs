@@ -1,7 +1,8 @@
 use crate::classical::node::BTreeNode;
 use crate::common::list::memory::*;
 use crate::node_layer::{impl_node_layer, NodeLayer};
-use crate::traits::{Address, KeyBounded, StaticBounded};
+use crate::traits::{Address, KeyBounded};
+use crate::Key;
 use std::ops::Bound;
 
 // ----------------------------------------
@@ -12,7 +13,10 @@ pub struct MemoryBTreeLayer<K: Ord, V, const FANOUT: usize, PA> {
     inner: MemoryList<BTreeNode<K, V, FANOUT>, PA>,
 }
 
-impl<K: Ord, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
+impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA>
+where
+    K: Key,
+{
     pub fn empty() -> Self {
         Self {
             inner: MemoryList::empty(),
@@ -33,11 +37,9 @@ impl<K: Ord, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         }
     }
 
-    pub fn fill_with_parent<B>(&mut self, base: &mut B)
+    pub fn fill_with_parent<B: NodeLayer<K, V, ArenaID>>(&mut self, base: &mut B)
     where
-        K: Clone,
         V: Address,
-        B: NodeLayer<K, V, ArenaID>,
     {
         // Add empty cap node
         let mut ptr = self.inner.clear();
@@ -56,7 +58,6 @@ impl<K: Ord, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
 
     pub fn insert(&mut self, key: K, value: V, ptr: ArenaID) -> Option<(K, ArenaID, PA)>
     where
-        K: Clone + StaticBounded,
         PA: Address,
     {
         if self.inner[ptr].is_full() {
@@ -85,7 +86,7 @@ impl<K: Ord, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         None
     }
 
-    pub fn insert_with_parent<B>(
+    pub fn insert_with_parent<B: NodeLayer<K, V, ArenaID>>(
         &mut self,
         key: K,
         value: V,
@@ -93,10 +94,8 @@ impl<K: Ord, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         ptr: ArenaID,
     ) -> Option<(K, ArenaID, PA)>
     where
-        K: Clone + StaticBounded,
         V: Address,
         PA: Address,
-        B: NodeLayer<K, V, ArenaID>,
     {
         if self.inner[ptr].is_full() {
             let parent = self.inner.parent(ptr).unwrap();
@@ -145,7 +144,7 @@ impl<K: Ord, V, const FANOUT: usize, PA> core::ops::Index<ArenaID>
 
 impl<K, V, const FANOUT: usize, PA> NodeLayer<K, ArenaID, PA> for MemoryBTreeLayer<K, V, FANOUT, PA>
 where
-    K: Clone + Ord + StaticBounded,
+    K: Key,
     PA: Address,
 {
     impl_node_layer!(ArenaID, PA);

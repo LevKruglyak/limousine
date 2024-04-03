@@ -3,7 +3,7 @@ mod layer;
 use crate::common::list::memory::ArenaID;
 use crate::node_layer::{impl_node_layer, NodeLayer};
 use crate::traits::Address;
-use crate::{component::*, Key, StaticBounded};
+use crate::{component::*, Key, StaticBounded, Value};
 use layer::*;
 
 // -------------------------------------------------------
@@ -80,7 +80,7 @@ impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddress, PA>
     for BTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: Key,
-    V: 'static,
+    V: Value,
     PA: Address,
 {
     impl_node_layer!(ArenaID, PA);
@@ -90,7 +90,7 @@ impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddres
     for BTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: Key,
-    V: 'static + Clone,
+    V: Value,
     PA: Address,
 {
     fn insert(

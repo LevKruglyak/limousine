@@ -15,7 +15,7 @@ where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
     SA: Address,
-    K: Clone,
+    K: Key,
 {
     fn search(&self, base: &Base, key: &K) -> BA;
 
@@ -31,7 +31,7 @@ where
     BA: Address,
     SA: Address,
     PA: Address,
-    K: Clone,
+    K: Key,
 {
     fn search(&self, base: &Base, ptr: SA, key: &K) -> BA;
 
@@ -51,7 +51,7 @@ where
     BA: Persisted + Address,
     SA: Persisted + Address,
     PA: Address,
-    K: Clone,
+    K: Key,
 {
     fn search(&self, base: &Base, ptr: SA, key: &K) -> crate::Result<BA>;
 
@@ -71,7 +71,7 @@ where
     BA: Persisted + Address,
     SA: Persisted + Address,
     PA: Persisted + Address,
-    K: Clone,
+    K: Key,
 {
     fn search(&self, base: &Base, ptr: SA, key: &K) -> crate::Result<BA>;
 
@@ -89,7 +89,7 @@ where
     Self: NodeLayer<K, SA, PA>,
     SA: Address,
     PA: Address,
-    K: Clone,
+    K: Key,
 {
     fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropagateInsert<K, SA, PA>>;
 
@@ -105,7 +105,7 @@ where
     Self: NodeLayer<K, SA, PA> + Sized,
     SA: Persisted + Address,
     PA: Address,
-    K: Clone,
+    K: Key,
 {
     fn insert(
         &mut self,
@@ -124,7 +124,7 @@ where
     Self: NodeLayer<K, SA, PA> + Sized,
     SA: Persisted + Address,
     PA: Persisted + Address,
-    K: Clone,
+    K: Key,
 {
     fn insert(
         &mut self,

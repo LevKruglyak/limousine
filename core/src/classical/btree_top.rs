@@ -1,6 +1,7 @@
 use crate::component::{PropagateInsert, TopComponent};
 use crate::node_layer::NodeLayer;
 use crate::traits::Address;
+use crate::Key;
 use std::collections::BTreeMap;
 use std::ops::Bound;
 
@@ -14,7 +15,7 @@ pub struct BTreeTopComponent<K, X, A> {
 impl<K, X, Base, BA: Copy> TopComponent<K, Base, BA, ()> for BTreeTopComponent<K, X, BA>
 where
     Base: NodeLayer<K, BA, ()>,
-    K: Ord + Clone,
+    K: Key,
     BA: Address,
 {
     fn search(&self, _: &Base, key: &K) -> BA {
@@ -28,14 +29,11 @@ where
 
     fn insert(&mut self, base: &mut Base, prop: PropagateInsert<K, BA, ()>) {
         match prop {
-            PropagateInsert::Single(key, address, _parent) => {
-                // TODO: figure out how to leverage parent?
+            PropagateInsert::Single(key, address, _) => {
                 self.inner.insert(key, address);
                 base.set_parent(address, ());
             }
-            PropagateInsert::Replace { .. } => {
-                unimplemented!()
-            }
+            _ => unimplemented!(),
         }
     }
 

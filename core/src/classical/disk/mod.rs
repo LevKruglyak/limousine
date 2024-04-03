@@ -2,7 +2,6 @@ use crate::{
     common::storage::{GlobalStore, StoreID},
     impl_node_layer, Address, BoundaryDiskBaseComponent, BoundaryDiskInternalComponent,
     DeepDiskBaseComponent, DeepDiskInternalComponent, Key, NodeLayer, Persisted, PropagateInsert,
-    StaticBounded, Value,
 };
 
 use self::boundary_layer::BoundaryDiskBTreeLayer;
@@ -25,7 +24,7 @@ pub struct BoundaryDiskBTreeInternalComponent<K: Ord, X, const FANOUT: usize, BA
 impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, BoundaryDiskBTreeInternalAddress, PA>
     for BoundaryDiskBTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: Persisted + StaticBounded,
+    K: Persisted + Key,
     BA: Persisted + Address,
     PA: Address,
 {
@@ -88,7 +87,7 @@ pub struct BoundaryDiskBTreeBaseComponent<K: Ord, V, const FANOUT: usize, PA> {
 impl<K, V, const FANOUT: usize, PA> NodeLayer<K, BoundaryDiskBTreeBaseAddress, PA>
     for BoundaryDiskBTreeBaseComponent<K, V, FANOUT, PA>
 where
-    K: Key + Persisted,
+    K: Persisted + Key,
     V: Persisted,
     PA: Address,
 {
@@ -100,7 +99,7 @@ impl<K, V, const FANOUT: usize, PA: 'static>
     for BoundaryDiskBTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
-    V: Persisted + Value,
+    V: Persisted,
     PA: Address,
 {
     fn insert(
@@ -141,7 +140,7 @@ pub struct DeepDiskBTreeInternalComponent<K: Ord, X, const FANOUT: usize, BA, PA
 impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, DeepDiskBTreeInternalAddress, PA>
     for DeepDiskBTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: Persisted + StaticBounded,
+    K: Persisted + Key,
     BA: Persisted + Address,
     PA: Persisted + Address,
 {
@@ -204,7 +203,7 @@ pub struct DeepDiskBTreeBaseComponent<K: Ord, V, const FANOUT: usize, PA: Persis
 impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, DeepDiskBTreeBaseAddress, PA>
     for DeepDiskBTreeBaseComponent<K, V, FANOUT, PA>
 where
-    K: Key + Persisted,
+    K: Persisted + Key,
     V: Persisted,
     PA: Persisted + Address,
 {
@@ -216,7 +215,7 @@ impl<K, V, const FANOUT: usize, PA: 'static>
     for DeepDiskBTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
-    V: Persisted + Value,
+    V: Persisted,
     PA: Persisted + Address,
 {
     fn insert(
