@@ -8,21 +8,18 @@ use std::ops::Bound;
 // Layer Type
 // ----------------------------------------
 
-pub struct MemoryBTreeLayer<K, V, const FANOUT: usize, PA> {
+pub struct MemoryBTreeLayer<K: Ord, V, const FANOUT: usize, PA> {
     inner: MemoryList<BTreeNode<K, V, FANOUT>, PA>,
 }
 
-impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
+impl<K: Ord, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     pub fn empty() -> Self {
         Self {
-            inner: MemoryList::new(),
+            inner: MemoryList::empty(),
         }
     }
 
-    pub fn fill(&mut self, iter: impl Iterator<Item = (K, V)>)
-    where
-        K: Copy + Ord,
-    {
+    pub fn fill(&mut self, iter: impl Iterator<Item = (K, V)>) {
         // Add empty cap node
         let mut ptr = self.inner.clear();
 
@@ -38,7 +35,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
 
     pub fn fill_with_parent<B>(&mut self, base: &mut B)
     where
-        K: Copy + Ord,
+        K: Clone,
         V: Address,
         B: NodeLayer<K, V, ArenaID>,
     {
@@ -52,15 +49,14 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
                 ptr = self.inner.insert_after(BTreeNode::empty(), ptr);
             }
 
-            self.inner[ptr].insert(key, address.clone());
+            self.inner[ptr].insert(key.clone(), address.clone());
             parent.set(ptr);
         }
     }
 
     pub fn insert(&mut self, key: K, value: V, ptr: ArenaID) -> Option<(K, ArenaID, PA)>
     where
-        K: Copy + Ord + StaticBounded,
-        V: 'static,
+        K: Clone + StaticBounded,
         PA: Address,
     {
         if self.inner[ptr].is_full() {
@@ -78,7 +74,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
             }
 
             return Some((
-                *self.inner[new_node_ptr].lower_bound(),
+                self.inner[new_node_ptr].lower_bound().clone(),
                 new_node_ptr,
                 parent,
             ));
@@ -97,7 +93,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
         ptr: ArenaID,
     ) -> Option<(K, ArenaID, PA)>
     where
-        K: Copy + Ord + StaticBounded,
+        K: Clone + StaticBounded,
         V: Address,
         PA: Address,
         B: NodeLayer<K, V, ArenaID>,
@@ -124,7 +120,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
             }
 
             return Some((
-                *self.inner[new_node_ptr].lower_bound(),
+                self.inner[new_node_ptr].lower_bound().clone(),
                 new_node_ptr,
                 parent,
             ));
@@ -137,7 +133,7 @@ impl<K, V, const FANOUT: usize, PA> MemoryBTreeLayer<K, V, FANOUT, PA> {
     }
 }
 
-impl<K, V, const FANOUT: usize, PA> core::ops::Index<ArenaID>
+impl<K: Ord, V, const FANOUT: usize, PA> core::ops::Index<ArenaID>
     for MemoryBTreeLayer<K, V, FANOUT, PA>
 {
     type Output = BTreeNode<K, V, FANOUT>;
@@ -149,8 +145,7 @@ impl<K, V, const FANOUT: usize, PA> core::ops::Index<ArenaID>
 
 impl<K, V, const FANOUT: usize, PA> NodeLayer<K, ArenaID, PA> for MemoryBTreeLayer<K, V, FANOUT, PA>
 where
-    K: Copy + StaticBounded + 'static,
-    V: 'static,
+    K: Clone + Ord + StaticBounded,
     PA: Address,
 {
     impl_node_layer!(ArenaID, PA);

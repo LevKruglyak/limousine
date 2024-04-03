@@ -17,7 +17,6 @@ impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Iter<'n, K, N, SA, PA>
 where
     SA: Address,
     PA: Address,
-    K: Copy,
 {
     pub fn range(layer: &'n N, start: Bound<SA>, end: Bound<SA>) -> Self {
         match start {
@@ -47,7 +46,6 @@ where
 
 impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> Iterator for Iter<'n, K, N, SA, PA>
 where
-    K: Copy,
     SA: Address,
     PA: Address,
 {
@@ -77,14 +75,14 @@ where
             self.current = self.layer.next(current);
         }
 
-        Some(((self.layer.lower_bound(current.clone())), current.clone()))
+        Some(((self.layer.lower_bound(current.clone())), current))
     }
 }
 
 // ----------------------------------------
 // Mutable Iterator Type
 // ----------------------------------------
-//
+
 pub struct IterMut<'n, K, N, SA, PA> {
     layer: &'n mut N,
     current: Option<SA>,
@@ -94,9 +92,9 @@ pub struct IterMut<'n, K, N, SA, PA> {
 
 impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> IterMut<'n, K, N, SA, PA>
 where
+    K: Clone,
     SA: Address,
     PA: Address,
-    K: Copy,
 {
     pub fn range(layer: &'n mut N, start: Bound<SA>, end: Bound<SA>) -> Self {
         match start {
@@ -157,7 +155,7 @@ where
             self.current = self.layer.next(current);
         }
 
-        let key = self.layer.lower_bound(current.clone());
+        let key = self.layer.lower_bound(current.clone()).clone();
         let current = current.clone();
         let parent = IterMutParentView {
             layer: self.layer,
@@ -177,7 +175,6 @@ pub struct IterMutParentView<'n, K, N, SA, PA> {
 
 impl<'n, K, SA, PA, N: NodeLayer<K, SA, PA>> IterMutParentView<'n, K, N, SA, PA>
 where
-    K: Copy,
     SA: Address,
     PA: Address,
 {

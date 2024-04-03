@@ -15,9 +15,9 @@ where
     Base: NodeLayer<K, BA, SA>,
     BA: Address,
     SA: Address,
-    K: Copy,
+    K: Clone,
 {
-    fn search(&self, base: &Base, key: K) -> BA;
+    fn search(&self, base: &Base, key: &K) -> BA;
 
     fn insert(&mut self, base: &mut Base, prop: PropagateInsert<K, BA, SA>);
 
@@ -31,9 +31,9 @@ where
     BA: Address,
     SA: Address,
     PA: Address,
-    K: Copy,
+    K: Clone,
 {
-    fn search(&self, base: &Base, ptr: SA, key: K) -> BA;
+    fn search(&self, base: &Base, ptr: SA, key: &K) -> BA;
 
     fn insert(
         &mut self,
@@ -46,14 +46,14 @@ where
 
 pub trait BoundaryDiskInternalComponent<K, Base, BA, SA, PA>
 where
-    Self: NodeLayer<K, SA, PA>,
+    Self: NodeLayer<K, SA, PA> + Sized,
     Base: NodeLayer<K, BA, SA>,
     BA: Persisted + Address,
     SA: Persisted + Address,
     PA: Address,
-    K: Copy,
+    K: Clone,
 {
-    fn search(&self, base: &Base, ptr: SA, key: K) -> crate::Result<BA>;
+    fn search(&self, base: &Base, ptr: SA, key: &K) -> crate::Result<BA>;
 
     fn insert(
         &mut self,
@@ -66,14 +66,14 @@ where
 
 pub trait DeepDiskInternalComponent<K, Base, BA, SA, PA>
 where
-    Self: NodeLayer<K, SA, PA>,
+    Self: NodeLayer<K, SA, PA> + Sized,
     Base: NodeLayer<K, BA, SA>,
     BA: Persisted + Address,
     SA: Persisted + Address,
     PA: Persisted + Address,
-    K: Copy,
+    K: Clone,
 {
-    fn search(&self, base: &Base, ptr: SA, key: K) -> crate::Result<BA>;
+    fn search(&self, base: &Base, ptr: SA, key: &K) -> crate::Result<BA>;
 
     fn insert(
         &mut self,
@@ -89,11 +89,11 @@ where
     Self: NodeLayer<K, SA, PA>,
     SA: Address,
     PA: Address,
-    K: Copy,
+    K: Clone,
 {
     fn insert(&mut self, ptr: SA, key: K, value: V) -> Option<PropagateInsert<K, SA, PA>>;
 
-    fn search(&self, ptr: SA, key: K) -> Option<V>;
+    fn search(&self, ptr: SA, key: &K) -> Option<V>;
 
     fn empty() -> Self;
 
@@ -102,10 +102,10 @@ where
 
 pub trait BoundaryDiskBaseComponent<K, V, SA, PA>
 where
-    Self: NodeLayer<K, SA, PA>,
+    Self: NodeLayer<K, SA, PA> + Sized,
     SA: Persisted + Address,
     PA: Address,
-    K: Copy,
+    K: Clone,
 {
     fn insert(
         &mut self,
@@ -114,17 +114,17 @@ where
         value: V,
     ) -> crate::Result<Option<PropagateInsert<K, SA, PA>>>;
 
-    fn search(&self, ptr: SA, key: K) -> crate::Result<Option<V>>;
+    fn search(&self, ptr: SA, key: &K) -> crate::Result<Option<V>>;
 
     fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self>;
 }
 
 pub trait DeepDiskBaseComponent<K, V, SA, PA>
 where
-    Self: NodeLayer<K, SA, PA>,
+    Self: NodeLayer<K, SA, PA> + Sized,
     SA: Persisted + Address,
     PA: Persisted + Address,
-    K: Copy,
+    K: Clone,
 {
     fn insert(
         &mut self,
@@ -133,7 +133,7 @@ where
         value: V,
     ) -> crate::Result<Option<PropagateInsert<K, SA, PA>>>;
 
-    fn search(&self, ptr: SA, key: K) -> crate::Result<Option<V>>;
+    fn search(&self, ptr: SA, key: &K) -> crate::Result<Option<V>>;
 
     fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self>;
 }

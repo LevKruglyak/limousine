@@ -34,7 +34,7 @@ impl<N, PA> MemoryList<N, PA>
 where
     N: Default,
 {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         let mut arena = Arena::new();
         let ptr = arena.insert((Default::default(), None));
 
@@ -136,8 +136,8 @@ impl<N, PA> std::ops::IndexMut<ArenaID> for MemoryList<N, PA> {
 
 impl<K, N, PA> NodeLayer<K, ArenaID, PA> for MemoryList<N, PA>
 where
-    K: Copy,
-    N: KeyBounded<K> + 'static,
+    K: Clone,
+    N: KeyBounded<K>,
     PA: Address,
 {
     fn parent(&self, ptr: ArenaID) -> Option<PA> {
@@ -149,7 +149,7 @@ where
     }
 
     fn lower_bound(&self, ptr: ArenaID) -> K {
-        *self.arena[ptr].0.lower_bound()
+        self.arena[ptr].0.lower_bound().clone()
     }
 
     fn next(&self, ptr: ArenaID) -> Option<ArenaID> {
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_new() {
-        let list: MemoryList<i32, ()> = MemoryList::new();
+        let list: MemoryList<i32, ()> = MemoryList::empty();
 
         assert_eq!(list.len(), 1);
         assert_eq!(list[list.first], Default::default());
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn linked_list_insert_after() {
-        let mut list: MemoryList<u32, ()> = MemoryList::new();
+        let mut list: MemoryList<u32, ()> = MemoryList::empty();
 
         let first_ptr = list.first;
         let second_ptr = list.insert_after(2, first_ptr);
@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn linked_list_insert_before() {
-        let mut list: MemoryList<u32, ()> = MemoryList::new();
+        let mut list: MemoryList<u32, ()> = MemoryList::empty();
 
         let first_ptr = list.first;
         let zero_ptr = list.insert_before(0, first_ptr);
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_linked_list_clear() {
-        let mut list: MemoryList<i32, ()> = MemoryList::new();
+        let mut list: MemoryList<i32, ()> = MemoryList::empty();
         list.insert_after(2, list.first);
 
         assert_eq!(list.arena.len(), 2);

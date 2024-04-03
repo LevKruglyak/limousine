@@ -28,7 +28,7 @@ struct SortedArrayDeserializer<K, V, const FANOUT: usize>(
 
 impl<'de, K, V, const FANOUT: usize> Visitor<'de> for SortedArrayDeserializer<K, V, FANOUT>
 where
-    K: Deserialize<'de> + Ord + Copy,
+    K: Deserialize<'de> + Ord,
     V: Deserialize<'de>,
 {
     type Value = SortedArray<K, V, FANOUT>;
@@ -58,7 +58,7 @@ where
 
 impl<'de, K, V, const FANOUT: usize> Deserialize<'de> for SortedArray<K, V, FANOUT>
 where
-    K: Serialize + Deserialize<'de> + Ord + Copy,
+    K: Serialize + Deserialize<'de> + Ord,
     V: Serialize + Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

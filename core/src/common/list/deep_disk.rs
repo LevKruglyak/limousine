@@ -136,7 +136,7 @@ where
 
 impl<K, N, PA> NodeLayer<K, StoreID, PA> for DeepDiskList<N, PA>
 where
-    K: Copy,
+    K: Persisted,
     N: Persisted + KeyBounded<K>,
     PA: Persisted + Address,
 {
@@ -157,7 +157,7 @@ where
     }
 
     fn lower_bound(&self, ptr: StoreID) -> K {
-        *self.get_node(ptr).unwrap().unwrap().lower_bound()
+        self.get_node(ptr).unwrap().unwrap().lower_bound().clone()
     }
 
     fn next(&self, ptr: StoreID) -> Option<StoreID> {

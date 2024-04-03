@@ -35,7 +35,7 @@ impl<K, V, const N: usize> SortedArray<K, V, N> {
     /// Utility method to search the array by key
     fn search(&self, key: &K) -> Result<usize, usize>
     where
-        K: Ord + Copy,
+        K: Ord,
     {
         OptimalSearch::search_by_key(self.entries(), key)
     }
@@ -43,7 +43,7 @@ impl<K, V, const N: usize> SortedArray<K, V, N> {
     /// Return an entry which is an exact match for the key
     pub fn get_exact(&self, key: &K) -> Option<&V>
     where
-        K: Ord + Copy,
+        K: Ord,
     {
         if let Ok(index) = self.search(key) {
             Some(unsafe { &self.inner.get_unchecked(index).assume_init_ref().value })
@@ -64,7 +64,7 @@ impl<K, V, const N: usize> SortedArray<K, V, N> {
     /// method returns `true`, which happens when `self.len() == N`.
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
     where
-        K: Ord + Copy,
+        K: Ord,
     {
         match self.search(&key) {
             Ok(index) => {
@@ -97,7 +97,7 @@ impl<K, V, const N: usize> SortedArray<K, V, N> {
     /// Remove an element from the sorted array
     pub fn remove(&mut self, key: &K) -> Option<V>
     where
-        K: Ord + Copy,
+        K: Ord,
     {
         // TODO: fix undefined behavior here
         if let Ok(index) = self.search(key) {
@@ -123,7 +123,7 @@ impl<K, V, const N: usize> SortedArray<K, V, N> {
     /// Check if the array contains a given element.
     pub fn contains_key(&self, key: &K) -> bool
     where
-        K: Ord + Copy,
+        K: Ord,
     {
         self.search(key).is_ok()
     }
@@ -161,7 +161,7 @@ impl<K, V, const N: usize> SortedArray<K, V, N> {
     /// to the provided key.
     pub fn get_lower_bound(&self, key: &K) -> Option<&V>
     where
-        K: Ord + Copy,
+        K: Ord,
     {
         // binary search LUB
         if let Some(index) = lower_bound(self.search(key)) {
@@ -175,7 +175,7 @@ impl<K, V, const N: usize> SortedArray<K, V, N> {
     /// to the provided key, or the first key-value pair.
     pub fn get_lower_bound_always(&self, key: &K) -> &V
     where
-        K: Ord + Copy,
+        K: Ord,
     {
         // binary search LUB
         let index = lower_bound_always(self.search(key));

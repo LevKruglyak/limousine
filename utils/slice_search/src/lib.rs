@@ -96,7 +96,7 @@ pub trait Search {
     /// let result = BinarySearch::search(&slice, &6);
     /// assert_eq!(result, Err(4));
     /// ```
-    fn search<T: Ord + Clone>(slice: &[T], x: &T) -> Result<usize, usize> {
+    fn search<T: Ord>(slice: &[T], x: &T) -> Result<usize, usize> {
         Self::search_by_key(slice, x)
     }
 
@@ -134,7 +134,7 @@ pub trait Search {
     /// let result = BinarySearch::search_by_key(&slice, &3);
     /// assert_eq!(result, Ok(1));
     /// ```
-    fn search_by_key<K: Ord + Clone, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize>;
+    fn search_by_key<K: Ord, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize>;
 }
 
 /// Performs a binary search on a slice, with computational complexity `O(log n)`
@@ -142,8 +142,8 @@ pub trait Search {
 pub struct BinarySearch;
 
 impl Search for BinarySearch {
-    fn search_by_key<K: Ord + Clone, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize> {
-        slice.binary_search_by_key(x, |x| x.borrow().clone())
+    fn search_by_key<K: Ord, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize> {
+        slice.binary_search_by(|y| y.borrow().cmp(x))
     }
 }
 
@@ -175,7 +175,7 @@ const BINARY_SEARCH_CUTOFF: usize = 1024;
 pub struct OptimalSearch;
 
 impl Search for OptimalSearch {
-    fn search_by_key<K: Ord + Clone, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize> {
+    fn search_by_key<K: Ord, T: Borrow<K>>(slice: &[T], x: &K) -> Result<usize, usize> {
         if slice.len() * core::mem::size_of::<K>() > BINARY_SEARCH_CUTOFF {
             BinarySearch::search_by_key(slice, x)
         } else {

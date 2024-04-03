@@ -1,9 +1,9 @@
 mod layer;
 
 use crate::common::list::memory::ArenaID;
-use crate::component::*;
 use crate::node_layer::{impl_node_layer, NodeLayer};
-use crate::traits::{Address, StaticBounded};
+use crate::traits::Address;
+use crate::{component::*, Key, StaticBounded};
 use layer::*;
 
 // -------------------------------------------------------
@@ -12,7 +12,7 @@ use layer::*;
 
 pub type BTreeInternalAddress = ArenaID;
 
-pub struct BTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA> {
+pub struct BTreeInternalComponent<K: Ord, X: 'static, const FANOUT: usize, BA, PA> {
     inner: MemoryBTreeLayer<K, BA, FANOUT, PA>,
     _ph: std::marker::PhantomData<X>,
 }
@@ -20,7 +20,7 @@ pub struct BTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA> {
 impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, BTreeInternalAddress, PA>
     for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: StaticBounded,
+    K: Clone + Ord + StaticBounded,
     BA: Address,
     PA: Address,
 {
@@ -31,12 +31,12 @@ impl<K, X, BA, PA, B: NodeLayer<K, BA, BTreeInternalAddress>, const FANOUT: usiz
     InternalComponent<K, B, BA, BTreeInternalAddress, PA>
     for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: StaticBounded,
+    K: Key,
     BA: Address,
     PA: Address,
 {
-    fn search(&self, _: &B, ptr: BTreeInternalAddress, key: K) -> BA {
-        self.inner[ptr].get_lower_bound_always(&key).clone()
+    fn search(&self, _: &B, ptr: BTreeInternalAddress, key: &K) -> BA {
+        self.inner[ptr].get_lower_bound_always(key).clone()
     }
 
     fn insert(
@@ -72,14 +72,14 @@ where
 
 pub type BTreeBaseAddress = BTreeInternalAddress;
 
-pub struct BTreeBaseComponent<K, V, const FANOUT: usize, PA> {
+pub struct BTreeBaseComponent<K: Ord, V, const FANOUT: usize, PA> {
     inner: MemoryBTreeLayer<K, V, FANOUT, PA>,
 }
 
 impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BTreeBaseAddress, PA>
     for BTreeBaseComponent<K, V, FANOUT, PA>
 where
-    K: StaticBounded,
+    K: Key,
     V: 'static,
     PA: Address,
 {
@@ -89,7 +89,7 @@ where
 impl<K, V, const FANOUT: usize, PA: 'static> BaseComponent<K, V, BTreeBaseAddress, PA>
     for BTreeBaseComponent<K, V, FANOUT, PA>
 where
-    K: StaticBounded,
+    K: Key,
     V: 'static + Clone,
     PA: Address,
 {
@@ -106,8 +106,8 @@ where
         }
     }
 
-    fn search(&self, ptr: BTreeInternalAddress, key: K) -> Option<V> {
-        self.inner[ptr].get_exact(&key).cloned()
+    fn search(&self, ptr: BTreeInternalAddress, key: &K) -> Option<V> {
+        self.inner[ptr].get_exact(key).cloned()
     }
 
     fn empty() -> Self {

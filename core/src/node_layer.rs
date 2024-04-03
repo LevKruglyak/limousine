@@ -8,9 +8,8 @@ use crate::traits::*;
 /// A `NodeLayer` is has the interface of a linked list of key-bounded nodes which implement the
 /// `Model` trait. It's assumed that a `NodeLayer` is always non-empty, and thus should always have
 /// a `first` and `last` node.
-pub trait NodeLayer<K, SA, PA>: 'static + Sized
+pub trait NodeLayer<K, SA, PA>
 where
-    K: Copy,
     SA: Address,
     PA: Address,
 {
@@ -18,8 +17,6 @@ where
 
     fn set_parent(&mut self, ptr: SA, parent: PA);
 
-    /// Get the lower bound of a node. This could be overridden by some layers which might have a
-    /// more optimal way of mapping the address to the lower bound.
     fn lower_bound(&self, ptr: SA) -> K;
 
     fn next(&self, ptr: SA) -> Option<SA>;
@@ -33,13 +30,20 @@ where
     fn last(&self) -> SA;
 
     /// An immutable iterator over the layer, returning (Key, Address) pairs
-    fn range(&self, start: Bound<SA>, end: Bound<SA>) -> Iter<'_, K, Self, SA, PA> {
+    fn range(&self, start: Bound<SA>, end: Bound<SA>) -> Iter<'_, K, Self, SA, PA>
+    where
+        Self: Sized,
+    {
         Iter::range(self, start, end)
     }
 
     /// An iterator over the layer, returning (Key, Address, ParentView) pairs, where parents
     /// can be modified by the ParentView struct
-    fn range_mut(&mut self, start: Bound<SA>, end: Bound<SA>) -> IterMut<'_, K, Self, SA, PA> {
+    fn range_mut(&mut self, start: Bound<SA>, end: Bound<SA>) -> IterMut<'_, K, Self, SA, PA>
+    where
+        K: Clone,
+        Self: Sized,
+    {
         IterMut::range(self, start, end)
     }
 }

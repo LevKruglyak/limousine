@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use trait_set::trait_set;
 
@@ -6,20 +7,21 @@ trait_set! {
     /// A simple address trait,
     pub trait Address = Eq + Clone + 'static;
 
+    /// General trait for types which are serialized to disk
     pub trait Persisted = Serialize + for<'de> Deserialize<'de> + Clone + Default + Eq + 'static;
 
-    /// General key type, thread safe
-    pub trait Key = Send + Sync + Default + StaticBounded + 'static;
+    /// General key type
+    pub trait Key = Clone + StaticBounded + 'static;
 
-    /// General value type, thread-safe
-    pub trait Value = Send + Sync + Default + Clone + 'static;
+    /// General value type
+    pub trait Value = Clone + 'static;
 }
 
 pub trait KeyBounded<K> {
     fn lower_bound(&self) -> &K;
 }
 
-pub trait StaticBounded: 'static + Copy + Ord {
+pub trait StaticBounded: Ord + 'static {
     fn min_ref() -> &'static Self;
 }
 
@@ -43,3 +45,13 @@ macro_rules! impl_integer {
 }
 
 impl_integer!(usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
+
+lazy_static! {
+    static ref MIN_STRING: String = "".to_string();
+}
+
+impl StaticBounded for String {
+    fn min_ref() -> &'static Self {
+        &MIN_STRING
+    }
+}

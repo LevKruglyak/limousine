@@ -2,7 +2,7 @@ use crate::{
     common::storage::{GlobalStore, StoreID},
     impl_node_layer, Address, BoundaryDiskBaseComponent, BoundaryDiskInternalComponent,
     DeepDiskBaseComponent, DeepDiskInternalComponent, Key, NodeLayer, Persisted, PropagateInsert,
-    Value,
+    StaticBounded, Value,
 };
 
 use self::boundary_layer::BoundaryDiskBTreeLayer;
@@ -17,7 +17,7 @@ mod deep_layer;
 
 pub type BoundaryDiskBTreeInternalAddress = StoreID;
 
-pub struct BoundaryDiskBTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA> {
+pub struct BoundaryDiskBTreeInternalComponent<K: Ord, X, const FANOUT: usize, BA, PA> {
     pub inner: BoundaryDiskBTreeLayer<K, BA, FANOUT, PA>,
     _ph: std::marker::PhantomData<X>,
 }
@@ -25,7 +25,7 @@ pub struct BoundaryDiskBTreeInternalComponent<K, X: 'static, const FANOUT: usize
 impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, BoundaryDiskBTreeInternalAddress, PA>
     for BoundaryDiskBTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: Key + Persisted,
+    K: Persisted + StaticBounded,
     BA: Persisted + Address,
     PA: Address,
 {
@@ -40,11 +40,11 @@ where
     BA: Persisted + Address,
     PA: Address,
 {
-    fn search(&self, _: &B, ptr: BoundaryDiskBTreeInternalAddress, key: K) -> crate::Result<BA> {
+    fn search(&self, _: &B, ptr: BoundaryDiskBTreeInternalAddress, key: &K) -> crate::Result<BA> {
         Ok(self
             .inner
             .get_node(ptr)?
-            .get_lower_bound_always(&key)
+            .get_lower_bound_always(key)
             .clone())
     }
 
@@ -81,11 +81,11 @@ where
 
 pub type BoundaryDiskBTreeBaseAddress = StoreID;
 
-pub struct BoundaryDiskBTreeBaseComponent<K, V, const FANOUT: usize, PA> {
+pub struct BoundaryDiskBTreeBaseComponent<K: Ord, V, const FANOUT: usize, PA> {
     pub inner: BoundaryDiskBTreeLayer<K, V, FANOUT, PA>,
 }
 
-impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, BoundaryDiskBTreeBaseAddress, PA>
+impl<K, V, const FANOUT: usize, PA> NodeLayer<K, BoundaryDiskBTreeBaseAddress, PA>
     for BoundaryDiskBTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: Key + Persisted,
@@ -116,8 +116,8 @@ where
         }
     }
 
-    fn search(&self, ptr: BoundaryDiskBTreeInternalAddress, key: K) -> crate::Result<Option<V>> {
-        Ok(self.inner.get_node(ptr)?.get_exact(&key).cloned())
+    fn search(&self, ptr: BoundaryDiskBTreeInternalAddress, key: &K) -> crate::Result<Option<V>> {
+        Ok(self.inner.get_node(ptr)?.get_exact(key).cloned())
     }
 
     fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
@@ -133,10 +133,7 @@ where
 
 pub type DeepDiskBTreeInternalAddress = StoreID;
 
-pub struct DeepDiskBTreeInternalComponent<K, X: 'static, const FANOUT: usize, BA, PA>
-where
-    PA: Persisted + Address,
-{
+pub struct DeepDiskBTreeInternalComponent<K: Ord, X, const FANOUT: usize, BA, PA: Persisted> {
     pub inner: DeepDiskBTreeLayer<K, BA, FANOUT, PA>,
     _ph: std::marker::PhantomData<X>,
 }
@@ -144,7 +141,7 @@ where
 impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, DeepDiskBTreeInternalAddress, PA>
     for DeepDiskBTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: Key + Persisted,
+    K: Persisted + StaticBounded,
     BA: Persisted + Address,
     PA: Persisted + Address,
 {
@@ -159,11 +156,11 @@ where
     BA: Persisted + Address,
     PA: Persisted + Address,
 {
-    fn search(&self, _: &B, ptr: DeepDiskBTreeInternalAddress, key: K) -> crate::Result<BA> {
+    fn search(&self, _: &B, ptr: DeepDiskBTreeInternalAddress, key: &K) -> crate::Result<BA> {
         Ok(self
             .inner
             .get_node(ptr)?
-            .get_lower_bound_always(&key)
+            .get_lower_bound_always(key)
             .clone())
     }
 
@@ -200,10 +197,7 @@ where
 
 pub type DeepDiskBTreeBaseAddress = StoreID;
 
-pub struct DeepDiskBTreeBaseComponent<K, V, const FANOUT: usize, PA>
-where
-    PA: Persisted + Address,
-{
+pub struct DeepDiskBTreeBaseComponent<K: Ord, V, const FANOUT: usize, PA: Persisted> {
     pub inner: DeepDiskBTreeLayer<K, V, FANOUT, PA>,
 }
 
@@ -238,8 +232,8 @@ where
         }
     }
 
-    fn search(&self, ptr: BoundaryDiskBTreeInternalAddress, key: K) -> crate::Result<Option<V>> {
-        Ok(self.inner.get_node(ptr)?.get_exact(&key).cloned())
+    fn search(&self, ptr: BoundaryDiskBTreeInternalAddress, key: &K) -> crate::Result<Option<V>> {
+        Ok(self.inner.get_node(ptr)?.get_exact(key).cloned())
     }
 
     fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {

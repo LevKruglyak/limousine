@@ -87,7 +87,7 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = component_vars[0].clone();
     let next = component_vars[1].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(&self.#next, key);});
+    search_body.extend(quote! { let #search = self.#field.search(&self.#next, &key);});
 
     // Internal components
     for index in 1..=layout.internal.len() {
@@ -98,11 +98,11 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
 
         if layout.internal[index - 1].is_persisted() {
             search_body.extend(
-                quote! { let #search = self.#field.search(&self.#next, #prev_search, key)?;},
+                quote! { let #search = self.#field.search(&self.#next, #prev_search, &key)?;},
             );
         } else {
             search_body.extend(
-                quote! { let #search = self.#field.search(&self.#next, #prev_search, key);},
+                quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);},
             );
         }
     }
@@ -113,7 +113,7 @@ fn create_search_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let prev_search = search_vars[index - 1].clone();
     let field = component_vars[index].clone();
 
-    search_body.extend(quote! { let #search = self.#field.search(#prev_search, key)?;});
+    search_body.extend(quote! { let #search = self.#field.search(#prev_search, &key)?;});
     search_body.extend(quote! { Ok(#search) });
 
     search_body
@@ -133,7 +133,7 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let field = component_vars[0].clone();
     let next = component_vars[1].clone();
 
-    insert_body.extend(quote! { let #search = self.#field.search(&self.#next, key);});
+    insert_body.extend(quote! { let #search = self.#field.search(&self.#next, &key);});
 
     // Internal components
     for index in 1..=layout.internal.len() {
@@ -144,11 +144,11 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
 
         if layout.internal[index - 1].is_persisted() {
             insert_body.extend(
-                quote! { let #search = self.#field.search(&self.#next, #prev_search, key)?;},
+                quote! { let #search = self.#field.search(&self.#next, #prev_search, &key)?;},
             );
         } else {
             insert_body.extend(
-                quote! { let #search = self.#field.search(&self.#next, #prev_search, key);},
+                quote! { let #search = self.#field.search(&self.#next, #prev_search, &key);},
             );
         }
     }
@@ -159,7 +159,7 @@ fn create_insert_body(layout: &HybridLayout, _aliases: &[Ident], fields: &[Ident
     let prev_search = search_vars[index - 1].clone();
     let field = component_vars[index].clone();
 
-    insert_body.extend(quote! { let #search = self.#field.search(#prev_search, key)?;});
+    insert_body.extend(quote! { let #search = self.#field.search(#prev_search, &key)?;});
 
     insert_body.extend(quote! { let result = s0; });
 

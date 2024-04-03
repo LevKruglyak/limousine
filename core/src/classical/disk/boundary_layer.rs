@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::Bound};
+use std::ops::Bound;
 
 use crate::{
     classical::node::BTreeNode,
@@ -9,23 +9,8 @@ use crate::{
     impl_node_layer, Address, Key, KeyBounded, NodeLayer, Persisted, StaticBounded,
 };
 
-pub struct BoundaryDiskBTreeLayer<K, V, const FANOUT: usize, PA> {
+pub struct BoundaryDiskBTreeLayer<K: Ord, V, const FANOUT: usize, PA> {
     inner: BoundaryDiskList<BTreeNode<K, V, FANOUT>, PA>,
-}
-
-impl<K: Debug, V: Debug, const FANOUT: usize, PA> Debug for BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
-where
-    K: Persisted + Key,
-    V: Persisted,
-    PA: Address,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (node, ptr) in self.inner.range(Bound::Unbounded, Bound::Unbounded) {
-            writeln!(f, "node: [0x{ptr:?}]: {node:?}")?;
-        }
-
-        write!(f, "")
-    }
 }
 
 impl<K, V, const FANOUT: usize, PA> BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
@@ -42,7 +27,7 @@ where
 
     pub fn fill(&mut self, iter: impl Iterator<Item = (K, V)>) -> crate::Result<()>
     where
-        K: Copy + Ord,
+        K: Clone + Ord,
     {
         if let Some(mut ptr) = self.inner.is_empty()? {
             for (key, address) in iter {
@@ -60,7 +45,7 @@ where
 
     pub fn fill_with_parent<B>(&mut self, base: &mut B) -> crate::Result<()>
     where
-        K: Copy + Ord,
+        K: Clone + Ord,
         V: Address,
         B: NodeLayer<K, V, StoreID>,
     {
@@ -73,7 +58,7 @@ where
                     ptr = self.inner.insert_after(BTreeNode::empty(), ptr)?;
                 }
 
-                self.insert_into_node(key, &address, ptr)?;
+                self.insert_into_node(key.clone(), &address, ptr)?;
                 parent.set(ptr);
             }
         }
@@ -83,7 +68,7 @@ where
 
     fn insert_into_node(&mut self, key: K, value: &V, ptr: StoreID) -> crate::Result<Option<V>> {
         self.inner
-            .transform_node(ptr, |node| node.insert(key, value.clone()))
+            .transform_node(ptr, |node| node.insert(key.clone(), value.clone()))
     }
 
     pub fn get_node(&self, ptr: StoreID) -> crate::Result<BTreeNode<K, V, FANOUT>> {
@@ -111,7 +96,11 @@ where
             }
 
             return Ok(Some((
-                *self.inner.get_node(new_node_ptr)?.unwrap().lower_bound(),
+                self.inner
+                    .get_node(new_node_ptr)?
+                    .unwrap()
+                    .lower_bound()
+                    .clone(),
                 new_node_ptr,
                 parent,
             )));
@@ -130,7 +119,7 @@ where
         ptr: StoreID,
     ) -> crate::Result<Option<(K, StoreID, PA)>>
     where
-        K: Copy + Ord + StaticBounded,
+        K: Clone + Ord + StaticBounded,
         V: Address,
         PA: Address,
         B: NodeLayer<K, V, StoreID>,
@@ -157,7 +146,11 @@ where
             }
 
             return Ok(Some((
-                *self.inner.get_node(new_node_ptr)?.unwrap().lower_bound(),
+                self.inner
+                    .get_node(new_node_ptr)?
+                    .unwrap()
+                    .lower_bound()
+                    .clone(),
                 new_node_ptr,
                 parent,
             )));
@@ -173,7 +166,7 @@ where
 impl<K, V, const FANOUT: usize, PA> NodeLayer<K, StoreID, PA>
     for BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
 where
-    K: Persisted + Key,
+    K: Persisted + StaticBounded,
     V: Persisted,
     PA: Address,
 {
