@@ -1,0 +1,26 @@
+[package]
+name = "limousine_instance"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+average = "0.15.0"
+limousine_engine = { path = "../../engine", version = "0.3.4" }
+
+[build-dependencies]
+anyhow = "1.0.81"
+
+limousine_bench = { path = "../runner" }
+
+[features]
+default = ["key-U32"]
+instance = []
+key-U32 = []
+key-I32 = []
+key-U64 = []
+key-I64 = []
+key-U128 = []
+key-I128 = []
+
+[workspace]
+members = []

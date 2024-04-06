@@ -8,7 +8,13 @@ members = [
   "engine", 
   "utils/slice_search", 
   "utils/sorted_array", 
-  "utils/id_allocator",
+  "utils/id_allocator", 
+
+  "bench/runner",
+]
+
+exclude = [
+  "bench/instance"
 ]
 
 [profile.release]
