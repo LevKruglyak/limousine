@@ -1,5 +1,6 @@
 use std::{
     fs::File,
+    io::{stdout, Write},
     process::{Command, Stdio},
     time::SystemTime,
 };
@@ -21,8 +22,22 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Clean,
+    Clean(CleanArgs),
     Bench(BenchArgs),
+}
+
+#[derive(Args)]
+pub struct CleanArgs {
+    args: CleanType,
+}
+
+#[derive(ValueEnum, Clone, Default, PartialEq)]
+pub enum CleanType {
+    Build,
+    Data,
+    Logs,
+    #[default]
+    All,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, AsRefStr, Default)]
@@ -64,19 +79,30 @@ fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
     match &cli.command {
-        Commands::Clean => {
+        Commands::Clean(args) => {
             // Clean temp data directory
             if temp_storage_path.exists() {
-                std::fs::remove_dir_all(temp_storage_path)?;
+                let path = match args.args {
+                    CleanType::All => Some(temp_storage_path),
+                    CleanType::Data => Some(temp_storage_path.join("data")),
+                    CleanType::Logs => Some(temp_storage_path.join("logs")),
+                    _ => None,
+                };
+
+                if let Some(path) = path {
+                    std::fs::remove_dir_all(path)?;
+                }
             }
 
-            // Clean the cargo build directory for limousine_instance
-            Command::new("cargo")
-                .current_dir(limousine_instance_path)
-                .args(&["clean"])
-                .stdout(Stdio::null())
-                .spawn()?
-                .wait()?;
+            if args.args == CleanType::All || args.args == CleanType::Build {
+                // Clean the cargo build directory for limousine_instance
+                Command::new("cargo")
+                    .current_dir(limousine_instance_path)
+                    .args(&["clean"])
+                    .stdout(Stdio::null())
+                    .spawn()?
+                    .wait()?;
+            }
         }
         Commands::Bench(args) => {
             // Create temp storage directory
@@ -96,7 +122,6 @@ fn main() -> anyhow::Result<()> {
             };
 
             let instance_json = serde_json::to_string(&instance_params)?;
-            println!("json: {}", instance_json);
             std::fs::write(
                 limousine_instance_path.join(LIMOUSINE_INSTANCE_CONFIG),
                 instance_json,
@@ -104,15 +129,20 @@ fn main() -> anyhow::Result<()> {
 
             // Compile in release mode
             let time = humantime::format_rfc3339_seconds(SystemTime::now()).to_string();
-            let log_path = temp_storage_path.join(format!("compile_{}.log", time));
-            let err_path = temp_storage_path.join(format!("compile_{}.err", time));
+            let temp_logs_path = temp_storage_path.join("logs");
+            if !temp_logs_path.exists() {
+                std::fs::create_dir(temp_logs_path.clone())?;
+            }
+
+            let log_path = temp_logs_path.join(format!("compile_{}.log", time));
+            let err_path = temp_logs_path.join(format!("compile_{}.err", time));
 
             let log_file = File::create(log_path.clone())?;
             let err_file = File::create(err_path.clone())?;
 
             if !Command::new("cargo")
                 .current_dir(limousine_instance_path.clone())
-                .args(&["build", "--release"])
+                .args(&["build", "--release", "--features", "instance"])
                 .stdout(Stdio::from(log_file))
                 .stderr(Stdio::from(err_file))
                 .spawn()?
@@ -124,7 +154,8 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            println!("Finished code generation and compilation.");
+            print!("Generating code and compiling...    ");
+            stdout().flush().unwrap();
 
             // Run in release mode
             let _ = Command::new(limousine_instance_path.join("target/release/limousine_instance"))
