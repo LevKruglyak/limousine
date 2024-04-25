@@ -381,8 +381,22 @@ where
         res
     }
 
+    /// The total size of this gapped array
     pub fn size_in_bytes(&self) -> u128 {
         (size_of::<Self>() + (size_of::<K>() + size_of::<V>() + 1) * self.len()) as u128
+    }
+
+    /// The total _excess_ size of this gapped array. I.e. how many bytes are needed
+    /// that are _NOT_ storing the actual data in the index
+    pub fn excess_size_in_bytes(&self) -> u128 {
+        let mut num_unoccupied = 0;
+        for val in self.bitmap.iter() {
+            if !*val {
+                num_unoccupied += 1;
+            }
+        }
+        // Bitmap + k,v-size * num not occupied
+        (self.len() + (size_of::<K>() + size_of::<V>()) * num_unoccupied) as u128
     }
 }
 

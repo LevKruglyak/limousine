@@ -1,6 +1,7 @@
 use kdam::{tqdm, BarExt};
 use limousine_core::learned::pgm::gapped::gapped_pgm::GappedPGM;
 use std::io::Write;
+use std::time::Instant;
 use std::{collections::HashMap, fs, path::Path};
 use workload::{Executor, Workload};
 
@@ -127,24 +128,71 @@ impl<const VERBOSE: bool, const VERIFY: bool> OneWorkloadManyModelsExperiment<VE
 fn initial_experiment() {
     const VERBOSE: bool = true;
     const VERIFY: bool = false;
-    for mul in 2..10 {
+    for mul in 1..=10 {
         let seed = 0;
         let num_initial = 1_000_000 * mul;
         let num_upserts = 1_000_000 * mul;
         let num_bad_reads = 10_000 * mul;
         let models: Vec<Box<dyn Executor<VERBOSE, VERIFY>>> = vec![
-            Box::new(GappedPGM::<BenchVal, 8, 64, 128, 5, 8>::blank()),
-            Box::new(GappedPGM::<BenchVal, 8, 64, 128, 9, 10>::blank()),
-            Box::new(GappedPGM::<BenchVal, 8, 64, 0, 5, 8>::blank()),
-            Box::new(GappedPGM::<BenchVal, 8, 64, 0, 9, 10>::blank()),
+            Box::new(GappedPGM::<BenchVal, 4, 64, 64, 5, 8>::blank()),
+            Box::new(GappedPGM::<BenchVal, 4, 64, 64, 9, 10>::blank()),
+            Box::new(GappedPGM::<BenchVal, 4, 64, 0, 5, 8>::blank()),
+            Box::new(GappedPGM::<BenchVal, 4, 64, 0, 9, 10>::blank()),
         ];
         let workload = Workload::<VERBOSE, VERIFY>::get_uniform_workload(seed, num_initial, num_upserts, num_bad_reads);
         let mut experiment =
-            OneWorkloadManyModelsExperiment::new(&format!("InitialExperiment{}e6", mul), models, workload);
-        experiment.run(4);
+            OneWorkloadManyModelsExperiment::new(&format!("NewInitialExperiment{}e6", mul), models, workload);
+        experiment.run(3);
     }
+}
+
+fn sanity_experiment() {
+    const VERBOSE: bool = true;
+    const VERIFY: bool = false;
+    for mul in 1..10 {
+        let seed = 0;
+        let num_initial = 100_000 * mul;
+        let num_upserts = 100_000 * mul;
+        let num_bad_reads = 1_000 * mul;
+        let models: Vec<Box<dyn Executor<VERBOSE, VERIFY>>> = vec![
+            Box::new(GappedPGM::<BenchVal, 4, 16, 32, 5, 8>::blank()),
+            Box::new(GappedPGM::<BenchVal, 4, 16, 32, 9, 10>::blank()),
+            Box::new(GappedPGM::<BenchVal, 4, 16, 0, 5, 8>::blank()),
+            Box::new(GappedPGM::<BenchVal, 4, 16, 0, 9, 10>::blank()),
+        ];
+        let workload = Workload::<VERBOSE, VERIFY>::get_uniform_workload(seed, num_initial, num_upserts, num_bad_reads);
+        let mut experiment =
+            OneWorkloadManyModelsExperiment::new(&format!("SanityExperiment{}e5", mul), models, workload);
+        experiment.run(2);
+    }
+}
+
+fn vs_hashmap() {
+    let mul = 10;
+    let seed = 0;
+    let num_initial = 100_000 * mul;
+    let num_upserts = 100_000 * mul;
+    let num_bad_reads = 1_000 * mul;
+    let workload = Workload::<true, false>::get_uniform_workload(seed, num_initial, num_upserts, num_bad_reads);
+    let mut map = HashMap::new();
+    let time = Instant::now();
+    for initial in workload.initial {
+        map.insert(initial.key, initial.value);
+    }
+    for upsert in workload.upserts {
+        map.insert(upsert.key, upsert.value);
+    }
+    let mut tot: i32 = 0;
+    for read in workload.reads {
+        let test = map.get(&read.key).unwrap_or(&0);
+        tot = tot.wrapping_add(*test);
+    }
+    let time = time.elapsed().as_micros();
+    println!("time: {:?}", time);
 }
 
 fn main() {
     initial_experiment();
+    // sanity_experiment();
+    // vs_hashmap();
 }

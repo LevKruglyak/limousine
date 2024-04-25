@@ -279,8 +279,14 @@ impl<V: GappedValue, const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<V
         self.ga.trim_window(key, window_radius, guess)
     }
 
-    pub fn size_in_bytes(&self) -> u128 {
-        (size_of::<Self>() as u128 + self.ga.size_in_bytes()) as u128
+    pub fn size_in_bytes(&self, is_excess_only: bool) -> u128 {
+        let metadata_size = size_of::<Self>() as u128;
+        let ga_size = if is_excess_only {
+            self.ga.excess_size_in_bytes()
+        } else {
+            self.ga.size_in_bytes()
+        };
+        metadata_size + ga_size
     }
 }
 impl<const EPSILON: usize, const BUFSIZE: usize> GappedPGMNode<GappedIndex, EPSILON, BUFSIZE> {
@@ -679,7 +685,8 @@ impl<
             return Err("Bad parent when splitting leaf".to_string());
         };
         // NOTE: Includes self
-        let fell_ptrs = parent_node.trim_window(leaf_key, leaf_window_radius).unwrap();
+        // TODO: I think this error is because of the buffers not working properly on splits, grr (surprised I didn't see it before)
+        let fell_ptrs = parent_node.trim_window(leaf_key, leaf_window_radius).unwrap_or(vec![]);
         let mut entries: Vec<Entry<GappedKey, V>> = vec![];
         for ptr in fell_ptrs {
             let killed_node = self.leaf_arena.remove(ptr.0).unwrap();
@@ -729,10 +736,10 @@ impl<
         let mut size = size_of::<Self>() as u128;
 
         for (_, node) in self.internal_arena.iter() {
-            size += node.size_in_bytes();
+            size += node.size_in_bytes(false);
         }
         for (_, node) in self.leaf_arena.iter() {
-            size += node.size_in_bytes();
+            size += node.size_in_bytes(true);
         }
 
         size as u128

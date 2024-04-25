@@ -219,8 +219,8 @@ impl ExecutionResult {
     pub fn help_fill_row(&self, map: &mut HashMap<String, u128>) {
         map.insert("initial_size".to_string(), self.initial_size);
         map.insert("build_time".to_string(), self.build_time);
-        map.insert("upsert_time".to_string(), self.build_time);
-        map.insert("read_time".to_string(), self.build_time);
+        map.insert("upsert_time".to_string(), self.upsert_time);
+        map.insert("read_time".to_string(), self.read_time);
         map.insert("final_size".to_string(), self.final_size);
     }
 }
