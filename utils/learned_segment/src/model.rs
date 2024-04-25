@@ -11,12 +11,12 @@ use num::PrimInt;
 pub struct LinearModel<K, const EPSILON: usize> {
     /// Define the approximation line. See note at top of file about forcing
     /// approximations to pass through the origin.
-    pub key: K,
-    pub slope: f64,
+    pub(crate) key: K,
+    pub(crate) slope: f64,
 
     /// How many entries are indexed by this model. Not strictly needed but
     /// useful for debugging.
-    pub size: usize,
+    pub(crate) size: usize,
 }
 
 impl<K: PrimInt, const EPSILON: usize> LinearModel<K, EPSILON> {
@@ -43,13 +43,17 @@ impl<K: PrimInt, const EPSILON: usize> LinearModel<K, EPSILON> {
             size: 0,
         }
     }
+}
 
-    pub fn min_key(&self) -> K {
-        self.key
+impl<K, const EPSILON: usize> LinearModel<K, EPSILON> {
+    pub fn min_key(&self) -> &K {
+        &self.key
     }
 }
 
-/// Simple component with simple test(s)
+// impl<K: PrimInt, const EPSILON: usize>
+
+// Simple component with simple test(s)
 #[cfg(test)]
 mod pgm_model_tests {
     use super::*;

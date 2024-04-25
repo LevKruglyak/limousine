@@ -2,6 +2,7 @@ pub mod classical;
 pub mod component;
 pub mod iter;
 pub mod kv_store;
+pub mod learned;
 
 mod common;
 mod node_layer;
@@ -12,6 +13,7 @@ pub use anyhow::Result;
 
 pub use classical::*;
 pub use common::storage::GlobalStore;
+pub use learned::*;
 
 pub use component::*;
 pub use kv_store::*;
