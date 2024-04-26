@@ -11,11 +11,7 @@ repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
 slice_search = { path = "../slice_search", version = "0.1.2" }
-serde = { version = "1.0.197", features = ["derive"], optional = true}
+serde = { version = "1.0.197", features = ["derive"] }
 itertools = "0.12.1"
 kdam = "0.5.1"
-
-[features]
-serde = ["dep:serde"]
-
 

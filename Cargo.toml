@@ -10,6 +10,7 @@ members = [
   "utils/sorted_array", 
   "utils/id_allocator", 
   "utils/learned_segment",
+  "utils/gapped_array",
   "bench/runner", 
 ]
 

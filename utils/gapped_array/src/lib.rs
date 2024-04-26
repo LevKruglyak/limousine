@@ -1,25 +1,27 @@
 use core::fmt;
 use std::mem::size_of;
 
+use serde::{Deserialize, Serialize};
+
 /// A sorted array which is constructed with intentional gaps to allow for practical in-place inserts
 /// NOTE: The current implementation assumes keys are unique. It may break if this is not true.
 /// NOTE: The current implementation is not heavily optimized.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GappedKVArray<K, V>
 where
-    K: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
-    V: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
+    K: Copy + Default + Ord,
+    V: Copy + Default,
 {
-    pub bitmap: Box<[bool]>,
-    pub keys: Box<[K]>,
-    pub vals: Box<[V]>,
+    bitmap: Box<[bool]>,
+    keys: Box<[K]>,
+    vals: Box<[V]>,
     size: usize,
 }
 
 impl<K, V> GappedKVArray<K, V>
 where
-    K: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
-    V: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
+    K: Default + Copy + Clone + Ord,
+    V: Default + Copy + Clone,
 {
     /// Creates an empty gapped array with the given size
     pub fn new(size: usize) -> Self {
@@ -386,12 +388,20 @@ where
         // Bitmap + k,v-size * num not occupied
         (self.len() + (size_of::<K>() + size_of::<V>()) * num_unoccupied) as u128
     }
+
+    /// The minimum key in this array, or None if it's empty
+    pub fn min(&self) -> Option<&K> {
+        match self.next_occupied_ix(0) {
+            Some(ix) => self.keys.get(ix),
+            None => None,
+        }
+    }
 }
 
 impl<K, V> fmt::Display for GappedKVArray<K, V>
 where
-    K: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
-    V: Default + Copy + Clone + PartialEq + PartialOrd + std::fmt::Debug,
+    K: Default + Copy + Clone + Ord + std::fmt::Debug,
+    V: Default + Copy + Clone + Ord + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut res = String::new();
@@ -419,6 +429,7 @@ mod gapped_array_tests {
     use itertools::Itertools;
     use kdam::{tqdm, BarExt};
 
+    #[allow(unused)]
     fn print_gapped_array(ga: &GappedKVArray<i32, i32>) {
         let mut line1 = String::new();
         let mut line2 = String::new();
@@ -438,7 +449,7 @@ mod gapped_array_tests {
         for num in 0..size {
             let result = ga.upsert_with_hint((num as i32, num as i32), hint);
             assert!(result.is_ok());
-            print_gapped_array(&ga);
+            // print_gapped_array(&ga);
         }
         for ix in 0..size {
             assert!(ga.bitmap[ix]);
@@ -504,9 +515,9 @@ mod gapped_array_tests {
         for ix in 0..ga.len() {
             let good = ga.bitmap[ix] && ga.keys[ix] == ix as i32;
             if !good {
-                println!("Perm: {:?}", perm);
-                println!("Hints: {:?}", hints);
-                print_gapped_array(&ga);
+                // println!("Perm: {:?}", perm);
+                // println!("Hints: {:?}", hints);
+                // print_gapped_array(&ga);
             }
             assert!(good);
         }
@@ -532,13 +543,13 @@ mod gapped_array_tests {
         let perm = vec![1, 2, 0, 3, 4];
         let hints = vec![0, 0, 3, 0, 0];
         let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
-        print_gapped_array(&ga);
+        // print_gapped_array(&ga);
         for (value, hint) in perm.iter().zip(hints.iter()) {
             assert!(ga
                 .upsert_with_hint((value.clone(), value.clone()), hint.clone())
                 .is_ok());
-            println!("");
-            print_gapped_array(&ga);
+            // println!("");
+            // print_gapped_array(&ga);
         }
     }
 
@@ -552,9 +563,9 @@ mod gapped_array_tests {
         for ix in 0..ga.len() {
             let good = ga.bitmap[ix] && ga.keys[ix] == ix as i32;
             if !good {
-                println!("Items: {:?}", items);
-                println!("Hints: {:?}", hints);
-                print_gapped_array(&ga);
+                // println!("Items: {:?}", items);
+                // println!("Hints: {:?}", hints);
+                // print_gapped_array(&ga);
             }
             assert!(good);
         }
@@ -681,13 +692,13 @@ mod gapped_array_tests {
         let perm = vec![0, 1, 2, 3, 4, 5];
         let hints = vec![0, 0, 0, 4, 4, 4];
         let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
-        print_gapped_array(&ga);
+        // print_gapped_array(&ga);
         for (value, hint) in perm.iter().zip(hints.iter()) {
             assert!(ga
                 .initial_model_based_insert((value.clone(), value.clone()), hint.clone())
                 .is_ok());
-            println!("");
-            print_gapped_array(&ga);
+            // println!("");
+            // print_gapped_array(&ga);
         }
     }
 }

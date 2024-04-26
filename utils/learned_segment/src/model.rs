@@ -5,9 +5,10 @@
 //! to pass through the origin, which slightly degrades performance
 
 use num::PrimInt;
+use serde::{Deserialize, Serialize};
 
 /// A simple linear model for a key-rank segment of data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LinearModel<K, const EPSILON: usize> {
     /// Define the approximation line. See note at top of file about forcing
     /// approximations to pass through the origin.

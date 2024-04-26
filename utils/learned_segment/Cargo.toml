@@ -14,7 +14,4 @@ rand_distr = "0.4.3"
 
 [dependencies]
 num = "0.4.2"
-serde = { version = "1.0.197", features = ["derive"], optional = true}
-
-[features]
-serde = ["dep:serde"]
+serde = { version = "1.0.197", features = ["derive"] }
