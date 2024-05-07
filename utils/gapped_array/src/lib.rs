@@ -8,8 +8,7 @@ use std::mem::size_of;
 #[derive(Debug)]
 pub struct GappedKVArray<K, V>
 where
-    K: Copy + Ord,
-    V: Copy,
+    K: Ord,
 {
     bitmap: Box<[bool]>,
     keys: Box<[MaybeUninit<K>]>,
@@ -19,8 +18,7 @@ where
 
 impl<K, V> GappedKVArray<K, V>
 where
-    K: Ord + Copy,
-    V: Copy,
+    K: Ord,
 {
     /// Creates an empty gapped array with the given size
     pub fn new(size: usize) -> Self {
@@ -44,7 +42,7 @@ where
         self.bitmap.len()
     }
 
-    /// The length of the gapped array (excluding gaps)
+    /// The length of the gapped arraycannot move out of `self.vals[_]` which is behind a mutable reference (excluding gaps)
     pub fn size(&self) -> usize {
         self.size
     }
@@ -117,7 +115,7 @@ where
             match next {
                 Some(next_ix) => {
                     unsafe {
-                        if *needle < self.keys[next_ix].assume_init() {
+                        if needle < self.keys[next_ix].assume_init_ref() {
                             break;
                         }
                     }
@@ -134,7 +132,7 @@ where
         // Then ensure correctness by moving left as far as we need to
         while check.is_some() {
             unsafe {
-                if self.keys[check.unwrap()].assume_init() <= *needle {
+                if self.keys[check.unwrap()].assume_init_ref() <= needle {
                     break;
                 }
             }
@@ -168,7 +166,7 @@ where
     pub fn search_exact(&self, needle: &K, hint: Option<usize>) -> Option<&V> {
         match self.price_is_right(needle, hint) {
             Some(ix) => unsafe {
-                if self.keys[ix].assume_init() == *needle {
+                if self.keys[ix].assume_init_ref() == needle {
                     match self.vals.get(ix) {
                         Some(val) => Some(val.assume_init_ref()),
                         None => None,
@@ -184,8 +182,15 @@ where
     /// Helper function to copy within for all the needed arrays
     fn copy_within(&mut self, src: std::ops::Range<usize>, dest: usize) {
         self.bitmap.copy_within(src.clone(), dest);
-        self.keys.copy_within(src.clone(), dest);
-        self.vals.copy_within(src.clone(), dest);
+        unsafe {
+            let key_src = self.keys.get_unchecked(src.start).as_ptr();
+            let key_dest = self.keys.get_unchecked_mut(dest).as_mut_ptr();
+            core::ptr::copy(key_src, key_dest, src.clone().count());
+
+            let val_src = self.vals.get_unchecked(src.start).as_ptr();
+            let val_dest = self.vals.get_unchecked_mut(dest).as_mut_ptr();
+            core::ptr::copy(val_src, val_dest, src.count());
+        }
     }
 
     /// Helper function to upsert an entry into a given location
@@ -204,11 +209,9 @@ where
         if !self.bitmap[ix] {
             Err("No such element exists for remove_at".to_string())
         } else {
-            let key = self.keys[ix];
-            let val = self.vals[ix];
             self.bitmap[ix] = false;
-            self.keys[ix] = MaybeUninit::uninit();
-            self.vals[ix] = MaybeUninit::uninit();
+            let key = std::mem::replace(&mut self.keys[ix], MaybeUninit::uninit());
+            let val = std::mem::replace(&mut self.vals[ix], MaybeUninit::uninit());
             self.size -= 1;
             unsafe { Ok((key.assume_init(), val.assume_init())) }
         }
@@ -229,7 +232,7 @@ where
             }
             Some(mut ix) => {
                 unsafe {
-                    if self.keys[ix].assume_init() == pair.0 {
+                    if self.keys[ix].assume_init_ref() == &pair.0 {
                         // If this is an update handle it quickly and return
                         self.upsert_at(pair, ix);
                         return Ok(());
@@ -323,7 +326,7 @@ where
         match self.price_is_right(&needle, Some(hint)) {
             Some(ix) => {
                 unsafe {
-                    if self.keys[ix].assume_init() != needle {
+                    if self.keys[ix].assume_init_ref() != &needle {
                         return Err("Can't trim window: supposed key doesn't exist".to_string());
                     }
                 }
@@ -367,7 +370,7 @@ where
     }
 
     /// Keep the same elements and relative spacing but create more array space and replace as needed
-    pub fn scale_up(&mut self, c: f32) -> Result<(), String> {
+    pub fn rescale(&mut self, c: f32) -> Result<(), String> {
         if c <= 1.0 {
             return Err("Must scale by a constant c > 1.0".to_string());
         }
@@ -378,8 +381,10 @@ where
                 continue;
             }
             unsafe {
+                let key = std::mem::replace(&mut self.keys[ix], MaybeUninit::uninit());
+                let val = std::mem::replace(&mut self.vals[ix], MaybeUninit::uninit());
                 let Ok(_) = temp.initial_model_based_insert(
-                    (self.keys[ix].assume_init(), self.vals[ix].assume_init()),
+                    (key.assume_init(), val.assume_init()),
                     (ix as f32 * c) as usize,
                 ) else {
                     return Err("Failed to re-insert data after scaling up".to_string());
@@ -420,12 +425,23 @@ where
             None => None,
         }
     }
+
+    /// The minimum key in this array, or None if it's empty
+    pub fn min_val(&self) -> Option<&V> {
+        match self.next_occupied_ix(0) {
+            Some(ix) => match self.vals.get(ix) {
+                Some(val) => unsafe { Some(val.assume_init_ref()) },
+                None => None,
+            },
+            None => None,
+        }
+    }
 }
 
 impl<K, V> fmt::Display for GappedKVArray<K, V>
 where
-    K: Default + Copy + Clone + Ord + std::fmt::Debug,
-    V: Default + Copy + Clone + Ord + std::fmt::Debug,
+    K: Default + Clone + Ord + std::fmt::Debug,
+    V: Default + Clone + Ord + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut res = String::new();

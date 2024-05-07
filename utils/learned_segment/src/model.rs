@@ -54,6 +54,11 @@ impl<K: PrimInt, const EPSILON: usize> LinearModel<K, EPSILON> {
             size: 0,
         }
     }
+
+    /// Rescales the slope of the model
+    pub fn rescale(&mut self, c: f64) {
+        self.slope *= c;
+    }
 }
 
 impl<K, const EPSILON: usize> LinearModel<K, EPSILON> {

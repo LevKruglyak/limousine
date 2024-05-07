@@ -16,7 +16,7 @@ pub struct LinearSimpleSegmentation<K, V, const EPSILON: usize> {
     last_key: Option<K>,
 }
 
-impl<K: PrimInt, V: Clone, const EPSILON: usize> LinearSimpleSegmentation<K, V, EPSILON> {
+impl<K: PrimInt, V, const EPSILON: usize> LinearSimpleSegmentation<K, V, EPSILON> {
     pub fn new() -> Self {
         Self {
             first_key: None,
@@ -32,17 +32,12 @@ impl<K: PrimInt, V: Clone, const EPSILON: usize> LinearSimpleSegmentation<K, V, 
 
     /// Tries to add an entry to this segmentor, returning a result about whether it was
     /// successful.
-    fn try_add_entry(&mut self, entry: (K, V)) -> Result<(), ()> {
+    fn try_add_entry(&mut self, entry: (K, V)) -> Result<(), (K, V)> {
         if self.num_entries == 0 {
             // If it's empty just add the point
             self.first_key = Some(entry.0);
-            self.entries = vec![entry.clone()];
+            self.entries = vec![entry];
             self.num_entries = 1;
-
-            #[cfg(debug_assertions)]
-            {
-                self.last_key = Some(entry.0);
-            }
 
             return Ok(());
         }
@@ -83,7 +78,7 @@ impl<K: PrimInt, V: Clone, const EPSILON: usize> LinearSimpleSegmentation<K, V, 
             let new_min_slope = this_min.max(self.min_slope);
             if new_min_slope >= new_max_slope {
                 // We can't fit this point in the model
-                return Err(());
+                return Err(entry);
             }
             // SANITY TESTING
             #[cfg(debug_assertions)]
@@ -100,12 +95,7 @@ impl<K: PrimInt, V: Clone, const EPSILON: usize> LinearSimpleSegmentation<K, V, 
 
         // This point is fine to add, and we've already update the slope
         self.num_entries += 1;
-        self.entries.push(entry.clone());
-
-        #[cfg(debug_assertions)]
-        {
-            self.last_key = Some(entry.0);
-        }
+        self.entries.push(entry);
 
         Ok(())
     }
@@ -125,9 +115,9 @@ impl<K: PrimInt, V: Clone, const EPSILON: usize> LinearSimpleSegmentation<K, V, 
         LinearModel::new(self.first_key.unwrap(), slope, self.num_entries)
     }
 
-    // Outputs the a vector of values that generated a linear model
-    pub fn entries(&self) -> &Vec<(K, V)> {
-        &self.entries
+    /// Takes ownership of the entires generating this linear model
+    pub fn take_entries(&mut self) -> Vec<(K, V)> {
+        std::mem::replace(&mut self.entries, vec![])
     }
 
     pub fn is_empty(&self) -> bool {
@@ -136,7 +126,7 @@ impl<K: PrimInt, V: Clone, const EPSILON: usize> LinearSimpleSegmentation<K, V, 
 }
 
 #[must_use]
-pub fn linear_simple_segmentation<K: PrimInt, V: Clone, const EPSILON: usize>(
+pub fn linear_simple_segmentation<K: PrimInt, V, const EPSILON: usize>(
     data: impl Iterator<Item = (K, V)>,
 ) -> Vec<(LinearModel<K, EPSILON>, Vec<(K, V)>)> {
     let mut result: Vec<(LinearModel<K, EPSILON>, Vec<(K, V)>)> = vec![];
@@ -144,25 +134,25 @@ pub fn linear_simple_segmentation<K: PrimInt, V: Clone, const EPSILON: usize>(
     let mut cur_segment: LinearSimpleSegmentation<K, V, EPSILON> = LinearSimpleSegmentation::new();
 
     for entry in data {
-        match cur_segment.try_add_entry(entry.clone()) {
+        match cur_segment.try_add_entry(entry) {
             Ok(_) => {
                 // Nothing to do, entry added successfully
             }
-            Err(_) => {
+            Err(entry) => {
                 // Export the model currently specified by the segmentor
-                result.push((cur_segment.to_linear_model(), cur_segment.entries().clone()));
+                result.push((cur_segment.to_linear_model(), cur_segment.take_entries()));
                 // Reset current segmentor
                 cur_segment = LinearSimpleSegmentation::new();
 
-                // Should be fine to unwrap here since adding first entry always works
-                cur_segment.try_add_entry(entry).unwrap();
+                // Should always be ok since adding the first entry is fine
+                cur_segment.try_add_entry(entry).ok();
             }
         }
     }
 
     // Handle last segment
     if !cur_segment.is_empty() {
-        result.push((cur_segment.to_linear_model(), cur_segment.entries().clone()));
+        result.push((cur_segment.to_linear_model(), cur_segment.take_entries()));
     }
 
     result
