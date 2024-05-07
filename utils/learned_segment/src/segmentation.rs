@@ -135,6 +135,7 @@ impl<K: PrimInt, V: Clone, const EPSILON: usize> LinearSimpleSegmentation<K, V, 
     }
 }
 
+#[must_use]
 pub fn linear_simple_segmentation<K: PrimInt, V: Clone, const EPSILON: usize>(
     data: impl Iterator<Item = (K, V)>,
 ) -> Vec<(LinearModel<K, EPSILON>, Vec<(K, V)>)> {

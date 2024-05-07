@@ -36,6 +36,16 @@ impl<K: PrimInt, const EPSILON: usize> LinearModel<K, EPSILON> {
         (pos.saturating_sub(EPSILON), pos + EPSILON + 2)
     }
 
+    /// Instead of returning a window'd approximation, return a hint, which
+    /// is better for gapped arrays with exponential search
+    /// (I.e., it's a hint for where to _start_ searching for the element, not
+    /// a window which is guaranteed to hold the value)
+    pub fn hint(&self, key: &K) -> usize {
+        let run = num::cast::<K, f64>(key.clone().saturating_sub(self.key)).unwrap();
+        let pos = (run * self.slope).floor() as i64;
+        pos.max(0) as usize
+    }
+
     /// Construct a sentinel model which will sit at the end of a layer
     pub fn sentinel() -> Self {
         Self {

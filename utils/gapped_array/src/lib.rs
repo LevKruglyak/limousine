@@ -12,8 +12,6 @@ where
     V: Copy,
 {
     bitmap: Box<[bool]>,
-    // keys: Box<[K]>,
-    // vals: Box<[V]>,
     keys: Box<[MaybeUninit<K>]>,
     vals: Box<[MaybeUninit<V>]>,
     size: usize,

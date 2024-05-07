@@ -23,6 +23,8 @@ pub trait KeyBounded<K> {
 
 pub trait StaticBounded: Ord + 'static {
     fn min_ref() -> &'static Self;
+
+    fn max_ref() -> &'static Self;
 }
 
 macro_rules! impl_integer {
@@ -32,6 +34,11 @@ macro_rules! impl_integer {
                 fn min_ref() -> &'static Self {
                     static MIN: $t = <$t>::min_value();
                     &MIN
+                }
+
+                fn max_ref() -> &'static Self {
+                    static MAX: $t = <$t>::max_value();
+                    &MAX
                 }
             }
 
@@ -48,10 +55,15 @@ impl_integer!(usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
 
 lazy_static! {
     static ref MIN_STRING: String = "".to_string();
+    static ref MAX_STRING: String = "".to_string();
 }
 
 impl StaticBounded for String {
     fn min_ref() -> &'static Self {
         &MIN_STRING
+    }
+
+    fn max_ref() -> &'static Self {
+        &MAX_STRING
     }
 }
