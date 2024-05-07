@@ -1,8 +1,6 @@
 use learned_index_segmentation::LinearModel;
-use num::PrimInt;
-// use serde::{Deserialize, Serialize};
 
-use crate::{KeyBounded, StaticBounded};
+use crate::{Key, KeyBounded, StaticBounded};
 use gapped_array::GappedKVArray;
 
 impl<K: StaticBounded, const EPSILON: usize> KeyBounded<K> for LinearModel<K, EPSILON> {
@@ -12,18 +10,18 @@ impl<K: StaticBounded, const EPSILON: usize> KeyBounded<K> for LinearModel<K, EP
 }
 
 #[derive(Debug)]
-pub struct PGMNode<K: Ord, V, const EPSILON: usize> {
+pub struct PGMNode<K: Key, V, const EPSILON: usize> {
     gapped: GappedKVArray<K, V>,
     model: LinearModel<K, EPSILON>,
 }
 
-impl<K: StaticBounded, V, const EPSILON: usize> KeyBounded<K> for PGMNode<K, V, EPSILON> {
+impl<K: Key, V, const EPSILON: usize> KeyBounded<K> for PGMNode<K, V, EPSILON> {
     fn lower_bound(&self) -> &K {
         self.gapped.min().unwrap_or(&K::max_ref())
     }
 }
 
-impl<K: Ord + PrimInt, V, const EPSILON: usize> Default for PGMNode<K, V, EPSILON> {
+impl<K: Key, V, const EPSILON: usize> Default for PGMNode<K, V, EPSILON> {
     fn default() -> Self {
         Self {
             gapped: GappedKVArray::new(0),
@@ -32,7 +30,7 @@ impl<K: Ord + PrimInt, V, const EPSILON: usize> Default for PGMNode<K, V, EPSILO
     }
 }
 
-impl<K: PrimInt, V, const EPSILON: usize> PGMNode<K, V, EPSILON> {
+impl<K: Key, V, const EPSILON: usize> PGMNode<K, V, EPSILON> {
     pub fn from_trained(model: LinearModel<K, EPSILON>, entries: Vec<(K, V)>) -> Self {
         // NOTE: Filling at 0.5 utilization is just a heuristic, eventually this should be a param
         let mut gapped = GappedKVArray::new(entries.len() * 2);

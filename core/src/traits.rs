@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use num::PrimInt;
 use serde::{Deserialize, Serialize};
 use trait_set::trait_set;
 
@@ -11,7 +12,7 @@ trait_set! {
     pub trait Persisted = Serialize + for<'de> Deserialize<'de> + Clone + Default + Eq + 'static;
 
     /// General key type
-    pub trait Key = Clone + StaticBounded + 'static;
+    pub trait Key = PrimInt + Clone + StaticBounded + 'static ;
 
     /// General value type
     pub trait Value = Clone + 'static;

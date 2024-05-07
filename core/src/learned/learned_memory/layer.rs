@@ -5,15 +5,13 @@
 use std::ops::Bound;
 
 use learned_index_segmentation::linear_simple_segmentation;
-use num::PrimInt;
-// use serde::de::value;
 
 use crate::common::list::memory::*;
 use crate::iter::Iter;
 use crate::learned::node::PGMNode;
 use crate::{impl_node_layer, Address, Key, NodeLayer};
 
-pub struct MemoryPGMLayer<K: Ord, V, const EPSILON: usize, PA> {
+pub struct MemoryPGMLayer<K: Key, V, const EPSILON: usize, PA> {
     inner: MemoryList<PGMNode<K, V, EPSILON>, PA>,
 }
 
@@ -43,7 +41,7 @@ where
 
 impl<K, V, const EPSILON: usize, PA> MemoryPGMLayer<K, V, EPSILON, PA>
 where
-    K: Ord + PrimInt,
+    K: Key,
 {
     pub fn empty() -> Self {
         Self {
@@ -107,7 +105,7 @@ where
     }
 }
 
-impl<K: Ord, V, const EPSILON: usize, PA> core::ops::Index<ArenaID>
+impl<K: Key, V, const EPSILON: usize, PA> core::ops::Index<ArenaID>
     for MemoryPGMLayer<K, V, EPSILON, PA>
 {
     type Output = PGMNode<K, V, EPSILON>;
@@ -119,7 +117,7 @@ impl<K: Ord, V, const EPSILON: usize, PA> core::ops::Index<ArenaID>
 
 impl<K, V, const EPSILON: usize, PA> NodeLayer<K, ArenaID, PA> for MemoryPGMLayer<K, V, EPSILON, PA>
 where
-    K: Ord + Key + PrimInt,
+    K: Key,
     PA: Address,
 {
     impl_node_layer!(ArenaID, PA);

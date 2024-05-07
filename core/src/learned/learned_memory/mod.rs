@@ -15,7 +15,7 @@ mod layer;
 
 pub type PGMInternalAddress = ArenaID;
 
-pub struct PGMInternalComponent<K: Ord, X: 'static, const EPSILON: usize, BA, PA> {
+pub struct PGMInternalComponent<K: Key, X: 'static, const EPSILON: usize, BA, PA> {
     inner: MemoryPGMLayer<K, BA, EPSILON, PA>,
     _ph: std::marker::PhantomData<X>,
 }
@@ -76,7 +76,7 @@ where
 
 pub type PGMBaseAddress = PGMInternalAddress;
 
-pub struct PGMBaseComponent<K: Ord, V, const EPSILON: usize, PA> {
+pub struct PGMBaseComponent<K: Key, V, const EPSILON: usize, PA> {
     inner: MemoryPGMLayer<K, V, EPSILON, PA>,
 }
 

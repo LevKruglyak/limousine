@@ -57,7 +57,7 @@ mod tests {
 
         // Test for insert now
         for key in 0..10_000 {
-            index.insert(key, key * key as V)?;
+            index.insert(key, key as V * key as V)?;
         }
 
         // Search again
@@ -94,6 +94,39 @@ mod tests {
             for i in 0..num {
                 kv_store.insert(keys[i], values[i]);
             }
+
+            // Test searches
+            for i in 0..num {
+                assert_eq!(kv_store.search(keys[i]), Some(values[i]));
+            }
+
+            for key in 0..10_000 {
+                assert_eq!(kv_store.search(key as K), None);
+            }
+        }
+    }
+
+    /// Same as test_kv_store, but instead of inserting elements one at a time,
+    /// the index is built over the numbers
+    fn test_kv_store_build<KV: KVStore<K, V>>() {
+        let mut rng = thread_rng();
+        let key_dist = Uniform::new(K::MIN, K::MAX);
+        let value_dist = Uniform::new(V::MIN, V::MAX);
+
+        let num = 20_000;
+        let mut keys: Vec<K> = (&mut rng)
+            .sample_iter(key_dist)
+            .filter(|&x| x < 0 as K || x > 10_000 as K) // we want to test for false positives as
+            // well
+            .take(num)
+            .collect();
+        keys.sort();
+
+        let values: Vec<V> = (&mut rng).sample_iter(value_dist).take(num).collect();
+
+        {
+            // Test build
+            let kv_store = KV::build(keys.clone().into_iter().zip(values.clone().into_iter()));
 
             // Test searches
             for i in 0..num {
@@ -318,5 +351,20 @@ mod tests {
         }
 
         test_kv_store::<KVStore1<K, V>>();
+    }
+
+    #[test]
+
+    fn test_pgm_store_1() {
+        create_kv_store! {
+            name: PGMStore1,
+            layout: [
+                btree_top(),
+                pgm(epsilon = 8),
+                pgm(epsilon = 8),
+            ]
+        }
+
+        test_kv_store_build::<PGMStore1<K, V>>();
     }
 }

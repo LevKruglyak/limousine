@@ -127,7 +127,13 @@ where
         // Handle edge case where hint put us past the end of the array, snap back to left if there is an element
         check = match check {
             Some(ix) => Some(ix),
-            None => self.prev_occupied_ix(self.len() - 1),
+            None => {
+                if self.len() > 0 {
+                    self.prev_occupied_ix(self.len() - 1)
+                } else {
+                    None
+                }
+            }
         };
         // Then ensure correctness by moving left as far as we need to
         while check.is_some() {

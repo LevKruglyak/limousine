@@ -10,10 +10,9 @@ pub struct LinearSimpleSegmentation<K, V, const EPSILON: usize> {
     pub max_slope: f64,
     pub min_slope: f64,
     pub num_entries: usize,
-
-    // For sanity checking that input is increasing
-    #[cfg(debug_assertions)]
-    last_key: Option<K>,
+    // // For sanity checking that input is increasing
+    // #[cfg(debug_assertions)]
+    // last_key: Option<K>,
 }
 
 impl<K: PrimInt, V, const EPSILON: usize> LinearSimpleSegmentation<K, V, EPSILON> {
@@ -24,9 +23,8 @@ impl<K: PrimInt, V, const EPSILON: usize> LinearSimpleSegmentation<K, V, EPSILON
             max_slope: f64::MAX,
             min_slope: f64::MIN,
             num_entries: 0,
-
-            #[cfg(debug_assertions)]
-            last_key: None,
+            // #[cfg(debug_assertions)]
+            // last_key: None,
         }
     }
 
@@ -47,8 +45,8 @@ impl<K: PrimInt, V, const EPSILON: usize> LinearSimpleSegmentation<K, V, EPSILON
         {
             debug_assert!(self.first_key.is_some());
             debug_assert!(self.entries.len() == self.num_entries);
-            debug_assert!(self.last_key.is_some());
-            debug_assert!(self.last_key.clone().unwrap() < entry.0);
+            // debug_assert!(self.last_key.is_some());
+            // debug_assert!(self.last_key.clone().unwrap() < entry.0);
         }
 
         // Get the worst case points we care about
