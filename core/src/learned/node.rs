@@ -35,7 +35,7 @@ impl<K: Key, V, const EPSILON: usize> PGMNode<K, V, EPSILON> {
         // NOTE: Filling at 0.5 utilization is just a heuristic, eventually this should be a param
         let mut gapped = GappedKVArray::new(entries.len() * 2);
         for (key, value) in entries {
-            let hint = model.hint(&key);
+            let hint = model.hint(&key).min(gapped.len() - 1);
             gapped
                 .initial_model_based_insert((key, value), hint)
                 .unwrap();

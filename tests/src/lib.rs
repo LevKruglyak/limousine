@@ -355,11 +355,31 @@ mod tests {
 
     #[test]
 
-    fn test_pgm_store_1() {
+    fn test_pgm_store_3() {
         create_kv_store! {
             name: PGMStore1,
             layout: [
                 btree_top(),
+                pgm(epsilon = 8),
+                pgm(epsilon = 8),
+            ]
+        }
+
+        test_kv_store_build::<PGMStore1<K, V>>();
+    }
+
+    #[test]
+    fn test_pgm_store_9() {
+        create_kv_store! {
+            name: PGMStore1,
+            layout: [
+                btree_top(),
+                pgm(epsilon = 8),
+                pgm(epsilon = 8),
+                pgm(epsilon = 8),
+                pgm(epsilon = 8),
+                pgm(epsilon = 8),
+                pgm(epsilon = 8),
                 pgm(epsilon = 8),
                 pgm(epsilon = 8),
             ]
