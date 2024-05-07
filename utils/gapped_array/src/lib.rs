@@ -1,33 +1,38 @@
 use core::fmt;
+use core::mem::MaybeUninit;
 use std::mem::size_of;
-
-use serde::{Deserialize, Serialize};
 
 /// A sorted array which is constructed with intentional gaps to allow for practical in-place inserts
 /// NOTE: The current implementation assumes keys are unique. It may break if this is not true.
 /// NOTE: The current implementation is not heavily optimized.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct GappedKVArray<K, V>
 where
-    K: Copy + Default + Ord,
-    V: Copy + Default,
+    K: Copy + Ord,
+    V: Copy,
 {
     bitmap: Box<[bool]>,
-    keys: Box<[K]>,
-    vals: Box<[V]>,
+    // keys: Box<[K]>,
+    // vals: Box<[V]>,
+    keys: Box<[MaybeUninit<K>]>,
+    vals: Box<[MaybeUninit<V>]>,
     size: usize,
 }
 
 impl<K, V> GappedKVArray<K, V>
 where
-    K: Default + Copy + Clone + Ord,
-    V: Default + Copy + Clone,
+    K: Ord + Copy,
+    V: Copy,
 {
     /// Creates an empty gapped array with the given size
     pub fn new(size: usize) -> Self {
         let bitmap_vec = vec![false; size];
-        let keys_vec = vec![K::default(); size];
-        let vals_vec = vec![V::default(); size];
+        let mut keys_vec = Vec::<MaybeUninit<K>>::with_capacity(size);
+        let mut vals_vec = Vec::<MaybeUninit<V>>::with_capacity(size);
+        for _ in 0..size {
+            keys_vec.push(MaybeUninit::uninit());
+            vals_vec.push(MaybeUninit::uninit());
+        }
         Self {
             bitmap: bitmap_vec.into_boxed_slice(),
             keys: keys_vec.into_boxed_slice(),
@@ -113,8 +118,10 @@ where
             let next = self.next_occupied_ix(check.unwrap() + 1);
             match next {
                 Some(next_ix) => {
-                    if *needle < self.keys[next_ix] {
-                        break;
+                    unsafe {
+                        if *needle < self.keys[next_ix].assume_init() {
+                            break;
+                        }
                     }
                     check = Some(next_ix);
                 }
@@ -128,8 +135,10 @@ where
         };
         // Then ensure correctness by moving left as far as we need to
         while check.is_some() {
-            if self.keys[check.unwrap()] <= *needle {
-                break;
+            unsafe {
+                if self.keys[check.unwrap()].assume_init() <= *needle {
+                    break;
+                }
             }
             if check.unwrap() == 0 {
                 check = None;
@@ -146,7 +155,12 @@ where
     /// TODO: Update slice_search so it can work on gapped arrays
     pub fn search_pir(&self, needle: &K, hint: Option<usize>) -> Option<&V> {
         match self.price_is_right(needle, hint) {
-            Some(ix) => self.vals.get(ix),
+            Some(ix) => match self.vals.get(ix) {
+                Some(val) => unsafe {
+                    return Some(val.assume_init_ref());
+                },
+                None => None,
+            },
             None => None,
         }
     }
@@ -155,13 +169,16 @@ where
     /// TODO: Make exponential search
     pub fn search_exact(&self, needle: &K, hint: Option<usize>) -> Option<&V> {
         match self.price_is_right(needle, hint) {
-            Some(ix) => {
-                if self.keys[ix] == *needle {
-                    self.vals.get(ix)
+            Some(ix) => unsafe {
+                if self.keys[ix].assume_init() == *needle {
+                    match self.vals.get(ix) {
+                        Some(val) => Some(val.assume_init_ref()),
+                        None => None,
+                    }
                 } else {
                     None
                 }
-            }
+            },
             None => None,
         }
     }
@@ -180,8 +197,8 @@ where
             self.size += 1;
         }
         self.bitmap[ix] = true;
-        self.keys[ix] = pair.0;
-        self.vals[ix] = pair.1;
+        self.keys[ix] = MaybeUninit::<K>::new(pair.0);
+        self.vals[ix] = MaybeUninit::<V>::new(pair.1);
     }
 
     /// Helper function to remove an entry in a given location
@@ -191,11 +208,11 @@ where
         } else {
             let key = self.keys[ix];
             let val = self.vals[ix];
-            self.keys[ix] = Default::default();
-            self.vals[ix] = Default::default();
             self.bitmap[ix] = false;
+            self.keys[ix] = MaybeUninit::uninit();
+            self.vals[ix] = MaybeUninit::uninit();
             self.size -= 1;
-            Ok((key, val))
+            unsafe { Ok((key.assume_init(), val.assume_init())) }
         }
     }
 
@@ -213,10 +230,12 @@ where
                 Ok(())
             }
             Some(mut ix) => {
-                if self.keys[ix] == pair.0 {
-                    // If this is an update handle it quickly and return
-                    self.upsert_at(pair, ix);
-                    return Ok(());
+                unsafe {
+                    if self.keys[ix].assume_init() == pair.0 {
+                        // If this is an update handle it quickly and return
+                        self.upsert_at(pair, ix);
+                        return Ok(());
+                    }
                 }
                 if ix + 1 == self.len() {
                     // Edge case where upserting at the end
@@ -305,8 +324,10 @@ where
     ) -> Result<Vec<V>, String> {
         match self.price_is_right(&needle, Some(hint)) {
             Some(ix) => {
-                if self.keys[ix] != needle {
-                    return Err("Can't trim window: supposed key doesn't exist".to_string());
+                unsafe {
+                    if self.keys[ix].assume_init() != needle {
+                        return Err("Can't trim window: supposed key doesn't exist".to_string());
+                    }
                 }
                 let mut in_order: Vec<V> = vec![];
                 // First add the actual element
@@ -358,12 +379,14 @@ where
             if !self.bitmap[ix] {
                 continue;
             }
-            let Ok(_) = temp.initial_model_based_insert(
-                (self.keys[ix], self.vals[ix]),
-                (ix as f32 * c) as usize,
-            ) else {
-                return Err("Failed to re-insert data after scaling up".to_string());
-            };
+            unsafe {
+                let Ok(_) = temp.initial_model_based_insert(
+                    (self.keys[ix].assume_init(), self.vals[ix].assume_init()),
+                    (ix as f32 * c) as usize,
+                ) else {
+                    return Err("Failed to re-insert data after scaling up".to_string());
+                };
+            }
         }
         self.bitmap = temp.bitmap;
         self.vals = temp.vals;
@@ -392,7 +415,10 @@ where
     /// The minimum key in this array, or None if it's empty
     pub fn min(&self) -> Option<&K> {
         match self.next_occupied_ix(0) {
-            Some(ix) => self.keys.get(ix),
+            Some(ix) => match self.keys.get(ix) {
+                Some(key) => unsafe { Some(key.assume_init_ref()) },
+                None => None,
+            },
             None => None,
         }
     }
@@ -436,8 +462,8 @@ mod gapped_array_tests {
         let mut line3 = String::new();
         for ix in 0..ga.len() {
             line1 += &format!("{}", if ga.bitmap[ix] { 1 } else { 0 });
-            line2 += &format!("{}", ga.keys[ix]);
-            line3 += &format!("{}", ga.vals[ix]);
+            line2 += &format!("{:?}", ga.keys[ix]);
+            line3 += &format!("{:?}", ga.vals[ix]);
         }
         println!("bitmap: {}", &line1);
         println!("keys: {}", &line2);
@@ -453,7 +479,9 @@ mod gapped_array_tests {
         }
         for ix in 0..size {
             assert!(ga.bitmap[ix]);
-            assert!(ga.keys[ix] == ix as i32);
+            unsafe {
+                assert!(ga.keys[ix].assume_init() == ix as i32);
+            }
         }
     }
 
@@ -474,7 +502,9 @@ mod gapped_array_tests {
         }
         for ix in 0..size {
             assert!(ga.bitmap[ix]);
-            assert!(ga.keys[ix] == ix as i32);
+            unsafe {
+                assert!(ga.keys[ix].assume_init() == ix as i32);
+            }
         }
     }
 
@@ -513,7 +543,7 @@ mod gapped_array_tests {
                 .is_ok());
         }
         for ix in 0..ga.len() {
-            let good = ga.bitmap[ix] && ga.keys[ix] == ix as i32;
+            let good = unsafe { ga.bitmap[ix] && ga.keys[ix].assume_init() == ix as i32 };
             if !good {
                 // println!("Perm: {:?}", perm);
                 // println!("Hints: {:?}", hints);
@@ -553,7 +583,7 @@ mod gapped_array_tests {
         }
     }
 
-    fn test_nondec_seq(items: &Vec<i32>, hints: &Vec<usize>) {
+    unsafe fn test_nondec_seq(items: &Vec<i32>, hints: &Vec<usize>) {
         let mut ga = GappedKVArray::<i32, i32>::new(items.len());
         for (value, hint) in items.iter().zip(hints.iter()) {
             assert!(ga
@@ -561,7 +591,7 @@ mod gapped_array_tests {
                 .is_ok());
         }
         for ix in 0..ga.len() {
-            let good = ga.bitmap[ix] && ga.keys[ix] == ix as i32;
+            let good = ga.bitmap[ix] && ga.keys[ix].assume_init() == ix as i32;
             if !good {
                 // println!("Items: {:?}", items);
                 // println!("Hints: {:?}", hints);
@@ -587,7 +617,9 @@ mod gapped_array_tests {
             true
         });
         for seq in sequences {
-            test_nondec_seq(&items, &seq);
+            unsafe {
+                test_nondec_seq(&items, &seq);
+            }
         }
     }
 
@@ -613,8 +645,10 @@ mod gapped_array_tests {
                 .enumerate()
                 .take(final_keys.len())
             {
-                assert!(*key == final_keys[ix]);
-                assert!(*val == final_vals[ix]);
+                unsafe {
+                    assert!(key.assume_init() == final_keys[ix]);
+                    assert!(val.assume_init() == final_vals[ix]);
+                }
             }
         }
     }
@@ -639,9 +673,13 @@ mod gapped_array_tests {
             let expected_vals = vec![0, 0, 0, 0, 4, 5];
             let expected_bitmap = vec![true, false, false, false, true, true];
             for ix in 0..SIZE {
-                assert!(mid_ga.keys[ix] == expected_keys[ix]);
-                assert!(mid_ga.vals[ix] == expected_vals[ix]);
                 assert!(mid_ga.bitmap[ix] == expected_bitmap[ix]);
+                if mid_ga.bitmap[ix] {
+                    unsafe {
+                        assert!(mid_ga.keys[ix].assume_init() == expected_keys[ix]);
+                        assert!(mid_ga.vals[ix].assume_init() == expected_vals[ix]);
+                    }
+                }
             }
         }
         for hint in 0..SIZE {
@@ -652,9 +690,13 @@ mod gapped_array_tests {
             let expected_vals = vec![0, 0, 0, 0, 0, 0];
             let expected_bitmap = vec![false, false, false, false, false, false];
             for ix in 0..SIZE {
-                assert!(mid_ga.keys[ix] == expected_keys[ix]);
-                assert!(mid_ga.vals[ix] == expected_vals[ix]);
                 assert!(mid_ga.bitmap[ix] == expected_bitmap[ix]);
+                if mid_ga.bitmap[ix] {
+                    unsafe {
+                        assert!(mid_ga.keys[ix].assume_init() == expected_keys[ix]);
+                        assert!(mid_ga.vals[ix].assume_init() == expected_vals[ix]);
+                    }
+                }
             }
         }
         for hint in 0..SIZE {
@@ -665,9 +707,13 @@ mod gapped_array_tests {
             let expected_vals = vec![0, 0, 2, 3, 4, 5];
             let expected_bitmap = vec![false, false, true, true, true, true];
             for ix in 0..SIZE {
-                assert!(front_ga.keys[ix] == expected_keys[ix]);
-                assert!(front_ga.vals[ix] == expected_vals[ix]);
                 assert!(front_ga.bitmap[ix] == expected_bitmap[ix]);
+                if front_ga.bitmap[ix] {
+                    unsafe {
+                        assert!(front_ga.keys[ix].assume_init() == expected_keys[ix]);
+                        assert!(front_ga.vals[ix].assume_init() == expected_vals[ix]);
+                    }
+                }
             }
         }
         for hint in 0..SIZE {
@@ -680,9 +726,13 @@ mod gapped_array_tests {
             let expected_vals = vec![0, 1, 2, 3, 0, 0];
             let expected_bitmap = vec![true, true, true, true, false, false];
             for ix in 0..SIZE {
-                assert!(end_ga.keys[ix] == expected_keys[ix]);
-                assert!(end_ga.vals[ix] == expected_vals[ix]);
                 assert!(end_ga.bitmap[ix] == expected_bitmap[ix]);
+                if end_ga.bitmap[ix] {
+                    unsafe {
+                        assert!(end_ga.keys[ix].assume_init() == expected_keys[ix]);
+                        assert!(end_ga.vals[ix].assume_init() == expected_vals[ix]);
+                    }
+                }
             }
         }
     }
