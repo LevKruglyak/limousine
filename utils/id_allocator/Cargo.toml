@@ -9,7 +9,7 @@ license = "Apache-2.0"
 repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
-serde = { version = "1.0.199", features = ["derive"], optional = true}
+serde = { version = "1.0.203", features = ["derive"], optional = true}
 
 [features]
 serde = ["dep:serde"]
