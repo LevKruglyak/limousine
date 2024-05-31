@@ -1,4 +1,4 @@
-use super::{ObjectStore, StoreID};
+use super::StoreID;
 use core::panic;
 use id_allocator::IDAllocator;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ struct GlobalStoreCatalog {
     registry: HashMap<String, StoreID>,
 }
 
-const CACHE_SIZE: usize = 10_000;
+const CACHE_SIZE: usize = 4096 * 4096;
 
 const GLOBAL_STORE_CATALOG_ID: StoreID = 0;
 
@@ -39,26 +39,8 @@ pub struct GlobalStore {
 
 struct GlobalStoreInner {
     store: marble::Marble,
-    cache: HashMap<StoreID, Vec<u8>>,
-
     active_stores: HashSet<String>,
     catalog: GlobalStoreCatalog,
-}
-
-impl GlobalStoreInner {
-    pub fn flush_cache(&mut self) -> crate::Result<()> {
-        let mut batch = Vec::new();
-        {
-            for (&id, data) in self.cache.iter() {
-                batch.push((id, Some(data.clone())));
-            }
-        }
-
-        self.store.write_batch(batch)?;
-        self.cache.clear();
-
-        Ok(())
-    }
 }
 
 impl GlobalStore {
@@ -80,16 +62,41 @@ impl GlobalStore {
         Ok(GlobalStore {
             inner: Rc::new(RefCell::new(GlobalStoreInner {
                 store,
-                cache: HashMap::new(),
                 catalog,
                 active_stores: HashSet::new(),
             })),
         })
     }
 
-    pub fn load_local_store<C>(&mut self, ident: impl ToString) -> crate::Result<LocalStore<C>>
+    fn write_page<P>(&self, page: &P, id: StoreID) -> crate::Result<()>
     where
-        C: for<'de> Deserialize<'de> + Serialize + Default + Clone,
+        P: Serialize,
+    {
+        self.inner_ref_mut()
+            .store
+            .write_batch([(id, Some(bincode::serialize(page)?))])?;
+
+        Ok(())
+    }
+
+    fn read_page<P>(&self, id: StoreID) -> crate::Result<Option<P>>
+    where
+        for<'de> P: Deserialize<'de>,
+    {
+        if let Some(data) = self.inner_ref().store.read(id)? {
+            return Ok(Some(bincode::deserialize(data.as_ref())?));
+        }
+
+        Ok(None)
+    }
+
+    pub fn load_local_store<C, P>(
+        &mut self,
+        ident: impl ToString,
+    ) -> crate::Result<LocalStore<C, P>>
+    where
+        C: Serialize + for<'de> Deserialize<'de> + Clone + Default,
+        P: Serialize + for<'de> Deserialize<'de> + Clone,
     {
         if self.inner_ref().active_stores.contains(&ident.to_string()) {
             panic!("Catalog `{}` has already been loaded!", ident.to_string());
@@ -127,13 +134,13 @@ impl GlobalStore {
             catalog,
             id,
             ident: ident.to_string(),
+            cache: Rc::new(RefCell::new(HashMap::new())),
         })
     }
 
     pub fn flush(&mut self) -> crate::Result<()> {
         let catalog = self.inner_ref_mut().catalog.clone();
         self.write_page(&catalog, GLOBAL_STORE_CATALOG_ID)?;
-        self.inner_ref_mut().flush_cache()?;
 
         Ok(())
     }
@@ -160,29 +167,87 @@ impl Drop for GlobalStore {
     }
 }
 
-pub struct LocalStore<C>
+pub struct LocalStore<C, P>
 where
-    C: Clone + Serialize,
+    C: Serialize + for<'de> Deserialize<'de> + Clone,
+    P: Serialize + for<'de> Deserialize<'de> + Clone,
 {
     root: Rc<RefCell<GlobalStoreInner>>,
     pub catalog: C,
     id: StoreID,
     ident: String,
+
+    cache: Rc<RefCell<HashMap<StoreID, Option<P>>>>,
 }
 
-impl<C> LocalStore<C>
+impl<C, P> LocalStore<C, P>
 where
-    C: Clone + Serialize,
+    C: Serialize + for<'de> Deserialize<'de> + Clone,
+    P: Serialize + for<'de> Deserialize<'de> + Clone,
 {
-    pub fn flush(&mut self) -> crate::Result<()> {
+    pub fn flush(&self) -> crate::Result<()> {
         let catalog = self.catalog.clone();
-        self.write_page(&catalog, self.id)
+
+        // Serialize the cache
+        let mut write_batch: Vec<(StoreID, Option<Vec<u8>>)> = self
+            .cache
+            .as_ref()
+            .borrow_mut()
+            .iter()
+            .map_while(|(&id, page)| {
+                if let Some(page) = page {
+                    let data = bincode::serialize(page).ok()?;
+                    return Some((id, Some(data)));
+                }
+
+                Some((id, None))
+            })
+            .collect();
+        self.cache.as_ref().borrow_mut().clear();
+
+        write_batch.push((self.id, Some(bincode::serialize(&catalog)?)));
+
+        self.inner_ref_mut().store.write_batch(write_batch)?;
+        Ok(())
+    }
+
+    pub fn write_page(&self, page: &P, id: StoreID) -> crate::Result<()> {
+        self.cache
+            .as_ref()
+            .borrow_mut()
+            .insert(id, Some(page.clone()));
+
+        // Periodically flush the cache when writing
+        if self.cache.as_ref().borrow().len() * std::mem::size_of::<P>() > CACHE_SIZE {
+            self.flush()?;
+        }
+
+        Ok(())
+    }
+
+    pub fn read_page(&self, id: StoreID) -> crate::Result<Option<P>> {
+        if let Some(data) = self.cache.as_ref().borrow().get(&id) {
+            return Ok(data.clone());
+        }
+
+        if let Some(data) = self.inner_ref().store.read(id)? {
+            let data: P = bincode::deserialize(data.as_ref())?;
+            self.cache
+                .as_ref()
+                .borrow_mut()
+                .insert(id, Some(data.clone()));
+
+            return Ok(Some(data));
+        }
+
+        Ok(None)
     }
 }
 
-impl<C> Drop for LocalStore<C>
+impl<C, P> Drop for LocalStore<C, P>
 where
-    C: Clone + Serialize,
+    C: Serialize + for<'de> Deserialize<'de> + Clone,
+    P: Serialize + for<'de> Deserialize<'de> + Clone,
 {
     fn drop(&mut self) {
         self.inner_ref_mut().active_stores.remove(&self.ident);
@@ -190,7 +255,13 @@ where
     }
 }
 
-impl<T> ObjectStore for T
+pub trait ObjectStoreGeneric {
+    fn allocate_page(&mut self) -> StoreID;
+    fn free_page(&mut self, id: StoreID) -> crate::Result<bool>;
+    fn clear(&mut self) -> crate::Result<()>;
+}
+
+impl<T> ObjectStoreGeneric for T
 where
     T: ObjectStoreInner,
 {
@@ -200,9 +271,10 @@ where
 
     fn free_page(&mut self, id: StoreID) -> crate::Result<bool> {
         if self.inner_ref_mut().catalog.ids.free(id) {
+            self.remove_page(id);
+
             let empty_page: Option<[u8; 1]> = None;
             self.inner_ref_mut().store.write_batch([(id, empty_page)])?;
-            self.inner_ref_mut().cache.remove(&id);
             return Ok(true);
         }
 
@@ -216,56 +288,25 @@ where
             clear_batch.push((id, None));
         }
 
-        for (&id, _) in self.inner_ref().cache.iter() {
-            clear_batch.push((id, None));
-        }
-
-        self.inner_ref_mut().cache.clear();
         self.inner_ref_mut().store.write_batch(clear_batch)?;
         self.inner_ref_mut().catalog.ids.clear();
 
         Ok(())
-    }
-
-    fn write_page<P>(&self, page: &P, id: StoreID) -> crate::Result<()>
-    where
-        P: Serialize,
-    {
-        let data = bincode::serialize(page)?;
-        self.inner_ref_mut().cache.insert(id, data);
-
-        // Periodically flush the cache when writing
-        if self.inner_ref_mut().cache.len() > CACHE_SIZE {
-            self.inner_ref_mut().flush_cache()?;
-        }
-
-        Ok(())
-    }
-
-    fn read_page<P>(&self, id: StoreID) -> crate::Result<Option<P>>
-    where
-        for<'de> P: Deserialize<'de>,
-    {
-        if let Some(data) = self.inner_ref().cache.get(&id) {
-            return Ok(Some(bincode::deserialize(data.as_ref())?));
-        }
-
-        if let Some(data) = self.inner_ref().store.read(id)? {
-            return Ok(Some(bincode::deserialize(data.as_ref())?));
-        }
-
-        Ok(None)
     }
 }
 
 trait ObjectStoreInner {
     fn inner_ref(&self) -> Ref<GlobalStoreInner>;
     fn inner_ref_mut(&self) -> RefMut<GlobalStoreInner>;
+
+    // Callback for removing a page
+    fn remove_page(&self, _id: StoreID) -> () {}
 }
 
-impl<C> ObjectStoreInner for LocalStore<C>
+impl<C, P> ObjectStoreInner for LocalStore<C, P>
 where
-    C: Clone + Serialize,
+    C: Serialize + for<'de> Deserialize<'de> + Clone,
+    P: Serialize + for<'de> Deserialize<'de> + Clone,
 {
     fn inner_ref(&self) -> Ref<GlobalStoreInner> {
         self.root.as_ref().borrow()
@@ -273,6 +314,10 @@ where
 
     fn inner_ref_mut(&self) -> RefMut<GlobalStoreInner> {
         self.root.as_ref().borrow_mut()
+    }
+
+    fn remove_page(&self, id: StoreID) -> () {
+        self.cache.as_ref().borrow_mut().insert(id, None);
     }
 }
 
@@ -393,7 +438,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut store = GlobalStore::load(dir.path()).unwrap();
 
-        let _local_store: LocalStore<TestCatalog> = store.load_local_store("test").unwrap();
+        let _local_store: LocalStore<TestCatalog, i32> = store.load_local_store("test").unwrap();
     }
 
     #[derive(Serialize, Deserialize, Default, Clone)]
@@ -408,7 +453,7 @@ mod tests {
         let mut store = GlobalStore::load(dir.path()).unwrap();
 
         for i in 0..5 {
-            let mut local_store: LocalStore<TestCatalog> =
+            let mut local_store: LocalStore<TestCatalog, i32> =
                 store.load_local_store(i.to_string()).unwrap();
             local_store.catalog.id = local_store.allocate_page();
             local_store
@@ -417,7 +462,7 @@ mod tests {
         }
 
         for i in 0..5 {
-            let local_store: LocalStore<TestCatalog> =
+            let local_store: LocalStore<TestCatalog, i32> =
                 store.load_local_store(i.to_string()).unwrap();
 
             let value: i32 = local_store
@@ -437,7 +482,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut store = GlobalStore::load(dir.path()).unwrap();
 
-        let _local_store: LocalStore<TestCatalog> = store.load_local_store("test").unwrap();
+        let _local_store: LocalStore<TestCatalog, i32> = store.load_local_store("test").unwrap();
 
         // Should panic
         drop(store);
@@ -449,9 +494,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut store = GlobalStore::load(dir.path()).unwrap();
 
-        let _local_store_1: LocalStore<TestCatalog> = store.load_local_store("test").unwrap();
+        let _local_store_1: LocalStore<TestCatalog, i32> = store.load_local_store("test").unwrap();
         // Should panic
-        let _local_store_2: LocalStore<TestCatalog> = store.load_local_store("test").unwrap();
+        let _local_store_2: LocalStore<TestCatalog, i32> = store.load_local_store("test").unwrap();
     }
 
     #[test]
@@ -460,10 +505,12 @@ mod tests {
         let mut store = GlobalStore::load(dir.path()).unwrap();
 
         {
-            let _local_store_1: LocalStore<TestCatalog> = store.load_local_store("test").unwrap();
+            let _local_store_1: LocalStore<TestCatalog, i32> =
+                store.load_local_store("test").unwrap();
         }
         {
-            let _local_store_2: LocalStore<TestCatalog> = store.load_local_store("test").unwrap();
+            let _local_store_2: LocalStore<TestCatalog, i32> =
+                store.load_local_store("test").unwrap();
         }
     }
 
@@ -474,13 +521,14 @@ mod tests {
 
         // Create and load a local store for TestCatalog
         {
-            let mut local_store: LocalStore<TestCatalog> = store.load_local_store("test").unwrap();
+            let mut local_store: LocalStore<TestCatalog, i32> =
+                store.load_local_store("test").unwrap();
             local_store.catalog.entries.push("Test Entry".into());
         } // LocalStore drops here, should automatically flush to disk
 
         // Load again and check if the updates are persistent
         {
-            let local_store: LocalStore<TestCatalog> = store.load_local_store("test").unwrap();
+            let local_store: LocalStore<TestCatalog, i32> = store.load_local_store("test").unwrap();
             assert_eq!(local_store.catalog.entries.len(), 1);
             assert_eq!(local_store.catalog.entries[0], "Test Entry");
         }
