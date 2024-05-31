@@ -16,7 +16,11 @@ mod deep_layer;
 
 pub type BoundaryDiskBTreeInternalAddress = StoreID;
 
-pub struct BoundaryDiskBTreeInternalComponent<K: Ord, X, const FANOUT: usize, BA, PA> {
+pub struct BoundaryDiskBTreeInternalComponent<K, X, const FANOUT: usize, BA, PA>
+where
+    K: Persisted + Ord,
+    BA: Persisted,
+{
     pub inner: BoundaryDiskBTreeLayer<K, BA, FANOUT, PA>,
     _ph: std::marker::PhantomData<X>,
 }
@@ -80,7 +84,11 @@ where
 
 pub type BoundaryDiskBTreeBaseAddress = StoreID;
 
-pub struct BoundaryDiskBTreeBaseComponent<K: Ord, V, const FANOUT: usize, PA> {
+pub struct BoundaryDiskBTreeBaseComponent<K, V, const FANOUT: usize, PA>
+where
+    K: Persisted + Ord,
+    V: Persisted,
+{
     pub inner: BoundaryDiskBTreeLayer<K, V, FANOUT, PA>,
 }
 
@@ -132,7 +140,12 @@ where
 
 pub type DeepDiskBTreeInternalAddress = StoreID;
 
-pub struct DeepDiskBTreeInternalComponent<K: Ord, X, const FANOUT: usize, BA, PA: Persisted> {
+pub struct DeepDiskBTreeInternalComponent<K, X, const FANOUT: usize, BA, PA>
+where
+    K: Persisted + Ord,
+    BA: Persisted + Eq,
+    PA: Persisted + Eq,
+{
     pub inner: DeepDiskBTreeLayer<K, BA, FANOUT, PA>,
     _ph: std::marker::PhantomData<X>,
 }
@@ -196,7 +209,12 @@ where
 
 pub type DeepDiskBTreeBaseAddress = StoreID;
 
-pub struct DeepDiskBTreeBaseComponent<K: Ord, V, const FANOUT: usize, PA: Persisted> {
+pub struct DeepDiskBTreeBaseComponent<K, V, const FANOUT: usize, PA>
+where
+    K: Persisted + Ord,
+    V: Persisted + Eq,
+    PA: Persisted + Eq,
+{
     pub inner: DeepDiskBTreeLayer<K, V, FANOUT, PA>,
 }
 
@@ -204,7 +222,7 @@ impl<K, V, const FANOUT: usize, PA: 'static> NodeLayer<K, DeepDiskBTreeBaseAddre
     for DeepDiskBTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
-    V: Persisted,
+    V: Persisted + Eq,
     PA: Persisted + Address,
 {
     impl_node_layer!(StoreID, PA);
@@ -215,7 +233,7 @@ impl<K, V, const FANOUT: usize, PA: 'static>
     for DeepDiskBTreeBaseComponent<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
-    V: Persisted,
+    V: Persisted + Eq,
     PA: Persisted + Address,
 {
     fn insert(

@@ -31,8 +31,8 @@ pub struct BoundaryDiskListCatalogPage {
     state: BoundaryDiskListState,
 }
 
-pub struct BoundaryDiskList<N, PA> {
-    store: LocalStore<BoundaryDiskListCatalogPage>,
+pub struct BoundaryDiskList<N: Persisted, PA> {
+    store: LocalStore<BoundaryDiskListCatalogPage, N>,
 
     // We should only persist parents when we are in a deep persisted layer, in a boundary layer we
     // keep them in transient memory
@@ -46,7 +46,8 @@ where
     N: Persisted + Default + Eq,
 {
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
-        let mut store: LocalStore<BoundaryDiskListCatalogPage> = store.load_local_store(ident)?;
+        let mut store: LocalStore<BoundaryDiskListCatalogPage, N> =
+            store.load_local_store(ident)?;
         let parents = HashMap::new();
 
         if store.catalog.state == BoundaryDiskListState::Uninitialized {
