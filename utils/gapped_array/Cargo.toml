@@ -1,0 +1,17 @@
+[package]
+name = "gapped_array"
+version = "0.1.0"
+edition = "2021"
+description = "A sorted array with gapped-based inserts"
+authors = ["Mark Pekala <mpek66@gmail.com>"]
+keywords = ["contained", "gapped-array", "no_std"]
+license = "Apache-2.0"
+repository = "https://github.com/LevKruglyak/limousine"
+
+
+[dependencies]
+slice_search = { path = "../slice_search", version = "0.1.2" }
+serde = { version = "1.0.197", features = ["derive"] }
+itertools = "0.12.1"
+kdam = "0.5.1"
+

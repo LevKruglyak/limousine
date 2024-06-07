@@ -45,10 +45,11 @@ where
         }
     }
 
-    pub fn insert_after(&mut self, inner: N, ptr: ArenaID) -> ArenaID {
+    #[must_use]
+    pub fn insert_after(&mut self, node: N, ptr: ArenaID) -> ArenaID {
         let next_ptr = self.arena[ptr].0.next;
 
-        let mut new_node = MemoryNode::new(inner);
+        let mut new_node = MemoryNode::new(node);
         new_node.previous = Some(ptr);
         new_node.next = next_ptr;
 
@@ -65,10 +66,11 @@ where
     }
 
     #[allow(unused)]
-    pub fn insert_before(&mut self, inner: N, ptr: ArenaID) -> ArenaID {
+    #[must_use]
+    pub fn insert_before(&mut self, node: N, ptr: ArenaID) -> ArenaID {
         let previous_ptr = self.arena[ptr].0.previous;
 
-        let mut new_node = MemoryNode::new(inner);
+        let mut new_node = MemoryNode::new(node);
         new_node.previous = previous_ptr;
         new_node.next = Some(ptr);
 
@@ -84,6 +86,7 @@ where
         new_node_ptr
     }
 
+    #[must_use]
     pub fn clear(&mut self) -> ArenaID {
         self.arena.clear();
         let ptr = self

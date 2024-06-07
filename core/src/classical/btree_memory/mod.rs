@@ -3,7 +3,7 @@ mod layer;
 use crate::common::list::memory::ArenaID;
 use crate::node_layer::{impl_node_layer, NodeLayer};
 use crate::traits::Address;
-use crate::{component::*, Key, StaticBounded, Value};
+use crate::{component::*, Key, Value};
 use layer::*;
 
 // -------------------------------------------------------
@@ -12,7 +12,7 @@ use layer::*;
 
 pub type BTreeInternalAddress = ArenaID;
 
-pub struct BTreeInternalComponent<K: Ord, X: 'static, const FANOUT: usize, BA, PA> {
+pub struct BTreeInternalComponent<K: Key, X: 'static, const FANOUT: usize, BA, PA> {
     inner: MemoryBTreeLayer<K, BA, FANOUT, PA>,
     _ph: std::marker::PhantomData<X>,
 }
@@ -20,7 +20,7 @@ pub struct BTreeInternalComponent<K: Ord, X: 'static, const FANOUT: usize, BA, P
 impl<K, X, const FANOUT: usize, BA, PA> NodeLayer<K, BTreeInternalAddress, PA>
     for BTreeInternalComponent<K, X, FANOUT, BA, PA>
 where
-    K: Clone + Ord + StaticBounded,
+    K: Key,
     BA: Address,
     PA: Address,
 {

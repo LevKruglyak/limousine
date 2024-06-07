@@ -9,8 +9,9 @@ members = [
   "utils/slice_search", 
   "utils/sorted_array", 
   "utils/id_allocator", 
-
-  "bench/runner",
+  "utils/learned_segment",
+  "utils/gapped_array",
+  "bench/runner", 
 ]
 
 exclude = [

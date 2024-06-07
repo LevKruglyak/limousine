@@ -12,6 +12,7 @@ use syn::{
 pub enum Component {
     BTreeTop,
     BTree { fanout: usize, persist: bool },
+    PGM { epsilon: usize, },
 }
 
 pub struct ParsedComponent {
@@ -61,6 +62,17 @@ impl Parse for ParsedComponent {
 
                 Component::BTree { fanout, persist }
             }
+            "pgm" => {
+                let epsilon = attributes.try_get_integer(&ident, "epsilon")?;
+                
+                let epsilon = if epsilon > 0 {
+                    epsilon as usize
+                } else {
+                    bail!(ident, "Specified epsilon is not positive");
+                };
+
+                Component::PGM { epsilon }
+            }
             _ => {
                 bail!(ident, "Unknown component `{}`!", ident.to_string());
             }
@@ -102,12 +114,14 @@ pub enum PersistType {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InternalComponent {
     BTree { fanout: usize, persist: PersistType },
+    PGM {epsilon: usize},
 }
 
 impl ToString for InternalComponent {
     fn to_string(&self) -> String {
         match self {
-            Self::BTree { fanout, persist } => format!("{persist:?}BTreeInternal{fanout:?}").to_string()
+            Self::BTree { fanout, persist } => format!("{persist:?}BTreeInternal{fanout:?}").to_string(),
+            Self::PGM {epsilon} => format!("PGMInternal{epsilon:?}").to_string(),
         }
     }
 }
@@ -145,6 +159,10 @@ impl InternalComponent {
                 fanout,
                 persist: PersistType::DeepDisk,
             }),
+            (
+                Component::PGM { epsilon },
+                _
+            ) => Some(Self::PGM { epsilon }),
             _ => None,
         }
     }
@@ -172,6 +190,9 @@ impl InternalComponent {
                 persist: PersistType::DeepDisk,
             } => quote!(DeepDiskBTreeInternalComponent<K, V, #fanout, #base_address, #parent_address>)
                 .to_token_stream(),
+            
+            InternalComponent::PGM { epsilon } =>
+            quote!(PGMInternalComponent<K, V, #epsilon, #base_address, #parent_address>).to_token_stream(),
         }
     }
 
@@ -188,12 +209,17 @@ impl InternalComponent {
             InternalComponent::BTree { persist: PersistType::DeepDisk, .. } => {
                 quote!(DeepDiskBTreeInternalAddress).to_token_stream()
             }
+
+            InternalComponent::PGM {..} => {
+                quote!(PGMInternalAddress).to_token_stream()
+            }
         }
     }
 
     pub fn is_persisted(&self) -> bool {
         match *self {
             InternalComponent::BTree { persist, .. } => persist != PersistType::InMemory,
+            InternalComponent::PGM {..} => false,
         }
     }
 }
@@ -201,12 +227,14 @@ impl InternalComponent {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BaseComponent {
     BTree { fanout: usize, persist: PersistType },
+    PGM {epsilon: usize},
 }
 
 impl ToString for BaseComponent {
     fn to_string(&self) -> String {
         match self {
-            Self::BTree { fanout, persist } => format!("{persist:?}BTreeBase{fanout:?}").to_string()
+            Self::BTree { fanout, persist } => format!("{persist:?}BTreeBase{fanout:?}").to_string(),
+            Self::PGM {epsilon} => format!("PGMBase{epsilon:?}").to_string(),
         }
     }
 }
@@ -244,6 +272,7 @@ impl BaseComponent {
                 fanout,
                 persist: PersistType::DeepDisk,
             }),
+            (Component::PGM {epsilon}, _) => Some(Self::PGM {epsilon}),
             _ => None,
         }
     }
@@ -266,6 +295,10 @@ impl BaseComponent {
                 persist: PersistType::DeepDisk,
             } => quote!(DeepDiskBTreeBaseComponent<K, V, #fanout, #base_address>)
                 .to_token_stream(),
+            
+            BaseComponent::PGM {
+                epsilon
+            } => quote!(PGMBaseComponent<K, V, #epsilon, #base_address>).to_token_stream(),
         }
     }
 
@@ -285,12 +318,17 @@ impl BaseComponent {
                 persist: PersistType::DeepDisk,
                 ..
             } => quote!(DeepDiskBTreeBaseAddress).to_token_stream(),
+
+            BaseComponent::PGM {
+                ..
+            } => quote!(PGMBaseAddress).to_token_stream(),
         }
     }
 
     pub fn is_persisted(&self) -> bool {
         match *self {
             BaseComponent::BTree { persist, .. } => persist != PersistType::InMemory,
+            BaseComponent::PGM { .. } => false,
         }
     }
 }

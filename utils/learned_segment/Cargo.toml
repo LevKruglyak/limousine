@@ -1,0 +1,17 @@
+[package]
+name = "learned_index_segmentation"
+version = "0.1.0"
+edition = "2021"
+description = "A collection of algorithms for building piecewise models for learned indices."
+authors = ["Mark Pekala <mpekala@college.harvard.edu>", "Lev Kruglyak <lev.kruglyak2014@gmail.com>"]
+keywords = []
+license = "Apache-2.0"
+repository = "https://github.com/LevKruglyak/limousine"
+
+[dev-dependencies]
+rand = "0.8.5"
+rand_distr = "0.4.3"
+
+[dependencies]
+num = "0.4.2"
+serde = { version = "1.0.197", features = ["derive"] }
