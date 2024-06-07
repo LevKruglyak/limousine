@@ -16,4 +16,4 @@ syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
 md5 = "0.7.0"
-base64 = "0.22.0"
+base64 = "0.22.1"

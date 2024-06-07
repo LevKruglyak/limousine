@@ -9,7 +9,7 @@ license = "Apache-2.0"
 repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
-num = "0.4.0"
+num = "0.4.3"
 trait-set = "0.3.0"
 
 zstd-sys = "=2.0.9" # fix to avoid marble build issue
@@ -17,10 +17,10 @@ marble = "15.0"
 
 generational-arena = "0.2.9"
 
-serde = { version = "1.0.197", features = ["derive"] }
+serde = { version = "1.0.203", features = ["derive"] }
 bincode = { version = "1.3.3" }
 
-anyhow = "1.0.79"
+anyhow = "1.0.82"
 
 sorted_array = { path = "../utils/sorted_array", version = "0.1.3", features = ["serde"] }
 gapped_array = { path = "../utils/gapped_array", version = "0.1.0" }

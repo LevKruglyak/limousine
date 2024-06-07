@@ -36,8 +36,9 @@ pub struct DeepDiskListCatalogPage<PA> {
 pub struct DeepDiskList<N, PA>
 where
     PA: Persisted + Address,
+    N: Persisted,
 {
-    store: LocalStore<DeepDiskListCatalogPage<PA>>,
+    store: LocalStore<DeepDiskListCatalogPage<PA>, N>,
     _ph: std::marker::PhantomData<N>,
 }
 
@@ -47,7 +48,8 @@ where
     PA: Persisted + Address,
 {
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
-        let mut store: LocalStore<DeepDiskListCatalogPage<PA>> = store.load_local_store(ident)?;
+        let mut store: LocalStore<DeepDiskListCatalogPage<PA>, N> =
+            store.load_local_store(ident)?;
 
         if store.catalog.state == DeepDiskListState::Uninitialized {
             store.catalog.state = DeepDiskListState::Initialized;
@@ -137,7 +139,7 @@ where
 impl<K, N, PA> NodeLayer<K, StoreID, PA> for DeepDiskList<N, PA>
 where
     K: Persisted,
-    N: Persisted + KeyBounded<K>,
+    N: Persisted + KeyBounded<K> + Eq,
     PA: Persisted + Address,
 {
     fn first(&self) -> StoreID {

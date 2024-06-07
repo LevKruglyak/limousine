@@ -9,7 +9,11 @@ use crate::{
     impl_node_layer, Address, Key, KeyBounded, NodeLayer, Persisted,
 };
 
-pub struct BoundaryDiskBTreeLayer<K: Ord, V, const FANOUT: usize, PA> {
+pub struct BoundaryDiskBTreeLayer<K, V, const FANOUT: usize, PA>
+where
+    K: Persisted + Ord,
+    V: Persisted,
+{
     inner: BoundaryDiskList<BTreeNode<K, V, FANOUT>, PA>,
 }
 
@@ -159,7 +163,7 @@ impl<K, V, const FANOUT: usize, PA> NodeLayer<K, StoreID, PA>
     for BoundaryDiskBTreeLayer<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
-    V: Persisted,
+    V: Persisted + Eq,
     PA: Address,
 {
     impl_node_layer!(StoreID, PA);

@@ -9,14 +9,19 @@ use crate::{
     impl_node_layer, Address, Key, KeyBounded, NodeLayer, Persisted,
 };
 
-pub struct DeepDiskBTreeLayer<K: Ord, V, const FANOUT: usize, PA: Persisted> {
+pub struct DeepDiskBTreeLayer<K, V, const FANOUT: usize, PA>
+where
+    K: Persisted + Ord,
+    V: Persisted + Eq,
+    PA: Persisted + Eq,
+{
     inner: DeepDiskList<BTreeNode<K, V, FANOUT>, PA>,
 }
 
 impl<K, V, const FANOUT: usize, PA> DeepDiskBTreeLayer<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
-    V: Persisted,
+    V: Persisted + Eq,
     PA: Persisted + Address,
 {
     pub fn load(store: &mut GlobalStore, ident: impl ToString) -> crate::Result<Self> {
@@ -157,7 +162,7 @@ impl<K, V, const FANOUT: usize, PA> NodeLayer<K, StoreID, PA>
     for DeepDiskBTreeLayer<K, V, FANOUT, PA>
 where
     K: Persisted + Key,
-    V: Persisted,
+    V: Persisted + Eq,
     PA: Persisted + Address,
 {
     impl_node_layer!(StoreID, PA);

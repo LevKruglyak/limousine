@@ -28,7 +28,7 @@ pub fn create_index_struct(
     }
 
     let body = quote! {
-        pub struct #name<K: Key, V: Value> {
+        pub struct #name<K: Persisted + Key, V: Persisted + Value> {
             #(#field_bodies)*
             pub store: GlobalStore,
         }
