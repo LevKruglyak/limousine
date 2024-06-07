@@ -1,5 +1,5 @@
-pub mod learned_memory;
+pub mod pgm_memory;
 
 mod node;
 
-pub use learned_memory::*;
+pub use pgm_memory::*;
