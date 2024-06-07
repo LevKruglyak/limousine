@@ -14,10 +14,9 @@ type Key = i128;
 use std::{
     io::{stdout, Write},
     path::PathBuf,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
-use average::{Estimate, Variance};
 use limousine_engine::prelude::*;
 use sled::IVec;
 
@@ -77,8 +76,13 @@ fn main() {
 
     {
         std::fs::remove_dir_all(path.clone()).unwrap();
-        let mut store: Instance<Key, Vec<u8>> = Instance::open(path.join("store")).unwrap();
-        let store_sled = sled::open(path.join("store_sled")).unwrap();
+
+        let store_path = path.join("store");
+        let store_sled_path = path.join("store_sled");
+
+        let mut store: Instance<Key, Vec<u8>> =
+            Instance::open(store_path.clone().join("store")).unwrap();
+        let store_sled = sled::open(store_sled_path.clone()).unwrap();
 
         let start = Instant::now();
         for key in 0..size {
@@ -94,11 +98,23 @@ fn main() {
         }
         let store_sled_end = start.elapsed();
 
+        drop(store);
+        drop(store_sled);
+
+        let store_sled_size = fs_extra::dir::get_size(store_sled_path).unwrap();
+        let store_size = fs_extra::dir::get_size(store_path).unwrap();
+
         println!("[DONE]");
         println!();
 
         println!(
-            "insert: {:+.2e} ops/sec      baseline speedup: {:.2}x",
+            "size:    {:.2e} bytes        baseline improvement: {:.2}x",
+            store_size as f64,
+            store_sled_size as f64 / store_size as f64
+        );
+
+        println!(
+            "insert:  {:.2e} ops/sec      baseline improvement: {:.2}x",
             size as f64 / store_end.as_secs_f64(),
             store_sled_end.as_secs_f64() / store_end.as_secs_f64()
         );
@@ -121,7 +137,7 @@ fn main() {
         let store_sled_end = start.elapsed();
 
         println!(
-            "search: {:+.2e} ops/sec      baseline speedup: {:.2}x",
+            "search:  {:.2e} ops/sec      baseline improvement: {:.2}x",
             size as f64 / store_end.as_secs_f64(),
             store_sled_end.as_secs_f64() / store_end.as_secs_f64(),
         );
