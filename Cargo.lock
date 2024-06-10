@@ -79,6 +79,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bit-vec"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -217,6 +226,7 @@ dependencies = [
 name = "gapped_array"
 version = "0.1.0"
 dependencies = [
+ "bit-vec",
  "itertools",
  "kdam",
  "serde",

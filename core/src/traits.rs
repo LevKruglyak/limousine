@@ -12,10 +12,10 @@ trait_set! {
     pub trait Persisted = Serialize + for<'de> Deserialize<'de> + Clone + Default + Eq + 'static;
 
     /// General key type
-    pub trait Key = PrimInt + Clone + StaticBounded + 'static ;
+    pub trait Key = PrimInt + Clone + Default + StaticBounded + 'static ;
 
     /// General value type
-    pub trait Value = Clone + 'static;
+    pub trait Value = Clone + Default + 'static;
 }
 
 pub trait KeyBounded<K> {

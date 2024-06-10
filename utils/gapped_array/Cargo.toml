@@ -11,7 +11,12 @@ repository = "https://github.com/LevKruglyak/limousine"
 
 [dependencies]
 slice_search = { path = "../slice_search", version = "0.1.2" }
-serde = { version = "1.0.197", features = ["derive"] }
 itertools = "0.12.1"
 kdam = "0.5.1"
+bit-vec = { version = "0.6", optional = true } # TODO: copy_within support
 
+serde = { version = "1.0.203", features = ["derive"], optional = true}
+
+[features]
+# default = ["dep:bit-vec", "serde"]
+serde = ["dep:serde", "bit-vec?/serde"]

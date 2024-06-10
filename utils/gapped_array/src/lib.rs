@@ -6,19 +6,17 @@ use std::mem::size_of;
 /// NOTE: The current implementation assumes keys are unique. It may break if this is not true.
 /// NOTE: The current implementation is not heavily optimized.
 #[derive(Debug)]
-pub struct GappedKVArray<K, V>
-where
-    K: Ord,
-{
+pub struct GappedEntryArray<K, V> {
     bitmap: Box<[bool]>,
     keys: Box<[MaybeUninit<K>]>,
     vals: Box<[MaybeUninit<V>]>,
     size: usize,
 }
 
-impl<K, V> GappedKVArray<K, V>
+impl<K, V> GappedEntryArray<K, V>
 where
-    K: Ord,
+    K: Ord + Clone,
+    V: Clone,
 {
     /// Creates an empty gapped array with the given size
     pub fn new(size: usize) -> Self {
@@ -188,14 +186,19 @@ where
     /// Helper function to copy within for all the needed arrays
     fn copy_within(&mut self, src: std::ops::Range<usize>, dest: usize) {
         self.bitmap.copy_within(src.clone(), dest);
-        unsafe {
-            let key_src = self.keys.get_unchecked(src.start).as_ptr();
-            let key_dest = self.keys.get_unchecked_mut(dest).as_mut_ptr();
-            core::ptr::copy(key_src, key_dest, src.clone().count());
 
-            let val_src = self.vals.get_unchecked(src.start).as_ptr();
-            let val_dest = self.vals.get_unchecked_mut(dest).as_mut_ptr();
-            core::ptr::copy(val_src, val_dest, src.count());
+        // TODO: Performance
+        for i in src.clone() {
+            let dest_i = i - src.start + dest;
+            unsafe {
+                if self.bitmap[i] {
+                    self.keys[dest_i] = MaybeUninit::new(self.keys[i].assume_init_ref().clone());
+                    self.vals[dest_i] = MaybeUninit::new(self.vals[i].assume_init_ref().clone());
+                } else {
+                    self.keys[dest_i] = MaybeUninit::uninit();
+                    self.vals[dest_i] = MaybeUninit::uninit();
+                }
+            }
         }
     }
 
@@ -444,7 +447,7 @@ where
     }
 }
 
-impl<K, V> fmt::Display for GappedKVArray<K, V>
+impl<K, V> fmt::Display for GappedEntryArray<K, V>
 where
     K: Default + Clone + Ord + std::fmt::Debug,
     V: Default + Clone + Ord + std::fmt::Debug,
@@ -476,7 +479,7 @@ mod gapped_array_tests {
     use kdam::{tqdm, BarExt};
 
     #[allow(unused)]
-    fn print_gapped_array(ga: &GappedKVArray<i32, i32>) {
+    fn print_gapped_array(ga: &GappedEntryArray<i32, i32>) {
         let mut line1 = String::new();
         let mut line2 = String::new();
         let mut line3 = String::new();
@@ -491,7 +494,7 @@ mod gapped_array_tests {
     }
 
     fn fill_forward_with_hint(size: usize, hint: usize) {
-        let mut ga = GappedKVArray::<i32, i32>::new(size);
+        let mut ga = GappedEntryArray::<i32, i32>::new(size);
         for num in 0..size {
             let result = ga.upsert_with_hint((num as i32, num as i32), hint);
             assert!(result.is_ok());
@@ -514,7 +517,7 @@ mod gapped_array_tests {
     }
 
     fn fill_backward_with_hint(size: usize, hint: usize) {
-        let mut ga = GappedKVArray::<i32, i32>::new(size);
+        let mut ga = GappedEntryArray::<i32, i32>::new(size);
         for num in 0..size {
             let result =
                 ga.upsert_with_hint(((size - num - 1) as i32, (size - num - 1) as i32), hint);
@@ -556,7 +559,7 @@ mod gapped_array_tests {
     }
 
     fn test_perm_with_hints(perm: &Vec<i32>, hints: &Vec<usize>) {
-        let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
+        let mut ga = GappedEntryArray::<i32, i32>::new(perm.len());
         for (value, hint) in perm.iter().zip(hints.iter()) {
             assert!(ga
                 .upsert_with_hint((value.clone(), value.clone()), hint.clone())
@@ -592,7 +595,7 @@ mod gapped_array_tests {
     fn debug_gapped() {
         let perm = vec![1, 2, 0, 3, 4];
         let hints = vec![0, 0, 3, 0, 0];
-        let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
+        let mut ga = GappedEntryArray::<i32, i32>::new(perm.len());
         // print_gapped_array(&ga);
         for (value, hint) in perm.iter().zip(hints.iter()) {
             assert!(ga
@@ -604,7 +607,7 @@ mod gapped_array_tests {
     }
 
     unsafe fn test_nondec_seq(items: &Vec<i32>, hints: &Vec<usize>) {
-        let mut ga = GappedKVArray::<i32, i32>::new(items.len());
+        let mut ga = GappedEntryArray::<i32, i32>::new(items.len());
         for (value, hint) in items.iter().zip(hints.iter()) {
             assert!(ga
                 .initial_model_based_insert((value.clone(), value.clone()), hint.clone())
@@ -649,7 +652,7 @@ mod gapped_array_tests {
         let keys = vec![0, 1, 2, 3, 2, 3];
         let vals = vec![10, 11, 22, 33, 42, 53];
         let all_hints = get_all_possible_hints(SIZE, SIZE);
-        let mut ga = GappedKVArray::<i32, i32>::new(SIZE + 1);
+        let mut ga = GappedEntryArray::<i32, i32>::new(SIZE + 1);
         let final_keys = vec![0, 1, 2, 3];
         let final_vals = vec![10, 11, 42, 53];
         for hints in all_hints {
@@ -679,7 +682,7 @@ mod gapped_array_tests {
         let get_fresh_ga = || {
             let keys = vec![0, 1, 2, 3, 4, 5];
             let vals = vec![0, 1, 2, 3, 4, 5];
-            let mut ga = GappedKVArray::<i32, i32>::new(SIZE);
+            let mut ga = GappedEntryArray::<i32, i32>::new(SIZE);
             for (key, val) in keys.iter().zip(vals.iter()) {
                 ga.upsert_with_hint((*key, *val), 3).unwrap();
             }
@@ -761,7 +764,7 @@ mod gapped_array_tests {
     fn debug_initial_gapped() {
         let perm = vec![0, 1, 2, 3, 4, 5];
         let hints = vec![0, 0, 0, 4, 4, 4];
-        let mut ga = GappedKVArray::<i32, i32>::new(perm.len());
+        let mut ga = GappedEntryArray::<i32, i32>::new(perm.len());
         // print_gapped_array(&ga);
         for (value, hint) in perm.iter().zip(hints.iter()) {
             assert!(ga

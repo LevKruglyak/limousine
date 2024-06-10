@@ -11,7 +11,7 @@ use crate::iter::Iter;
 use crate::learned::node::PGMNode;
 use crate::{impl_node_layer, Address, Key, NodeLayer};
 
-pub struct MemoryPGMLayer<K: Key, V, const EPSILON: usize, PA> {
+pub struct MemoryPGMLayer<K: Key, V: Clone, const EPSILON: usize, PA> {
     inner: MemoryList<PGMNode<K, V, EPSILON>, PA>,
 }
 
@@ -42,6 +42,7 @@ where
 impl<K, V, const EPSILON: usize, PA> MemoryPGMLayer<K, V, EPSILON, PA>
 where
     K: Key,
+    V: Clone,
 {
     pub fn empty() -> Self {
         Self {
@@ -105,7 +106,7 @@ where
     }
 }
 
-impl<K: Key, V, const EPSILON: usize, PA> core::ops::Index<ArenaID>
+impl<K: Key, V: Clone, const EPSILON: usize, PA> core::ops::Index<ArenaID>
     for MemoryPGMLayer<K, V, EPSILON, PA>
 {
     type Output = PGMNode<K, V, EPSILON>;
@@ -118,6 +119,7 @@ impl<K: Key, V, const EPSILON: usize, PA> core::ops::Index<ArenaID>
 impl<K, V, const EPSILON: usize, PA> NodeLayer<K, ArenaID, PA> for MemoryPGMLayer<K, V, EPSILON, PA>
 where
     K: Key,
+    V: Clone,
     PA: Address,
 {
     impl_node_layer!(ArenaID, PA);

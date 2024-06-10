@@ -2,7 +2,7 @@ use num::PrimInt;
 
 use crate::{
     common::list::memory::ArenaID, impl_node_layer, Address, BaseComponent, InternalComponent, Key,
-    NodeLayer, PropagateInsert, StaticBounded, Value,
+    NodeLayer, PropagateInsert, Value,
 };
 
 use self::layer::MemoryPGMLayer;
@@ -15,7 +15,7 @@ mod layer;
 
 pub type PGMInternalAddress = ArenaID;
 
-pub struct PGMInternalComponent<K: Key, X: 'static, const EPSILON: usize, BA, PA> {
+pub struct PGMInternalComponent<K: Key, X: 'static, const EPSILON: usize, BA: Address, PA> {
     inner: MemoryPGMLayer<K, BA, EPSILON, PA>,
     _ph: std::marker::PhantomData<X>,
 }
@@ -23,7 +23,7 @@ pub struct PGMInternalComponent<K: Key, X: 'static, const EPSILON: usize, BA, PA
 impl<K, X, const EPSILON: usize, BA, PA> NodeLayer<K, PGMInternalAddress, PA>
     for PGMInternalComponent<K, X, EPSILON, BA, PA>
 where
-    K: Clone + Ord + StaticBounded + PrimInt,
+    K: Key,
     BA: Address,
     PA: Address,
 {
@@ -34,7 +34,7 @@ impl<K, X, BA, PA, B: NodeLayer<K, BA, PGMInternalAddress>, const EPSILON: usize
     InternalComponent<K, B, BA, PGMInternalAddress, PA>
     for PGMInternalComponent<K, X, EPSILON, BA, PA>
 where
-    K: Key + PrimInt,
+    K: Key,
     BA: Address,
     PA: Address,
 {
@@ -76,7 +76,7 @@ where
 
 pub type PGMBaseAddress = PGMInternalAddress;
 
-pub struct PGMBaseComponent<K: Key, V, const EPSILON: usize, PA> {
+pub struct PGMBaseComponent<K: Key, V: Clone, const EPSILON: usize, PA> {
     inner: MemoryPGMLayer<K, V, EPSILON, PA>,
 }
 
